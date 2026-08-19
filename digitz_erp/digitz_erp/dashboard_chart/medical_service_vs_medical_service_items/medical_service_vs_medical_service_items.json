@@ -1,0 +1,35 @@
+{
+ "chart_name": "Medical Service VS Medical Service Items",
+ "chart_type": "Report",
+ "creation": "2025-09-01 13:01:03.461578",
+ "currency": "AED",
+ "docstatus": 0,
+ "doctype": "Dashboard Chart",
+ "dynamic_filters_json": "{}",
+ "filters_json": "{}",
+ "group_by_type": "Count",
+ "idx": 1,
+ "is_public": 1,
+ "is_standard": 1,
+ "modified": "2025-09-01 13:16:55.395267",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "Medical Service VS Medical Service Items",
+ "number_of_groups": 0,
+ "owner": "Administrator",
+ "report_name": "Medical Service Report",
+ "roles": [],
+ "show_values_over_chart": 0,
+ "time_interval": "Yearly",
+ "timeseries": 0,
+ "timespan": "Last Year",
+ "type": "Line",
+ "use_report_chart": 0,
+ "x_field": "service",
+ "y_axis": [
+  {
+   "color": "#29CD42",
+   "y_field": "total_items"
+  }
+ ]
+}

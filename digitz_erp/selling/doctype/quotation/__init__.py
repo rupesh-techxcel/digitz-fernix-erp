@@ -1,0 +1,1 @@
+from digitz_erp.selling.doctype.quotation.quotation import generate_custom_invoice_pdf

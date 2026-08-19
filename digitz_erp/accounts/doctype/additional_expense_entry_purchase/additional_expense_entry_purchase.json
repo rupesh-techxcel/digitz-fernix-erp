@@ -1,0 +1,60 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2024-01-08 10:49:36.480261",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "supplier",
+  "purchase_invoice",
+  "gross_total",
+  "grand"
+ ],
+ "fields": [
+  {
+   "depends_on": "eval:doc.document_type ==\"Purchase Invoice\"",
+   "fetch_from": ".supplier",
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier",
+   "mandatory_depends_on": "eval:doc.document_type ==\"Purchase Invoice\"",
+   "options": "Supplier"
+  },
+  {
+   "fieldname": "purchase_invoice",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Purchase Invoice",
+   "options": "Purchase Invoice",
+   "reqd": 1
+  },
+  {
+   "fieldname": "gross_total",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Gross Total"
+  },
+  {
+   "fetch_from": "purchase_invoice.paid_amount",
+   "fieldname": "grand",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Net Total",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2024-02-04 13:19:02.890269",
+ "modified_by": "Administrator",
+ "module": "Accounts",
+ "name": "Additional Expense Entry Purchase",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

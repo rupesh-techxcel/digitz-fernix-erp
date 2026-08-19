@@ -1,0 +1,45 @@
+
+.layout-side-section
+{
+    background: #a8c5ed!important;
+    border:.5px solid #4c94c8;    
+}
+
+.sidebar-item-label {
+    border: .5px solid #4c94c8; /* or whatever color you prefer */
+}
+
+.page-head 
+{
+    background: lavenderblush!important;
+}
+
+body{
+    color:blue;
+}
+
+.list-row 
+{
+    border:.5px solid lightblue !important;
+}
+
+.list-row-head
+{
+    border:.5px solid lightblue !important;
+}
+
+.dt-row
+{
+    border:.5px solid lightblue !important;
+}
+.ce-block__content
+{
+    border:.5px solid lightblue !important;
+    padding:.5px !important;
+    /* background: lightblue !important; */
+}
+.frappe-control
+{
+    border:.5px solid lightblue !important;
+    padding:5px !important
+}

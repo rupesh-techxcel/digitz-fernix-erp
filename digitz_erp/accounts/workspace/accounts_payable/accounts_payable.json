@@ -1,0 +1,56 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"vtIdvCBXvL\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Accounts Payable</span>\",\"col\":12}},{\"id\":\"h5tHxzdCWi\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Entry\",\"col\":3}},{\"id\":\"5knm8III22\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Supplier Statement Of Account\",\"col\":3}},{\"id\":\"LpcwwHr3Ae\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"SvsPmwMsMv\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Payment Entry\",\"col\":4}}]",
+ "creation": "2024-02-06 13:25:44.608347",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "sidebar-collapse",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Accounts Payable",
+ "links": [],
+ "modified": "2025-07-15 08:08:01.001207",
+ "modified_by": "Administrator",
+ "module": "Accounts",
+ "name": "Accounts Payable",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [
+  {
+   "document_type": "Payment Entry",
+   "label": "Payment Entry",
+   "quick_list_filter": "[]"
+  }
+ ],
+ "roles": [
+  {
+   "role": "Administrator"
+  }
+ ],
+ "sequence_id": 7.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Payment Entry",
+   "link_to": "Payment Entry",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Supplier Statement Of Account",
+   "link_to": "Supplier Statement Of Account",
+   "report_ref_doctype": "Purchase Invoice",
+   "type": "Report"
+  }
+ ],
+ "title": "Accounts Payable"
+}

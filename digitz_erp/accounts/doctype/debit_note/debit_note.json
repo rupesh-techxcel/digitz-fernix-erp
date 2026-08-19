@@ -1,0 +1,298 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2023-12-26 15:09:04.785311",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_urni",
+  "naming_series",
+  "supplier",
+  "supplier_balance",
+  "supplier_address",
+  "tax_id",
+  "column_break_lwvy",
+  "date",
+  "posting_time",
+  "edit_posting_date_and_time",
+  "rate_includes_tax",
+  "default_cost_center",
+  "column_break_jcri",
+  "supplier_inv_no",
+  "supplier_inv_date",
+  "column_break_yhth",
+  "company",
+  "warehouse",
+  "accounts_section",
+  "on_credit",
+  "credit_days",
+  "payment_mode",
+  "payment_account",
+  "column_break_nnfu",
+  "payable_account",
+  "column_break_hcea",
+  "remarks",
+  "debit_note_detail_section",
+  "debit_note_details",
+  "section_break_elat",
+  "total_amount",
+  "tax_total",
+  "grand_total",
+  "column_break_2qwz",
+  "in_words",
+  "column_break_pdvw",
+  "tab_break_j0rg",
+  "payment_schedule",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_urni",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier",
+   "options": "Supplier",
+   "reqd": 1
+  },
+  {
+   "fieldname": "supplier_balance",
+   "fieldtype": "Currency",
+   "label": "Supplier Balance"
+  },
+  {
+   "fieldname": "supplier_address",
+   "fieldtype": "Small Text",
+   "label": "Supplier Address"
+  },
+  {
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "Tax Id"
+  },
+  {
+   "fieldname": "column_break_lwvy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "default": "Today",
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "now",
+   "fieldname": "posting_time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Posting Time",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "edit_posting_date_and_time",
+   "fieldtype": "Check",
+   "label": "Edit Posting Date and Time"
+  },
+  {
+   "default": "0",
+   "fieldname": "rate_includes_tax",
+   "fieldtype": "Check",
+   "label": "Rate Includes Tax"
+  },
+  {
+   "fieldname": "column_break_jcri",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "accounts_section",
+   "fieldtype": "Section Break",
+   "label": "Accounts"
+  },
+  {
+   "fieldname": "payment_mode",
+   "fieldtype": "Link",
+   "label": "Payment Mode",
+   "options": "Payment Mode"
+  },
+  {
+   "fieldname": "column_break_nnfu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks",
+   "reqd": 1
+  },
+  {
+   "fieldname": "supplier_inv_no",
+   "fieldtype": "Data",
+   "label": "Supplier Inv No"
+  },
+  {
+   "description": "Note: Accounts and Stock postings based on Date and Posting Time",
+   "fieldname": "supplier_inv_date",
+   "fieldtype": "Date",
+   "label": "Supplier Inv Date"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Debit Note",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fetch_from": "payment_mode.account",
+   "fieldname": "payment_account",
+   "fieldtype": "Link",
+   "label": "Payment Account",
+   "options": "Account"
+  },
+  {
+   "default": "0",
+   "fieldname": "credit_days",
+   "fieldtype": "Int",
+   "label": "Credit Days"
+  },
+  {
+   "fieldname": "total_amount",
+   "fieldtype": "Float",
+   "label": "Total Amount"
+  },
+  {
+   "fieldname": "tax_total",
+   "fieldtype": "Currency",
+   "label": "Tax Total"
+  },
+  {
+   "fieldname": "grand_total",
+   "fieldtype": "Currency",
+   "label": "Grand Total"
+  },
+  {
+   "fieldname": "payable_account",
+   "fieldtype": "Link",
+   "label": "Payable Account",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "on_credit",
+   "fieldtype": "Check",
+   "label": "On Credit"
+  },
+  {
+   "fieldname": "debit_note_details",
+   "fieldtype": "Table",
+   "label": "Debit Note Details",
+   "options": "Debit Note Detail",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_hcea",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "debit_note_detail_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_2qwz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_pdvw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_elat",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "default_cost_center",
+   "fieldtype": "Link",
+   "label": "Default Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "in_words",
+   "fieldtype": "Data",
+   "label": "In Words"
+  },
+  {
+   "fieldname": "tab_break_j0rg",
+   "fieldtype": "Tab Break",
+   "label": "Payment Schedule"
+  },
+  {
+   "fieldname": "payment_schedule",
+   "fieldtype": "Table",
+   "label": "Payment Schedule",
+   "options": "Purchase Payment Schedule"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "DN-.#####.-.MM.-.YYYY.",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_yhth",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2024-04-24 22:19:10.457131",
+ "modified_by": "Administrator",
+ "module": "Accounts",
+ "name": "Debit Note",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

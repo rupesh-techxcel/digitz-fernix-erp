@@ -1,0 +1,1086 @@
+/* =========================================================
+   DIGITZ ERP - Top Tier Premium Theme
+   Final interactive workspace hierarchy version
+   ========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&display=swap');
+
+:root {
+    --digitz-blue: #214dbb;
+    --digitz-blue-dark: #173b96;
+    --digitz-blue-light: #4da3ff;
+    --digitz-blue-soft: #f5f9ff;
+    --digitz-blue-soft-2: #edf4ff;
+    --digitz-blue-soft-3: #f7fbff;
+    --digitz-blue-soft-4: #f3f8ff;
+    --digitz-blue-border: #cfe0ff;
+    --digitz-blue-border-strong: #b8d1ff;
+    --digitz-blue-border-stronger: #98bcff;
+    --digitz-blue-border-deep: #7faeff;
+    --digitz-blue-border-soft-title: #d6e6ff;
+    --digitz-gold: #e0a62f;
+    --digitz-gold-soft: #fff4d9;
+    --digitz-text: #1b2b47;
+    --digitz-text-soft: #5f6f8c;
+    --digitz-bg: #f8fbff;
+    --digitz-white: #ffffff;
+
+    --digitz-shadow-sm: 0 2px 8px rgba(33, 77, 187, 0.06);
+    --digitz-shadow-md: 0 8px 24px rgba(33, 77, 187, 0.08);
+    --digitz-shadow-hover: 0 12px 30px rgba(33, 77, 187, 0.12);
+
+    --digitz-shadow-section:
+        0 10px 28px rgba(33, 77, 187, 0.10),
+        0 0 0 1px rgba(33, 77, 187, 0.04);
+
+    --digitz-shadow-section-hover:
+        0 20px 45px rgba(33, 77, 187, 0.18),
+        0 0 0 1px rgba(33, 77, 187, 0.08);
+
+    --digitz-shadow-inner: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+
+    --digitz-radius-sm: 10px;
+    --digitz-radius-md: 14px;
+    --digitz-radius-lg: 18px;
+    --digitz-radius-xl: 22px;
+    --digitz-transition: all 0.22s ease;
+}
+
+/* =========================================================
+   Global font and base
+   ========================================================= */
+html,
+body,
+body[data-route],
+.layout-main,
+.layout-main-section,
+.page-container,
+.page-content,
+.standard-sidebar,
+.navbar,
+.dropdown-menu,
+.modal,
+.form-control,
+.control-input,
+.control-value,
+textarea,
+select,
+.btn,
+.awesomplete > input,
+.list-row,
+.list-subject,
+.list-row-container,
+.form-page,
+.form-layout,
+.form-section,
+.section-head,
+.control-label,
+.grid-body,
+.grid-row,
+.grid-heading-row,
+.report-wrapper,
+.dt-scrollable,
+.widget,
+.widget-head,
+.widget-body,
+.ellipsis,
+small,
+p,
+h1, h2, h3, h4, h5, h6,
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="tel"],
+input[type="url"] {
+    font-family: 'Exo 2', sans-serif !important;
+}
+
+body {
+    background: linear-gradient(180deg, #f9fbff 0%, #f5f9ff 100%) !important;
+    color: var(--digitz-text) !important;
+}
+
+/* =========================================================
+   Navbar / top area
+   ========================================================= */
+.navbar,
+header.navbar,
+.page-head,
+.layout-main-section .page-head {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+    border-bottom: 1px solid var(--digitz-blue-border) !important;
+    box-shadow: 0 1px 0 rgba(33, 77, 187, 0.03) !important;
+}
+
+.navbar .app-logo,
+.navbar .navbar-brand {
+    font-weight: 700 !important;
+    color: var(--digitz-blue) !important;
+}
+
+.navbar .search-bar,
+.navbar .search-input,
+.navbar .form-control,
+.search-bar .awesomplete input {
+    border: 1px solid var(--digitz-blue-border) !important;
+    border-radius: 14px !important;
+    background: #ffffff !important;
+    box-shadow: var(--digitz-shadow-sm) !important;
+    transition: var(--digitz-transition) !important;
+}
+
+.navbar .search-bar:focus-within,
+.navbar .form-control:focus,
+.search-bar .awesomplete input:focus {
+    border-color: var(--digitz-blue-light) !important;
+    box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.12) !important;
+}
+
+/* =========================================================
+   Main workspace container
+   ========================================================= */
+.layout-main-section-wrapper,
+.layout-main-section,
+.page-body,
+.page-content {
+    background: transparent !important;
+}
+
+/* Main title / workspace header */
+.layout-main-section .page-head,
+.page-head-content,
+.page-head .page-title,
+.page-head-content .title-area {
+    border-radius: var(--digitz-radius-lg) !important;
+}
+
+.page-head {
+    margin-bottom: 12px !important;
+}
+
+.page-head,
+.page-head-content {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+    border: 1px solid var(--digitz-blue-border) !important;
+    box-shadow: var(--digitz-shadow-sm) !important;
+}
+
+.page-head .page-title,
+.page-title .title-text,
+.page-head h3,
+.page-head h2 {
+    color: #10264f !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.2px !important;
+    font-size: 24px !important;
+}
+
+.page-head::after,
+.page-head-content::after {
+    content: "";
+    display: block;
+    width: 44px;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e0a62f 0%, #f1cb72 100%);
+    margin: 8px auto 0 auto;
+    opacity: 0.9;
+}
+
+/* =========================================================
+   Sidebar
+   ========================================================= */
+.layout-side-section,
+.standard-sidebar,
+.desk-sidebar,
+.layout-main .layout-side-section {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+    border: 1px solid var(--digitz-blue-border) !important;
+    border-radius: var(--digitz-radius-lg) !important;
+    box-shadow: var(--digitz-shadow-sm) !important;
+}
+
+.standard-sidebar .standard-sidebar-item,
+.layout-side-section .sidebar-item,
+.desk-sidebar .standard-sidebar-item,
+.tree-link,
+.sidebar-item-label,
+.standard-sidebar-label {
+    color: #233553 !important;
+    font-weight: 500 !important;
+    border-radius: 12px !important;
+    transition: var(--digitz-transition) !important;
+}
+
+.standard-sidebar .standard-sidebar-item,
+.layout-side-section .sidebar-item,
+.tree-link {
+    position: relative !important;
+    margin: 3px 8px !important;
+    padding: 10px 12px !important;
+    min-height: 42px !important;
+    display: flex !important;
+    align-items: center !important;
+    border-radius: 14px !important;
+    border: 1px solid transparent !important;
+}
+
+.standard-sidebar .standard-sidebar-item:hover,
+.layout-side-section .sidebar-item:hover,
+.tree-link:hover {
+    background: linear-gradient(180deg, #f6faff 0%, #edf5ff 100%) !important;
+    color: var(--digitz-blue-dark) !important;
+    border-color: #d9e7ff !important;
+    box-shadow: 0 4px 10px rgba(33, 77, 187, 0.06) !important;
+    transform: translateX(2px) !important;
+}
+
+.standard-sidebar .standard-sidebar-item.selected,
+.standard-sidebar .standard-sidebar-item.active,
+.layout-side-section .sidebar-item.selected,
+.layout-side-section .sidebar-item.active,
+.tree-link.active {
+    position: relative !important;
+    background: linear-gradient(180deg, #eaf2ff 0%, #dcebff 100%) !important;
+    color: var(--digitz-blue-dark) !important;
+    font-weight: 700 !important;
+    border: 1px solid #bfd7ff !important;
+    box-shadow:
+        0 6px 14px rgba(33, 77, 187, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55) !important;
+}
+
+.standard-sidebar .standard-sidebar-item.selected::before,
+.standard-sidebar .standard-sidebar-item.active::before,
+.layout-side-section .sidebar-item.selected::before,
+.layout-side-section .sidebar-item.active::before,
+.tree-link.active::before {
+    content: "" !important;
+    position: absolute !important;
+    left: -1px !important;
+    top: 7px !important;
+    bottom: 7px !important;
+    width: 4px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(180deg, #214dbb 0%, #4da3ff 100%) !important;
+}
+
+.standard-sidebar .standard-sidebar-item.selected::after,
+.standard-sidebar .standard-sidebar-item.active::after,
+.layout-side-section .sidebar-item.selected::after,
+.layout-side-section .sidebar-item.active::after,
+.tree-link.active::after {
+    content: "" !important;
+    position: absolute !important;
+    right: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 18px !important;
+    height: 4px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(90deg, #e0a62f 0%, #f0c96a 100%) !important;
+    opacity: 0.9 !important;
+}
+
+.standard-sidebar .icon,
+.layout-side-section .icon,
+.tree-link .icon {
+    color: inherit !important;
+    opacity: 0.95;
+    font-size: 16px !important;
+}
+
+.sidebar-label,
+.standard-sidebar-label,
+.section-head .indicator,
+.indicator-pill,
+.filter-pill {
+    border-radius: 999px !important;
+    background: linear-gradient(180deg, #f3f8ff 0%, #eaf2ff 100%) !important;
+    color: var(--digitz-blue) !important;
+    border: 1px solid var(--digitz-blue-border) !important;
+    font-weight: 700 !important;
+    box-shadow: 0 1px 3px rgba(33, 77, 187, 0.06) !important;
+}
+
+.standard-sidebar-label,
+.sidebar-label {
+    margin: 6px 10px 10px !important;
+    padding: 6px 12px !important;
+    letter-spacing: 0.3px !important;
+    font-size: 12px !important;
+}
+
+/* =========================================================
+   Cards / widgets / blocks
+   ========================================================= */
+.widget,
+.widget-group,
+.widget-body,
+.widget-head,
+.number-widget,
+.chart-widget,
+.shortcut-widget-box,
+.ce-block,
+.ce-block.col-xs-12,
+.block-widget,
+.dashboard-graph,
+.workspace-card-wrapper,
+.workspace-card,
+.section-body,
+.frappe-card,
+.form-dashboard-section,
+.layout-main-section-wrapper .widget {
+    border: 1px solid var(--digitz-blue-border) !important;
+    border-radius: var(--digitz-radius-lg) !important;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
+    box-shadow: var(--digitz-shadow-sm) !important;
+    transition: var(--digitz-transition) !important;
+}
+
+.widget:hover,
+.chart-widget:hover,
+.shortcut-widget-box:hover,
+.workspace-card:hover,
+.frappe-card:hover {
+    box-shadow: var(--digitz-shadow-hover) !important;
+    transform: translateY(-1px);
+    border-color: var(--digitz-blue-border-strong) !important;
+}
+
+/* =========================================================
+   Workspace major sections - final hierarchy
+   ========================================================= */
+.shortcut-widget-box,
+.workspace-card,
+.widget.shortcut-widget-box {
+    position: relative !important;
+    overflow: hidden !important;
+    border-radius: var(--digitz-radius-xl) !important;
+    border: 1.5px solid var(--digitz-blue-border-stronger) !important;    
+    background: linear-gradient(180deg, #f4f9ff 0%, #ffffff 100%) !important;
+    box-shadow: var(--digitz-shadow-section) !important;
+    backdrop-filter: blur(2px) !important;
+    transition: all 0.25s ease, border-left-width 0.15s ease !important;
+}
+
+.shortcut-widget-box::before,
+.workspace-card::before,
+.widget.shortcut-widget-box::before {
+    content: "" !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
+    height: 72px !important;
+    background: linear-gradient(180deg, rgba(77, 163, 255, 0.10) 0%, rgba(77, 163, 255, 0.00) 100%) !important;
+    pointer-events: none !important;
+    transition: background 0.22s ease !important;
+}
+
+.shortcut-widget-box::after,
+.workspace-card::after,
+.widget.shortcut-widget-box::after {
+    content: "" !important;
+    position: absolute !important;
+    inset: 0 !important;
+    border-radius: inherit !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.85),
+        inset 0 -1px 0 rgba(33,77,187,0.04) !important;
+    pointer-events: none !important;
+}
+
+.shortcut-widget-box:hover,
+.workspace-card:hover,
+.widget.shortcut-widget-box:hover {
+    border-color: var(--digitz-blue-border-deep) !important;
+    border-left-color: var(--digitz-blue-dark) !important;    
+    box-shadow: var(--digitz-shadow-section-hover) !important;
+    transform: translateY(-2px) !important;
+}
+
+.shortcut-widget-box:hover::before,
+.workspace-card:hover::before,
+.widget.shortcut-widget-box:hover::before {
+    background: linear-gradient(
+        180deg,
+        rgba(77, 163, 255, 0.18) 0%,
+        rgba(77, 163, 255, 0.00) 100%
+    ) !important;
+}
+
+/* Inner content area of workspace blocks - reduced visual noise */
+.shortcut-widget-box .widget-body,
+.widget.shortcut-widget-box .widget-body,
+.workspace-card .widget-body {
+    position: relative !important;
+    padding-top: 14px !important;
+    padding-bottom: 16px !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: none !important;
+    border-radius: 18px !important;
+    box-shadow: var(--digitz-shadow-inner) !important;
+}
+
+/* Remove visual harshness from too many inner borders */
+.widget .widget-head,
+.widget-head,
+.section-head,
+.card-header,
+.chart-widget .widget-head {
+    border-bottom: 1px solid #edf3ff !important;
+    background: transparent !important;
+}
+
+/* =========================================================
+   Widget titles / section titles
+   ========================================================= */
+.widget-title,
+.widget-head .widget-title,
+.card-title,
+.ellipsis.title-text,
+.shortcut-widget-box .title,
+.workspace-card .widget-head .widget-title {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 8px 16px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(180deg, #f4f9ff 0%, #eaf2ff 100%) !important;
+    border: 1px solid var(--digitz-blue-border-soft-title) !important;
+    color: var(--digitz-blue-dark) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.15px !important;
+    box-shadow:
+        0 3px 8px rgba(33, 77, 187, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+    min-height: 36px !important;
+}
+
+.shortcut-widget-box .widget-title,
+.workspace-card .widget-head .widget-title,
+.widget.shortcut-widget-box .widget-title {
+    border-color: var(--digitz-blue-border-soft-title) !important;
+    background: linear-gradient(180deg, #f4f9ff 0%, #e8f1ff 100%) !important;
+}
+
+.section-head,
+.form-section .section-head {
+    color: var(--digitz-blue-dark) !important;
+    font-weight: 700 !important;
+}
+
+.widget-title::after,
+.widget-head .widget-title::after,
+.card-title::after,
+.ellipsis.title-text::after {
+    content: "";
+    width: 30px;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e0a62f 0%, #f1cb72 100%);
+    display: inline-block;
+    opacity: 0.95;
+}
+
+/* =========================================================
+   Links inside cards
+   ========================================================= */
+.widget a,
+.shortcut-widget-box a,
+.widget-body a,
+.page-content a,
+.list-link,
+.standard-sidebar a {
+    color: var(--digitz-text) !important;
+    transition: color 0.22s ease !important, background 0.22s ease !important, box-shadow 0.22s ease !important;
+}
+
+.widget a:hover,
+.shortcut-widget-box a:hover,
+.widget-body a:hover,
+.page-content a:hover,
+.list-link:hover {
+    color: var(--digitz-blue) !important;
+    text-decoration: none !important;
+}
+
+.shortcut-widget-box .link-item,
+.shortcut-widget-box a,
+.widget-body .link-item {
+    border-radius: 12px !important;
+    padding: 8px 10px !important;
+    transition: var(--digitz-transition) !important;
+}
+
+.shortcut-widget-box .link-item:hover,
+.shortcut-widget-box a:hover,
+.widget-body .link-item:hover {
+    background: linear-gradient(180deg, #f5f9ff 0%, #edf5ff 100%) !important;
+    color: var(--digitz-blue) !important;
+    box-shadow: 0 2px 8px rgba(33, 77, 187, 0.05) !important;
+}
+
+/* =========================================================
+   Buttons
+   ========================================================= */
+.btn {
+    border-radius: 12px !important;
+    transition: var(--digitz-transition) !important;
+    font-weight: 600 !important;
+}
+
+.btn-default,
+.btn-secondary {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+    border: 1px solid var(--digitz-blue-border) !important;
+    color: var(--digitz-blue-dark) !important;
+    box-shadow: var(--digitz-shadow-sm) !important;
+}
+
+.btn-default:hover,
+.btn-secondary:hover {
+    border-color: var(--digitz-blue-light) !important;
+    background: linear-gradient(180deg, #f7fbff 0%, #edf5ff 100%) !important;
+    transform: translateY(-1px);
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, #2b5ad0 0%, #214dbb 100%) !important;
+    border: 1px solid #214dbb !important;
+    color: #ffffff !important;
+    box-shadow: 0 8px 20px rgba(33, 77, 187, 0.18) !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background: linear-gradient(180deg, #3264df 0%, #214dbb 100%) !important;
+    border-color: #214dbb !important;
+    transform: translateY(-1px);
+}
+
+.btn .icon {
+    color: inherit !important;
+}
+
+/* =========================================================
+   Inputs / filters / dropdowns
+   ========================================================= */
+.form-control,
+.control-input,
+.awesomplete > input,
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="tel"],
+input[type="url"],
+textarea,
+select {
+    border: 1px solid var(--digitz-blue-border) !important;
+    border-radius: 12px !important;
+    background: #ffffff !important;
+    color: var(--digitz-text) !important;
+    box-shadow: inset 0 1px 2px rgba(33, 77, 187, 0.02) !important;
+    transition: var(--digitz-transition) !important;
+}
+
+.control-value {
+    color: var(--digitz-text) !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+}
+
+.form-control:focus,
+.control-input:focus,
+.awesomplete > input:focus,
+input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+input[type="date"]:focus,
+input[type="datetime-local"]:focus,
+input[type="time"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+textarea:focus,
+select:focus {
+    border-color: var(--digitz-blue-light) !important;
+    box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.12) !important;
+}
+
+/* Checkboxes.
+   Read-only Check fields are rendered by Frappe as
+   `<input type="checkbox" disabled class="disabled-selected">` with NO `checked`
+   attribute - the tick is drawn purely by CSS. So the appearance/background must
+   never be reset to the native widget, or checked values look empty in read-only
+   (submitted) documents. */
+input[type="checkbox"] {
+    position: relative;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    width: 14px !important;
+    height: 14px !important;
+    padding: 0 !important;
+    border: 1px solid var(--digitz-blue-border-stronger) !important;
+    border-radius: 4px !important;
+    background-color: #ffffff !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+/* Unchecked - declared first so the checked rules below always win
+   (`:disabled` and `.disabled-selected` have equal specificity) */
+input[type="checkbox"]:disabled,
+input[type="checkbox"].disabled-deselected {
+    background-color: var(--digitz-blue-soft-2) !important;
+    background-image: none !important;
+    border-color: var(--digitz-blue-border) !important;
+    pointer-events: none;
+}
+
+/* Checked - includes the read-only/disabled variants, which carry no
+   `checked` attribute and rely on this tick being drawn by CSS */
+input[type="checkbox"]:checked,
+input[type="checkbox"]:disabled:checked,
+input[type="checkbox"].disabled-selected {
+    background-color: var(--digitz-blue) !important;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 8 7' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 4.00001L2.66667 5.80001L7 1.20001' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+    background-size: 57% !important;
+    border-color: var(--digitz-blue) !important;
+    opacity: 1 !important;
+}
+
+input[type="checkbox"].disabled-selected {
+    pointer-events: none;
+}
+
+input[type="checkbox"]:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.18) !important;
+}
+
+input[type="radio"] {
+    appearance: auto !important;
+    -webkit-appearance: radio !important;
+    box-shadow: none !important;
+    border: initial !important;
+    background: initial !important;
+    border-radius: initial !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 0 !important;
+}
+
+/* =========================================================
+   Tables / list areas
+   ========================================================= */
+.list-row,
+.grid-row,
+.grid-heading-row,
+.report-wrapper,
+.dt-scrollable,
+.table,
+.datatable {
+    border-color: #e8f0ff !important;
+}
+
+.list-row:hover,
+.grid-row:hover {
+    background: #f8fbff !important;
+}
+
+.table thead th,
+.grid-heading-row {
+    background: #f7faff !important;
+    color: var(--digitz-blue-dark) !important;
+    border-bottom: 1px solid var(--digitz-blue-border) !important;
+    font-weight: 700 !important;
+}
+
+/* =========================================================
+   Modals / dialogs
+   ========================================================= */
+.modal-content,
+.dialog,
+.msg-box,
+.widget.new-widget {
+    border: 1px solid var(--digitz-blue-border) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 18px 40px rgba(33, 77, 187, 0.14) !important;
+}
+
+.modal-header,
+.dialog-header {
+    background: linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%) !important;
+    border-bottom: 1px solid var(--digitz-blue-border) !important;
+}
+
+.modal-title,
+.dialog-title {
+    color: var(--digitz-blue-dark) !important;
+    font-weight: 700 !important;
+}
+
+/* =========================================================
+   Form sections
+   ========================================================= */
+.form-section,
+.section-body,
+.form-dashboard-section,
+.form-column {
+    border-radius: var(--digitz-radius-md) !important;
+}
+
+/* =========================================================
+   Small muted text
+   ========================================================= */
+.text-muted,
+.small,
+small,
+.text-extra-muted,
+.help-box,
+.control-label {
+    color: var(--digitz-text-soft) !important;
+}
+
+/* =========================================================
+   Scrollbars
+   ========================================================= */
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+    background: #f2f6ff;
+    border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #c6dafe 0%, #9dc2ff 100%);
+    border-radius: 999px;
+    border: 2px solid #f2f6ff;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #aecdff 0%, #7fb1ff 100%);
+}
+
+/* =========================================================
+   Chart polish
+   ========================================================= */
+.chart-widget,
+.dashboard-graph,
+.frappe-chart {
+    position: relative !important;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
+    border: 1px solid #cfe0ff !important;
+    border-radius: 20px !important;
+    box-shadow:
+        0 8px 24px rgba(33, 77, 187, 0.07),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+    overflow: hidden !important;
+}
+
+.chart-widget::before,
+.dashboard-graph::before,
+.frappe-chart::before {
+    content: "" !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
+    height: 68px !important;
+    background: linear-gradient(180deg, rgba(77,163,255,0.08) 0%, rgba(77,163,255,0.00) 100%) !important;
+    pointer-events: none !important;
+}
+
+.chart-widget .widget-head,
+.dashboard-graph .widget-head,
+.widget.chart-widget .widget-head {
+    padding-top: 14px !important;
+    padding-bottom: 12px !important;
+    border-bottom: 1px solid #edf3ff !important;
+    background: transparent !important;
+}
+
+.chart-widget .widget-title,
+.dashboard-graph .widget-title,
+.widget.chart-widget .widget-title {
+    font-size: 14px !important;
+    padding: 8px 16px !important;
+    border-radius: 999px !important;
+    background: linear-gradient(180deg, #f4f9ff 0%, #e8f1ff 100%) !important;
+    border: 1px solid #cfe0ff !important;
+    color: #214dbb !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 6px rgba(33, 77, 187, 0.05) !important;
+}
+
+.chart-widget .widget-control,
+.chart-widget .widget-actions,
+.widget-head .widget-menu {
+    opacity: 0.95;
+}
+
+.chart-widget .widget-control button,
+.chart-widget .widget-actions button,
+.chart-widget .btn,
+.chart-widget .icon-btn {
+    border-radius: 12px !important;
+    border: 1px solid #d7e5ff !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%) !important;
+    box-shadow: 0 2px 6px rgba(33, 77, 187, 0.04) !important;
+}
+
+.chart-widget .widget-control button:hover,
+.chart-widget .widget-actions button:hover,
+.chart-widget .btn:hover,
+.chart-widget .icon-btn:hover {
+    border-color: #bdd6ff !important;
+    background: linear-gradient(180deg, #f7fbff 0%, #edf5ff 100%) !important;
+}
+
+.chart-widget .widget-body,
+.dashboard-graph .widget-body,
+.frappe-chart .graph-stats-container {
+    padding-top: 10px !important;
+    padding-bottom: 12px !important;
+}
+
+.chart-widget svg text,
+.frappe-chart svg text {
+    fill: #4d5f7c !important;
+    font-family: 'Exo 2', sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+}
+
+.chart-widget svg line,
+.frappe-chart svg line {
+    stroke: #e9f1ff !important;
+}
+
+.graph-svg-tip,
+.chart-container .graph-svg-tip {
+    border-radius: 12px !important;
+    border: 1px solid #d4e4ff !important;
+    background: rgba(255, 255, 255, 0.96) !important;
+    color: #1b2b47 !important;
+    box-shadow: 0 10px 22px rgba(33, 77, 187, 0.12) !important;
+    backdrop-filter: blur(6px) !important;
+}
+
+/* =========================================================
+   Workspace blocks spacing refinement
+   ========================================================= */
+.widget-group,
+.workspace-card,
+.chart-widget,
+.shortcut-widget-box,
+.ce-block.col-xs-12 {
+    margin-bottom: 12px !important;
+}
+
+.widget-body,
+.card-body,
+.section-body {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+}
+
+/* =========================================================
+   Optional: stronger border highlight on major sections only
+   ========================================================= */
+.layout-main-section-wrapper > .widget,
+.layout-main-section-wrapper > .ce-block,
+.page-content > .widget:first-child,
+.page-content > .chart-widget:first-child {
+    border-color: var(--digitz-blue-border-strong) !important;
+}
+
+/* =========================================================
+   Frappe indicators / pills / labels
+   ========================================================= */
+.indicator,
+.ellipsis .indicator {
+    border-radius: 999px !important;
+    font-weight: 700 !important;
+    padding: 3px 10px !important;
+    box-shadow: 0 1px 3px rgba(33, 77, 187, 0.05) !important;
+}
+
+/* =========================================================
+   Clean up excessive harsh borders from random elements
+   ========================================================= */
+hr,
+.widget .divider,
+.form-divider,
+.section-divider {
+    border-color: #edf3ff !important;
+}
+
+/* =========================================================
+   Mobile / smaller screens
+   ========================================================= */
+@media (max-width: 768px) {
+    .widget-title,
+    .widget-head .widget-title,
+    .card-title {
+        padding: 6px 12px !important;
+        font-size: 13px !important;
+    }
+
+    .page-head::after,
+    .page-head-content::after {
+        width: 34px;
+    }
+
+    .page-head .page-title,
+    .page-title .title-text,
+    .page-head h3,
+    .page-head h2 {
+        font-size: 24px !important;
+    }
+}
+
+/* =========================================================
+   Workspace editor + Link dropdown compatibility fixes
+   ---------------------------------------------------------
+   The premium theme wraps cards in `overflow:hidden` chrome and
+   restyles editor.js blocks. That clips the Link/Autocomplete
+   dropdowns and the block toolbar used to add cards & links to a
+   workspace. These rules make the interactive editor UI escape
+   its containers again WITHOUT changing the normal (read) look.
+   ========================================================= */
+
+/* 1. Link / Dynamic Link / Autocomplete dropdowns must escape their
+      container. The control itself was already handled, but its
+      clipping ancestors inside dialog grids (e.g. the "Card Links"
+      table -> "Link To") also need overflow visible. */
+.frappe-control[data-fieldtype="Link"],
+.frappe-control[data-fieldtype="Dynamic Link"],
+.frappe-control[data-fieldtype="Autocomplete"] {
+    overflow: visible !important;
+}
+.modal .form-grid,
+.modal .grid-body,
+.modal .grid-body .rows,
+.modal .grid-row,
+.modal .grid-row .row,
+.modal .grid-static-col,
+.modal .grid-row .field-area,
+.grid-row.editable-row .grid-static-col {
+    overflow: visible !important;
+}
+
+/* 2. Editor.js (workspace EDIT mode): keep structural block wrappers
+      chrome-free and their toolbar / add-block popover above and
+      clickable. (Cards keep their look via the `.widget` styles.) */
+.ce-block,
+.ce-block.col-xs-12 {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+}
+.ce-toolbar,
+.ce-toolbar__actions,
+.ce-toolbar__plus,
+.ce-toolbar__settings-btn,
+.ce-popover,
+.ce-popover--opened,
+.ce-inline-toolbar,
+.ce-conversion-toolbar,
+.ce-settings {
+    z-index: 1060 !important;
+    pointer-events: auto !important;
+}
+
+/* NOTE: earlier revisions also forced `transition/animation: none` on all
+   editor descendants and `transform: none` on editor blocks/cards, chasing a
+   containing-block theory for the vibration. Both were the WRONG cause (the
+   real fix is the pointer-events guard in 2c below) and they broke charts:
+   frappe-charts positions/animates its SVG labels, bars and pie slices, so
+   suppressing transform/transition on chart descendants collapsed the labels.
+   Never neutralize transform/transition/animation on chart/editor descendants. */
+
+/* 2c. THE vibration fix (confirmed via live diagnostic: the toolbar's inline
+   `top` oscillates between two adjacent blocks while hovering the open menu).
+   editor.js repositions the toolbar to whichever block the cursor is over;
+   the theme's tall cards make the open "add block" popover overlap the next
+   block, so hovering its items re-triggers the move -> the popover (which
+   lives inside the toolbar) jumps and items slip away. While the popover is
+   open, make existing blocks non-interactive so editor.js stops chasing the
+   hovered block; keep the toolbar/popover fully clickable. */
+.codex-editor:has(.ce-popover--opened) .ce-block {
+    pointer-events: none !important;
+}
+.codex-editor:has(.ce-popover--opened) .ce-toolbar,
+.codex-editor:has(.ce-popover--opened) .ce-toolbar *,
+.codex-editor:has(.ce-popover--opened) .ce-popover,
+.codex-editor:has(.ce-popover--opened) .ce-popover * {
+    pointer-events: auto !important;
+}
+
+/* 3. A widget/card in edit mode must not clip its add / settings
+      controls or the inline link editor, and its decorative overlays
+      must not sit over them. */
+.widget.edit-mode,
+.widget.links.edit-mode,
+.widget.edit-mode .widget-body,
+.shortcut-widget-box.edit-mode {
+    overflow: visible !important;
+}
+.widget.edit-mode::before,
+.widget.edit-mode::after,
+.shortcut-widget-box.edit-mode::before,
+.shortcut-widget-box.edit-mode::after {
+    content: none !important;
+}
+
+/* =========================================================
+   Fix Desk / Report page title clipping
+   ========================================================= */
+.page-head .page-head-content {
+	display: flex !important;
+	align-items: center !important;
+	gap: 14px !important;
+}
+
+.page-head .title-area,
+.page-head .page-title {
+	flex: 1 1 auto !important;
+	min-width: 0 !important;
+	max-width: none !important;
+	width: auto !important;
+}
+
+.page-head .title-area .title-text,
+.page-head .page-title .title-text {
+	display: block !important;
+	max-width: none !important;
+	width: auto !important;
+	overflow: visible !important;
+	text-overflow: unset !important;
+	white-space: nowrap !important;
+}

@@ -1,0 +1,40 @@
+{
+ "based_on": "",
+ "chart_name": "Medical Service Chart",
+ "chart_type": "Report",
+ "creation": "2025-09-01 12:58:58.379535",
+ "currency": "AED",
+ "docstatus": 0,
+ "doctype": "Dashboard Chart",
+ "document_type": "",
+ "dynamic_filters_json": "[]",
+ "filters_json": "{}",
+ "group_by_type": "Count",
+ "idx": 0,
+ "is_public": 1,
+ "is_standard": 1,
+ "modified": "2025-09-01 13:07:21.744980",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "Medical Service Chart",
+ "number_of_groups": 0,
+ "owner": "Administrator",
+ "parent_document_type": "",
+ "report_name": "Medical Service Report",
+ "roles": [],
+ "show_values_over_chart": 0,
+ "source": "",
+ "time_interval": "Yearly",
+ "timeseries": 0,
+ "timespan": "Last Year",
+ "type": "Line",
+ "use_report_chart": 0,
+ "value_based_on": "",
+ "x_field": "service",
+ "y_axis": [
+  {
+   "color": "#29CD42",
+   "y_field": "total_amount"
+  }
+ ]
+}

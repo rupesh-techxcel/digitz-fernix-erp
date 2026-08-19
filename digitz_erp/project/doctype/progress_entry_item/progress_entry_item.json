@@ -1,0 +1,247 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2024-08-09 13:26:35.130654",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_and_completion_details",
+  "prev_completion",
+  "total_completion",
+  "current_completion",
+  "item",
+  "sales_order_amt",
+  "column_break_11",
+  "item_name",
+  "item_gross_amount",
+  "item_tax_amount",
+  "item_net_amount",
+  "rate_includes_tax",
+  "tax_excluded",
+  "section_break_ijht",
+  "tax",
+  "tax_rate",
+  "total_gross_amount",
+  "total_tax_amount",
+  "total_net_amount",
+  "prev_gross_amount",
+  "prev_tax_amount",
+  "prev_net_amount",
+  "column_break_swfb",
+  "gross_amount",
+  "tax_amount",
+  "net_amount",
+  "amendment_mode"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item",
+   "options": "Item"
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name"
+  },
+  {
+   "fieldname": "column_break_11",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "gross_amount",
+   "fieldtype": "Currency",
+   "label": "Gross Amount",
+   "non_negative": 1,
+   "precision": "2"
+  },
+  {
+   "default": "0",
+   "fieldname": "tax_amount",
+   "fieldtype": "Currency",
+   "label": "Tax Amount",
+   "non_negative": 1,
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "description": "(Total Percentage Of Completion)",
+   "fieldname": "total_completion",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Total Completion %",
+   "precision": "2"
+  },
+  {
+   "fieldname": "sales_order_amt",
+   "fieldtype": "Currency",
+   "hidden": 1,
+   "label": "Sales Order Amt.",
+   "non_negative": 1,
+   "precision": "3"
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "description": "(Prev Percentage Of Completion)",
+   "fieldname": "prev_completion",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Prev Completion %",
+   "precision": "0",
+   "read_only": 1
+  },
+  {
+   "description": "Total from SO Or BOQ",
+   "fieldname": "item_gross_amount",
+   "fieldtype": "Currency",
+   "label": "Item Gross Amount",
+   "read_only": 1
+  },
+  {
+   "description": "Total from SO Or BOQ",
+   "fieldname": "item_tax_amount",
+   "fieldtype": "Currency",
+   "label": "Item Tax Amount",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "description": "Total from SO Or BOQ",
+   "fieldname": "item_net_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Item Net Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_ijht",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_swfb",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tax",
+   "fieldtype": "Link",
+   "label": "Tax",
+   "options": "Tax"
+  },
+  {
+   "fetch_from": "tax.tax_rate",
+   "fieldname": "tax_rate",
+   "fieldtype": "Currency",
+   "label": "Tax Rate",
+   "non_negative": 1,
+   "precision": "3"
+  },
+  {
+   "fieldname": "item_and_completion_details",
+   "fieldtype": "Section Break",
+   "label": "Item & Completion Details"
+  },
+  {
+   "default": "0",
+   "fieldname": "net_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Net Amount",
+   "non_negative": 1,
+   "precision": "2"
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "description": "(Total Completion - Prev Completion)",
+   "fieldname": "current_completion",
+   "fieldtype": "Percent",
+   "label": "Current Completion %",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "rate_includes_tax",
+   "fieldtype": "Check",
+   "label": "Rate Includes Tax"
+  },
+  {
+   "default": "0",
+   "fieldname": "tax_excluded",
+   "fieldtype": "Check",
+   "label": "Tax Excluded"
+  },
+  {
+   "fieldname": "total_gross_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Total Gross Amount",
+   "precision": "2"
+  },
+  {
+   "fieldname": "total_tax_amount",
+   "fieldtype": "Currency",
+   "label": "Total Tax Amount",
+   "precision": "2"
+  },
+  {
+   "fieldname": "prev_gross_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Prev Gross Amount",
+   "precision": "2"
+  },
+  {
+   "fieldname": "prev_tax_amount",
+   "fieldtype": "Currency",
+   "label": "Prev Tax Amount",
+   "precision": "2"
+  },
+  {
+   "default": "No Amendment",
+   "fieldname": "amendment_mode",
+   "fieldtype": "Select",
+   "label": "Amendment Mode",
+   "options": "No Amendment\nAddition\nDeletion",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "fieldname": "prev_net_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Prev Net Amount",
+   "non_negative": 1,
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_net_amount",
+   "fieldtype": "Currency",
+   "label": "Total Amount",
+   "precision": "2"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-02-03 08:16:17.525589",
+ "modified_by": "Administrator",
+ "module": "Project",
+ "name": "Progress Entry Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,315 @@
+{
+ "actions": [],
+ "allow_copy": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2023-07-19 13:14:47.879782",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "details_section",
+  "naming_series",
+  "posting_date",
+  "posting_time",
+  "edit_posting_date_and_time",
+  "column_break_ovhu",
+  "default_payable_account",
+  "default_cost_center",
+  "column_break_3fo8",
+  "rate_includes_tax",
+  "remarks",
+  "column_break_ymsh",
+  "company",
+  "project",
+  "work_order",
+  "boq_execution",
+  "boq",
+  "accounts_section",
+  "credit_expense",
+  "payment_mode",
+  "payment_account",
+  "mode",
+  "column_break_hugq",
+  "reference_no",
+  "reference_date",
+  "column_break_ntgt",
+  "column_break_sfxf",
+  "section_break_xwqi",
+  "expense_entry_details",
+  "section_break_shsu",
+  "total_expense_amount",
+  "total_tax_amount",
+  "grand_total",
+  "column_break_yyur",
+  "paid_amount",
+  "column_break_8dze",
+  "column_break_kbba",
+  "section_break_jtpi",
+  "amended_from",
+  "payment_schedule_tab",
+  "payment_schedule"
+ ],
+ "fields": [
+  {
+   "default": "Today",
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Posting Date",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Expense Entry",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "default": "Now",
+   "fieldname": "posting_time",
+   "fieldtype": "Time",
+   "label": "Posting Time",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "edit_posting_date_and_time",
+   "fieldtype": "Check",
+   "label": "Edit Posting Date and Time"
+  },
+  {
+   "fieldname": "expense_entry_details",
+   "fieldtype": "Table",
+   "label": "Expense Entry Details",
+   "options": "Expense Entry Details"
+  },
+  {
+   "fieldname": "total_expense_amount",
+   "fieldtype": "Currency",
+   "label": "Total Expense Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "accounts_section",
+   "fieldtype": "Section Break",
+   "label": "Accounts"
+  },
+  {
+   "depends_on": "eval:doc.credit_expense == 0",
+   "fieldname": "payment_mode",
+   "fieldtype": "Link",
+   "label": "Payment Mode",
+   "options": "Payment Mode"
+  },
+  {
+   "depends_on": "eval:doc.credit_expense == 0",
+   "fetch_from": "payment_mode.account",
+   "fieldname": "payment_account",
+   "fieldtype": "Link",
+   "label": "Payment Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "total_tax_amount",
+   "fieldtype": "Currency",
+   "label": "Total Tax Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "grand_total",
+   "fieldtype": "Currency",
+   "label": "Grand Total",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "credit_expense",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Credit Expense"
+  },
+  {
+   "default": "0",
+   "fieldname": "rate_includes_tax",
+   "fieldtype": "Check",
+   "label": "Rate includes tax"
+  },
+  {
+   "fieldname": "paid_amount",
+   "fieldtype": "Currency",
+   "label": "Paid Amount"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "column_break_ovhu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_3fo8",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "section_break_xwqi",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_hugq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_ntgt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_yyur",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_8dze",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_jtpi",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "section_break_shsu",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "payment_schedule_tab",
+   "fieldtype": "Tab Break",
+   "label": "Payment Schedule"
+  },
+  {
+   "fieldname": "payment_schedule",
+   "fieldtype": "Table",
+   "label": "Payment Schedule",
+   "options": "Expense Payment Schedule"
+  },
+  {
+   "fieldname": "default_payable_account",
+   "fieldtype": "Link",
+   "label": "Default Payable Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "reference_no",
+   "fieldtype": "Data",
+   "label": "Reference No",
+   "mandatory_depends_on": "eval:doc.mode == 'Bank'"
+  },
+  {
+   "fieldname": "reference_date",
+   "fieldtype": "Date",
+   "label": "Reference Date",
+   "mandatory_depends_on": "eval:doc.mode == 'Bank'"
+  },
+  {
+   "fetch_from": "payment_mode.mode",
+   "fetch_if_empty": 1,
+   "fieldname": "mode",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Mode"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "EE-.#####.-.MM.-.YYYY."
+  },
+  {
+   "fieldname": "default_cost_center",
+   "fieldtype": "Link",
+   "label": "Default Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "column_break_ymsh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project"
+  },
+  {
+   "fieldname": "work_order",
+   "fieldtype": "Link",
+   "label": "Work Order",
+   "options": "Work Order"
+  },
+  {
+   "depends_on": "eval:doc.work_order != undefined",
+   "fetch_from": "work_order.boq_execution",
+   "fieldname": "boq_execution",
+   "fieldtype": "Data",
+   "label": "BOQ Execution",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "work_order.boq",
+   "fieldname": "boq",
+   "fieldtype": "Data",
+   "label": "BOQ",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_sfxf",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_kbba",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2024-12-15 13:58:15.999913",
+ "modified_by": "Administrator",
+ "module": "Accounts",
+ "name": "Expense Entry",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

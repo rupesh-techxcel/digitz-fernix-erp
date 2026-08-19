@@ -1,0 +1,827 @@
+{
+ "actions": [],
+ "allow_copy": 1,
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2023-01-04 16:31:16.689825",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "sales_inv_no",
+  "customer",
+  "customer_balance",
+  "column_break_6",
+  "customer_name",
+  "customer_display_name",
+  "warehouse",
+  "customer_token",
+  "customer_email",
+  "column_break_4",
+  "posting_date",
+  "posting_time",
+  "edit_posting_date_and_time",
+  "remarks",
+  "rate_includes_tax",
+  "column_break_egud",
+  "invoice_fullfilled",
+  "reason_for_unfilled_invoice",
+  "column_break_bufh",
+  "company",
+  "company_tax_id",
+  "more_details_section",
+  "customer_address",
+  "tax_id",
+  "default_cost_center",
+  "ship_to_location",
+  "location_to_print",
+  "column_break_arcq",
+  "update_stock",
+  "salesman",
+  "salesman_code",
+  "reference_no",
+  "reference_date",
+  "column_break_wupz",
+  "price_list",
+  "cost_center",
+  "update_rates_in_price_list",
+  "payment_status",
+  "column_break_lpap",
+  "lpo_no",
+  "lpo_date",
+  "created_from_tab_sale",
+  "advance_received_with_sales_order",
+  "allocated_receipt_entry",
+  "project_section",
+  "project",
+  "project_value",
+  "column_break_iyei",
+  "for_advance_payment",
+  "advance_percentage",
+  "column_break_hpkf",
+  "for_retention_recovery",
+  "column_break_leiv",
+  "accounts_section",
+  "credit_sale",
+  "credit_days",
+  "column_break_bfep",
+  "payment_mode",
+  "mode",
+  "payment_account",
+  "column_break_zjj2",
+  "payment_terms",
+  "column_break_yacz",
+  "section_break_19",
+  "items",
+  "section_break_29",
+  "selected_item_stock_qty_in_the_warehouse",
+  "column_break_30",
+  "item_units",
+  "column_break_uozz",
+  "amended_from",
+  "section_break_25",
+  "is_round_off",
+  "gross_total",
+  "taxable_total",
+  "net_total",
+  "column_break_e6g4",
+  "tax_total",
+  "net_amount",
+  "total_discount_in_line_items",
+  "additional_discount",
+  "in_words",
+  "column_break_33",
+  "rounded_total",
+  "paid_amount",
+  "round_off",
+  "column_break_zvur",
+  "total_big",
+  "terms_and_conditions_section",
+  "terms",
+  "terms_and_conditions",
+  "references_tab",
+  "data_53",
+  "auto_save_delivery_note",
+  "tab_sales",
+  "sales_order",
+  "delivery_notes",
+  "delivery_notes_to_print",
+  "address_line_1",
+  "address_line_2",
+  "area_name",
+  "country",
+  "quotation",
+  "receipt_schedule_tab",
+  "receipt_schedule",
+  "import",
+  "external"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "SI-.#####.-.MM.-.YYYY."
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_6",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "default": "Today",
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
+   "label": "Date",
+   "read_only": 1
+  },
+  {
+   "default": "Now",
+   "fieldname": "posting_time",
+   "fieldtype": "Time",
+   "in_list_view": 1,
+   "label": "Posting Time",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "edit_posting_date_and_time",
+   "fieldtype": "Check",
+   "label": "Edit Posting Date And Time"
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "in_standard_filter": 1,
+   "label": "Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "default": "Standard Selling",
+   "fieldname": "price_list",
+   "fieldtype": "Link",
+   "label": "Price List",
+   "options": "Price List"
+  },
+  {
+   "default": "0",
+   "fieldname": "rate_includes_tax",
+   "fieldtype": "Check",
+   "label": "Rate includes tax",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accounts_section",
+   "fieldtype": "Section Break",
+   "label": "Accounts"
+  },
+  {
+   "fieldname": "section_break_19",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Sales Invoice Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_29",
+   "fieldtype": "Section Break",
+   "hidden": 1
+  },
+  {
+   "fieldname": "selected_item_stock_qty_in_the_warehouse",
+   "fieldtype": "Data",
+   "label": "Last Selected Item Stock Qty in the warehouse"
+  },
+  {
+   "fieldname": "column_break_30",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Sales Invoice",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_25",
+   "fieldtype": "Section Break",
+   "label": "Totals"
+  },
+  {
+   "fieldname": "gross_total",
+   "fieldtype": "Currency",
+   "hidden": 1,
+   "label": "Gross Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_discount_in_line_items",
+   "fieldtype": "Currency",
+   "hidden": 1,
+   "label": "Total Discount In Line Items"
+  },
+  {
+   "fieldname": "tax_total",
+   "fieldtype": "Currency",
+   "label": "Tax Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "additional_discount",
+   "fieldtype": "Currency",
+   "hidden": 1,
+   "label": "Additional Discount"
+  },
+  {
+   "fieldname": "column_break_33",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "net_total",
+   "fieldtype": "Currency",
+   "hidden": 1,
+   "label": "Net Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "round_off",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Round Off",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rounded_total",
+   "fieldtype": "Currency",
+   "label": "Rounded Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "terms_and_conditions_section",
+   "fieldtype": "Section Break",
+   "label": "Terms And Conditions"
+  },
+  {
+   "fieldname": "terms",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Terms",
+   "options": "Terms And Conditions"
+  },
+  {
+   "fieldname": "terms_and_conditions",
+   "fieldtype": "Text Editor",
+   "hidden": 1,
+   "label": "Terms and Conditions"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "lpo_no",
+   "fieldtype": "Data",
+   "in_preview": 1,
+   "label": "LPO No"
+  },
+  {
+   "fieldname": "lpo_date",
+   "fieldtype": "Date",
+   "label": "LPO Date"
+  },
+  {
+   "fieldname": "reference_no",
+   "fieldtype": "Data",
+   "label": "Reference No",
+   "mandatory_depends_on": "eval:doc.mode == 'Bank'"
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "data_53",
+   "fieldtype": "Section Break",
+   "label": "Related Documents"
+  },
+  {
+   "default": "0",
+   "fieldname": "credit_sale",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Credit Sale"
+  },
+  {
+   "fieldname": "credit_days",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Credit Days"
+  },
+  {
+   "fieldname": "payment_terms",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Payment Terms "
+  },
+  {
+   "default": "Cash",
+   "fieldname": "payment_mode",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Payment Mode",
+   "options": "Payment Mode"
+  },
+  {
+   "fetch_from": "payment_mode.mode",
+   "fetch_if_empty": 1,
+   "fieldname": "mode",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Mode"
+  },
+  {
+   "fetch_from": "payment_mode.account",
+   "fieldname": "payment_account",
+   "fieldtype": "Link",
+   "label": "Payment Account",
+   "options": "Account",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ship_to_location",
+   "fieldtype": "Link",
+   "label": "Ship To Location",
+   "options": "Customer Delivery Location"
+  },
+  {
+   "fieldname": "customer_address",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "salesman",
+   "fieldtype": "Link",
+   "label": "Salesman",
+   "options": "Employee"
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_preview": 1,
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "This field is no longer using",
+   "fieldname": "auto_save_delivery_note",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Auto Save Delivery Note"
+  },
+  {
+   "fetch_from": "salesman.employee_code",
+   "fieldname": "salesman_code",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Salesman Code"
+  },
+  {
+   "fieldname": "references_tab",
+   "fieldtype": "Tab Break",
+   "label": "References"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "delivery_notes",
+   "fieldtype": "Table",
+   "label": "Delivery Notes",
+   "options": "Sales Invoice Delivery Notes",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "customer.address_line_1",
+   "fieldname": "address_line_1",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Address Line 1"
+  },
+  {
+   "fetch_from": "customer.address_line_2",
+   "fieldname": "address_line_2",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Address Line 2"
+  },
+  {
+   "fetch_from": "customer.area_name",
+   "fieldname": "area_name",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Area Name"
+  },
+  {
+   "fetch_from": "customer.country",
+   "fieldname": "country",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Country"
+  },
+  {
+   "fetch_from": "company.tax_id",
+   "fieldname": "company_tax_id",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Company Tax Id"
+  },
+  {
+   "fetch_from": "customer.tax_id",
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "Tax Id"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "delivery_notes_to_print",
+   "fieldtype": "Data",
+   "label": "Delivery Notes To Print"
+  },
+  {
+   "fieldname": "customer_display_name",
+   "fieldtype": "Data",
+   "label": "Customer Display Name"
+  },
+  {
+   "fieldname": "quotation",
+   "fieldtype": "Link",
+   "label": "Quotation",
+   "options": "Quotation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "paid_amount",
+   "fieldtype": "Currency",
+   "hidden": 1,
+   "label": "Paid Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tab_sales",
+   "fieldtype": "Link",
+   "label": "Tab Sales",
+   "options": "Tab Sales",
+   "read_only": 1
+  },
+  {
+   "fieldname": "item_units",
+   "fieldtype": "Data",
+   "label": "Item Units"
+  },
+  {
+   "fieldname": "customer_balance",
+   "fieldtype": "Currency",
+   "label": "Customer Balance",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "update_rates_in_price_list",
+   "fieldtype": "Check",
+   "label": "Update Rates In Price List"
+  },
+  {
+   "fieldname": "column_break_e6g4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_zjj2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "receipt_schedule",
+   "fieldtype": "Table",
+   "label": "Receipt Schedule",
+   "options": "Sales Receipt Schedule"
+  },
+  {
+   "fieldname": "receipt_schedule_tab",
+   "fieldtype": "Tab Break",
+   "label": "Receipt Schedule"
+  },
+  {
+   "fieldname": "column_break_yacz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_uozz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payment_status",
+   "fieldtype": "Data",
+   "in_filter": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Payment Status"
+  },
+  {
+   "fieldname": "reference_date",
+   "fieldtype": "Date",
+   "label": "Reference Date",
+   "mandatory_depends_on": "eval:doc.mode == 'Bank'"
+  },
+  {
+   "fieldname": "in_words",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "In words"
+  },
+  {
+   "default": "0",
+   "fieldname": "update_stock",
+   "fieldtype": "Check",
+   "label": "Update Stock"
+  },
+  {
+   "default": "0",
+   "fieldname": "created_from_tab_sale",
+   "fieldtype": "Check",
+   "label": "Invoice created from tab sale option",
+   "read_only": 1
+  },
+  {
+   "fieldname": "default_cost_center",
+   "fieldtype": "Link",
+   "label": "Default Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "column_break_bufh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_bfep",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "label": "Sales Order",
+   "options": "Sales Order",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_zvur",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_big",
+   "fieldtype": "HTML"
+  },
+  {
+   "description": "This is a duplicate field for ship_to_location and getting saved from the server side. It is added because of 'Customer Delivery Location' is a child table for customer and cannot have access here",
+   "fieldname": "location_to_print",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Location To Print",
+   "read_only": 1
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project"
+  },
+  {
+   "fieldname": "allocated_receipt_entry",
+   "fieldtype": "Data",
+   "label": "Allocated Receipt Entry",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "stage_proforma_invoice.net_amount",
+   "fieldname": "net_amount",
+   "fieldtype": "Currency",
+   "hidden": 1,
+   "label": "Net Amount",
+   "non_negative": 1,
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "for_advance_payment",
+   "fieldtype": "Check",
+   "label": "For Advance Payment",
+   "read_only_depends_on": "eval:doc.project == undefined"
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "default": "0",
+   "fieldname": "for_retention_recovery",
+   "fieldtype": "Check",
+   "label": "For retention recovery",
+   "read_only_depends_on": "eval:doc.project == undefined"
+  },
+  {
+   "depends_on": "eval:doc.for_advance_payment",
+   "fieldname": "advance_percentage",
+   "fieldtype": "Percent",
+   "label": "Advance Percentage",
+   "precision": "0"
+  },
+  {
+   "depends_on": "eval:doc.for_advance_payment",
+   "fieldname": "project_value",
+   "fieldtype": "Currency",
+   "label": "Project Gross Value"
+  },
+  {
+   "default": "0",
+   "fieldname": "advance_received_with_sales_order",
+   "fieldtype": "Check",
+   "label": "Advance Received With Sales Order",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "more_details_section",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "More Details"
+  },
+  {
+   "fieldname": "column_break_arcq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_wupz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_lpap",
+   "fieldtype": "Column Break"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "project_section",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Project"
+  },
+  {
+   "fieldname": "column_break_iyei",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_hpkf",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_leiv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "To be used for data importing",
+   "fieldname": "import",
+   "fieldtype": "Check",
+   "label": "Import",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "To be used for data insertion with API",
+   "fieldname": "external",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "External",
+   "read_only": 1
+  },
+  {
+   "description": "This field allows you to override the automatically generated Sales Invoice Number.",
+   "fieldname": "sales_inv_no",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Sales Inv No"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_round_off",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Apply Round off"
+  },
+  {
+   "fieldname": "customer_token",
+   "fieldtype": "Data",
+   "label": "Customer Token"
+  },
+  {
+   "default": "1",
+   "fieldname": "invoice_fullfilled",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Invoice Fullfilled"
+  },
+  {
+   "depends_on": "eval: !doc.invoice_fullfilled;",
+   "fieldname": "reason_for_unfilled_invoice",
+   "fieldtype": "Data",
+   "label": "Reason for Unfilled Invoice"
+  },
+  {
+   "fieldname": "customer_email",
+   "fieldtype": "Data",
+   "label": "Customer Email"
+  },
+  {
+   "fieldname": "column_break_egud",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "taxable_total",
+   "fieldtype": "Currency",
+   "label": "Taxable Total",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [
+  {
+   "is_child_table": 1,
+   "link_doctype": "Sales Return Invoices",
+   "link_fieldname": "sales_invoice",
+   "parent_doctype": "Sales Return",
+   "table_fieldname": "invoices"
+  },
+  {
+   "is_child_table": 1,
+   "link_doctype": "Receipt Allocation",
+   "link_fieldname": "reference_name",
+   "parent_doctype": "Receipt Entry",
+   "table_fieldname": "receipt_allocation"
+  }
+ ],
+ "modified": "2026-04-02 07:15:51.638573",
+ "modified_by": "Administrator",
+ "module": "Selling",
+ "name": "Sales Invoice",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

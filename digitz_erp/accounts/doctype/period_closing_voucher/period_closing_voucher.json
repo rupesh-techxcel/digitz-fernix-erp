@@ -1,0 +1,176 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "ACC-PCV-.YYYY.-.#####",
+ "creation": "2023-12-29 10:16:52.887238",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_d56v",
+  "posting_date",
+  "from_date",
+  "to_date",
+  "column_break_qnbz",
+  "remarks",
+  "column_break_jylr",
+  "company",
+  "section_break_kjnj",
+  "get_accounts",
+  "closing_accounts",
+  "section_break_kdau",
+  "column_break_ilgd",
+  "column_break_rifz",
+  "closing_account_head",
+  "amount",
+  "amount_dr_cr",
+  "column_break_ekza",
+  "total_debit",
+  "total_credit",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_d56v",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "Today",
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Posting Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_kjnj",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "section_break_kdau",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "total_debit",
+   "fieldtype": "Currency",
+   "label": "Total Debit",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_credit",
+   "fieldtype": "Currency",
+   "label": "Total Credit",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Period Closing Voucher",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "closing_account_head",
+   "fieldtype": "Link",
+   "label": "Profit and Loss Parking Account",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amount_dr_cr",
+   "fieldtype": "Data",
+   "label": "Amount Dr Cr",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_qnbz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_jylr",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_ilgd",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_rifz",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_ekza",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Today",
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date"
+  },
+  {
+   "default": "Today",
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date"
+  },
+  {
+   "fieldname": "get_accounts",
+   "fieldtype": "Button",
+   "label": "Get Accounts"
+  },
+  {
+   "fieldname": "closing_accounts",
+   "fieldtype": "Table",
+   "label": "Closing Accounts",
+   "options": "Period Closing Voucher Account"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2024-04-29 07:48:28.534998",
+ "modified_by": "Administrator",
+ "module": "Accounts",
+ "name": "Period Closing Voucher",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

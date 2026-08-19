@@ -1,0 +1,25 @@
+{
+ "cards": [],
+ "charts": [
+  {
+   "chart": "Account Summary",
+   "width": "Half"
+  },
+  {
+   "chart": "Count Summary",
+   "width": "Half"
+  }
+ ],
+ "creation": "2025-09-01 10:45:17.997930",
+ "dashboard_name": "MC",
+ "docstatus": 0,
+ "doctype": "Dashboard",
+ "idx": 0,
+ "is_default": 0,
+ "is_standard": 1,
+ "modified": "2025-09-02 14:31:18.615329",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "MC",
+ "owner": "sameer.rather@techxceltech.com"
+}

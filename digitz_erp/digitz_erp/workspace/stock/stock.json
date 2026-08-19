@@ -1,0 +1,205 @@
+{
+ "charts": [
+  {
+   "chart_name": "Stock Balance Chart",
+   "label": "Stock Balance Chart"
+  },
+  {
+   "chart_name": "Stock Value Chart",
+   "label": "Stock Value Chart"
+  }
+ ],
+ "content": "[{\"id\":\"kEpn_u8Iuq\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Stock Value Chart\",\"col\":12}},{\"id\":\"-MIaTvlMLM\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Stock Balance Chart\",\"col\":12}},{\"id\":\"bN43W1AZ_O\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"fqq2c6C0A4\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock Transactions\",\"col\":4}},{\"id\":\"eP9RkvR2rw\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters\",\"col\":4}},{\"id\":\"0dbfSOlpTT\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"qXGVOatyD2\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Stock Reports</span>\",\"col\":12}},{\"id\":\"07tneMtBVz\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Ledger Report\",\"col\":3}},{\"id\":\"hRihaUJldj\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Balance Register\",\"col\":3}},{\"id\":\"9sND_zSPlR\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Ledger Summary Report\",\"col\":3}},{\"id\":\"7AtAAubNP0\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Movement Report\",\"col\":3}},{\"id\":\"egpgBqovdU\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"JzXjJ30KHm\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b><span class=\\\"h4\\\">Other Stock Reports</span></b></span>\",\"col\":12}},{\"id\":\"JuKMV_Vaod\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Stock Report\",\"col\":3}},{\"id\":\"BKCjlYocwT\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Stock Report Summary\",\"col\":3}},{\"id\":\"aPs6G80xkg\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"fKqMsUooYF\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Item\",\"col\":4}},{\"id\":\"RXVU_-O_8_\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Item Group\",\"col\":4}},{\"id\":\"8YkcXaYhZI\",\"type\":\"quick_list\",\"data\":{\"quick_list_name\":\"Warehouse\",\"col\":4}}]",
+ "creation": "2024-02-05 14:33:23.946661",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 1,
+ "label": "Stock",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock Transactions",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock Reconciliation",
+   "link_count": 0,
+   "link_to": "Stock Reconciliation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Stock Transfer",
+   "link_count": 0,
+   "link_to": "Stock Transfer",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Masters",
+   "link_count": 6,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Warehouse",
+   "link_count": 0,
+   "link_to": "Warehouse",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item",
+   "link_count": 0,
+   "link_to": "Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item Group",
+   "link_count": 0,
+   "link_to": "Item Group",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Unit",
+   "link_count": 0,
+   "link_to": "Unit",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Price List",
+   "link_count": 0,
+   "link_to": "Price List",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item Price",
+   "link_count": 0,
+   "link_to": "Item Price",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2025-08-03 20:09:32.553333",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "Stock",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [
+  {
+   "document_type": "Warehouse",
+   "label": "Warehouse",
+   "quick_list_filter": "[]"
+  },
+  {
+   "document_type": "Item",
+   "label": "Item",
+   "quick_list_filter": "[]"
+  },
+  {
+   "document_type": "Item Group",
+   "label": "Item Group",
+   "quick_list_filter": "[]"
+  }
+ ],
+ "roles": [
+  {
+   "role": "Administrator"
+  }
+ ],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Daily Stock Report",
+   "link_to": "Daily Stock Report",
+   "report_ref_doctype": "Stock Ledger",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Stock Ledger Summary Report",
+   "link_to": "Stock Ledger Summary Report",
+   "report_ref_doctype": "Stock Ledger",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Daily Stock Report Summary",
+   "link_to": "Daily Stock Report Summary",
+   "report_ref_doctype": "Stock Ledger",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Stock Movement Report",
+   "link_to": "Stock Movement Report",
+   "report_ref_doctype": "Stock Ledger",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Stock Ledger Report",
+   "link_to": "Stock Ledger Report",
+   "report_ref_doctype": "Stock Ledger",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Stock Balance Register",
+   "link_to": "Stock Balance Register",
+   "report_ref_doctype": "Stock Balance",
+   "type": "Report"
+  }
+ ],
+ "title": "Stock"
+}

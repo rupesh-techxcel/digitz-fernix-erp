@@ -1,0 +1,330 @@
+{
+ "actions": [],
+ "autoname": "format:{customer_name}, {area_name}",
+ "creation": "2022-12-21 17:08:13.855018",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "customer_name",
+  "customer_group",
+  "tax_id",
+  "prospect",
+  "section_break_4",
+  "customer_type",
+  "discount",
+  "company_id",
+  "salesman",
+  "salesman_name",
+  "default_price_list",
+  "exclude_from_showing_in_soa",
+  "column_break_10",
+  "credit_days",
+  "credit_amount",
+  "last_transaction_date",
+  "default_currency",
+  "section_break_20",
+  "address",
+  "address_line_1",
+  "address_line_2",
+  "country",
+  "emirate",
+  "area",
+  "area_name",
+  "column_break_27",
+  "contact",
+  "phone",
+  "mobile_no",
+  "email_id",
+  "contact_person",
+  "contact_person_designation",
+  "full_address",
+  "column_break_wyer",
+  "delivery_locations",
+  "disabled",
+  "bank_details",
+  "section_break_24",
+  "use_default_customer_terms",
+  "default_terms",
+  "terms"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Customer Name",
+   "reqd": 1
+  },
+  {
+   "default": "Default Customer Group",
+   "fieldname": "customer_group",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Customer Group",
+   "link_filters": "[[\"Customer Group\",\"disabled\",\"=\",0]]",
+   "options": "Customer Group",
+   "reqd": 1
+  },
+  {
+   "description": "(Eg: TRN No in UAE)",
+   "fieldname": "tax_id",
+   "fieldtype": "Data",
+   "label": "Tax Id"
+  },
+  {
+   "fieldname": "credit_days",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Credit Days"
+  },
+  {
+   "fieldname": "credit_amount",
+   "fieldtype": "Float",
+   "hidden": 1,
+   "label": "Credit Amount"
+  },
+  {
+   "fieldname": "default_terms",
+   "fieldtype": "Link",
+   "label": "Terms and Conditions",
+   "options": "Terms And Conditions"
+  },
+  {
+   "default": "Standard Selling",
+   "fieldname": "default_price_list",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Default Price List",
+   "options": "Price List"
+  },
+  {
+   "fieldname": "column_break_10",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "default_terms.terms",
+   "fieldname": "terms",
+   "fieldtype": "Text Editor",
+   "label": "Terms",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_20",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "use_default_customer_terms",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Use default customer terms from company settings"
+  },
+  {
+   "fieldname": "delivery_locations",
+   "fieldtype": "Table",
+   "label": "Delivery Locations",
+   "options": "Customer Delivery Location"
+  },
+  {
+   "fieldname": "address_line_1",
+   "fieldtype": "Data",
+   "label": "Address Line 1"
+  },
+  {
+   "fieldname": "address_line_2",
+   "fieldtype": "Data",
+   "label": "Address Line 2"
+  },
+  {
+   "default": "Dubai",
+   "depends_on": "eval:doc.country==\"United Arab Emirates\"",
+   "fieldname": "emirate",
+   "fieldtype": "Select",
+   "label": "Emirate",
+   "options": "Abu Dhabi\nAjman\nDubai\nSharjah\nFujairah\nRas Al Khaimah\nUmm Al Quwain"
+  },
+  {
+   "depends_on": "eval:doc.country==\"United Arab Emirates\"",
+   "fieldname": "area",
+   "fieldtype": "Link",
+   "label": "Area",
+   "options": "Area"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "label": "Country",
+   "options": "Country"
+  },
+  {
+   "fieldname": "salesman",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Salesman",
+   "options": "Employee"
+  },
+  {
+   "fieldname": "column_break_27",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "phone",
+   "fieldtype": "Data",
+   "label": "Phone "
+  },
+  {
+   "fieldname": "email_id",
+   "fieldtype": "Data",
+   "label": "Email Id",
+   "options": "Email"
+  },
+  {
+   "fieldname": "contact_person",
+   "fieldtype": "Data",
+   "label": "Contact Person"
+  },
+  {
+   "fieldname": "contact_person_designation",
+   "fieldtype": "Data",
+   "label": "Contact Person Designation"
+  },
+  {
+   "fieldname": "section_break_24",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "full_address",
+   "fieldtype": "Small Text",
+   "label": "Full Address",
+   "read_only": 1
+  },
+  {
+   "fieldname": "address",
+   "fieldtype": "Heading",
+   "label": "Address"
+  },
+  {
+   "fieldname": "contact",
+   "fieldtype": "Heading",
+   "label": "Contact"
+  },
+  {
+   "fetch_from": "salesman.employee_name",
+   "fieldname": "salesman_name",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Salesman Name",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.country==\"United Arab Emirates\"",
+   "fetch_from": "area.area",
+   "fieldname": "area_name",
+   "fieldtype": "Data",
+   "label": "Area Name",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Avoid showing the customer from the outstanding receipt list.",
+   "fieldname": "exclude_from_showing_in_soa",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Exclude from showing in SOA"
+  },
+  {
+   "fieldname": "column_break_wyer",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_transaction_date",
+   "fieldtype": "Date",
+   "hidden": 1,
+   "label": "Last Transaction Date"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "default_currency",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Default Currency",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "prospect",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Sales Prospect",
+   "options": "Sales Prospect"
+  },
+  {
+   "fieldname": "bank_details",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Bank Details"
+  },
+  {
+   "fieldname": "mobile_no",
+   "fieldtype": "Data",
+   "label": "Mobile No"
+  },
+  {
+   "default": "Individual",
+   "fieldname": "customer_type",
+   "fieldtype": "Select",
+   "label": "Customer Type",
+   "options": "Individual\nCompany"
+  },
+  {
+   "depends_on": "eval: doc.customer_type == \"Company\"",
+   "fieldname": "discount",
+   "fieldtype": "Percent",
+   "label": "Discount"
+  },
+  {
+   "depends_on": "eval: doc.customer_type === 'Company';",
+   "fieldname": "company_id",
+   "fieldtype": "Int",
+   "label": "Company ID",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-09-04 17:23:42.801837",
+ "modified_by": "Administrator",
+ "module": "Accounts",
+ "name": "Customer",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "customer_name"
+}

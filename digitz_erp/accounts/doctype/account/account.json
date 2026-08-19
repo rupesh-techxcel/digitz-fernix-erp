@@ -1,0 +1,140 @@
+{
+ "actions": [],
+ "autoname": "field:account_name",
+ "creation": "2022-12-21 11:47:46.978910",
+ "default_view": "Report",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "account_name",
+  "lft",
+  "rgt",
+  "is_group",
+  "old_parent",
+  "parent_account",
+  "column_break_1tjg",
+  "account_type",
+  "root_type",
+  "include_in_gross_profit",
+  "balance",
+  "balance_dr_cr",
+  "column_break_zdij"
+ ],
+ "fields": [
+  {
+   "fieldname": "account_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Account Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "lft",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Left",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "rgt",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Right",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_group",
+   "fieldtype": "Check",
+   "label": "Is Group"
+  },
+  {
+   "fieldname": "old_parent",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Old Parent",
+   "options": "Account"
+  },
+  {
+   "fieldname": "parent_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Parent Account",
+   "options": "Account"
+  },
+  {
+   "description": "Use the Account Type to configure specific accounts from the provided list. Disregard this field for other account types.",
+   "fieldname": "account_type",
+   "fieldtype": "Select",
+   "label": "Account Type",
+   "options": "\nDuties and Taxes\nStock\nCash\nBank\nReceivable\nPayable\nStock Received But Not Billed\nRound Off\nFixed Asset\nAccumulated Depreciation\nDepreciation\nCost Of Goods Sold\nLong Term Liability\nEquity\nAccrued Expense\nDeferred Income\nInvestment\nLoans Given\nUnearned Revenue\nWork In Progress\nRetention Receivable\nAdvance Billed But Not Received"
+  },
+  {
+   "fieldname": "root_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Root Type",
+   "options": "Asset\nLiability\nIncome\nExpense"
+  },
+  {
+   "fieldname": "balance",
+   "fieldtype": "Currency",
+   "label": "Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance_dr_cr",
+   "fieldtype": "Data",
+   "label": "Balance Dr Cr",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1tjg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_zdij",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "include_in_gross_profit",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Include in gross profit"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_tree": 1,
+ "links": [],
+ "modified": "2025-06-06 21:41:32.472477",
+ "modified_by": "Administrator",
+ "module": "Accounts",
+ "name": "Account",
+ "naming_rule": "By fieldname",
+ "nsm_parent_field": "parent_account",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
