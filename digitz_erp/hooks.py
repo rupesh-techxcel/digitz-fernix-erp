@@ -17,7 +17,10 @@ app_include_css = ["/assets/digitz_erp/css/digitz_desk_premium.css"]
 # include js, css files in header of web template
 # web_include_css = "/assets/digitz_erp/css/digitz_erp.css"
 # web_include_js = "/assets/digitz_erp/js/digitz_erp.js"
-app_include_js = "/assets/digitz_erp/js/digitz_common.js"
+app_include_js = [
+	"/assets/digitz_erp/js/digitz_common.js",
+	"/assets/digitz_erp/js/token_notifications.js",
+]
 
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "digitz_erp/public/scss/website"
@@ -35,7 +38,10 @@ app_include_js = "/assets/digitz_erp/js/digitz_common.js"
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 fixtures = ["Custom Field", "Custom DocPerm",{"doctype": "Role", "filters": [["role_name", "in", ["Cashier"]]]},
-                {"doctype": "Custom DocPerm", "filters": [["role", "=", "Cashier"]]}]
+                {"doctype": "Custom DocPerm", "filters": [["role", "=", "Cashier"]]},
+                # Ships the Medical Center workspace navigator with the app, so a
+                # fresh install gets it too (install_app calls sync_fixtures).
+                {"doctype": "Custom HTML Block", "filters": [["name", "in", ["Medical Center Navigator"]]]}]
 # Home Pages
 # ----------
 
@@ -132,7 +138,14 @@ scheduler_events = {
 	"hourly": [
 		"digitz_erp.api.scheduler_api.post_depreciation_for_depreciation_schedulers",
 		"digitz_erp.tasks.re_post_stock_ledgers"
-	]
+	],
+	"cron": {
+		# Pulls medical tokens and raises Sales Invoices. Replaces the browser
+		# driven loop that used to run in the Sales Invoice Board page.
+		"* * * * *": [
+			"digitz_erp.api.token_sync.enqueue_medical_token_sync"
+		]
+	}
 	# "weekly": [
 	# 	"digitz_erp.tasks.weekly"
 	# ],

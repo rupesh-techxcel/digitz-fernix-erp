@@ -4,12 +4,19 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "token_key",
   "customer_name",
+  "customer",
   "token_number",
   "service",
   "status",
+  "sales_invoice",
+  "synced_for_username",
   "added_on",
   "created_date",
+  "section_break_outcome",
+  "attempts",
+  "error_message",
   "api_response"
  ],
  "fields": [
@@ -40,8 +47,10 @@
    "description": "Sales Invoice creation status",
    "fieldname": "status",
    "fieldtype": "Select",
+   "in_standard_filter": 1,
    "label": "Status",
-   "options": "\nPending\nCompleted"
+   "options": "\nPending\nCompleted\nSkipped\nFailed",
+   "read_only": 1
   },
   {
    "fieldname": "created_date",
@@ -55,6 +64,55 @@
    "in_preview": 1,
    "in_standard_filter": 1,
    "label": "Added on"
+  },
+  {
+   "description": "Stable idempotency key derived from the API payload. Uniquely indexed so the same token can never produce two logs.",
+   "fieldname": "token_key",
+   "fieldtype": "Data",
+   "label": "Token Key",
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Sales Invoice",
+   "options": "Sales Invoice",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "read_only": 1
+  },
+  {
+   "description": "Cashier username this token was pulled for. The sync cursor is per username.",
+   "fieldname": "synced_for_username",
+   "fieldtype": "Data",
+   "label": "Synced For Username",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_break_outcome",
+   "fieldtype": "Section Break",
+   "label": "Outcome"
+  },
+  {
+   "fieldname": "attempts",
+   "fieldtype": "Int",
+   "label": "Attempts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,

@@ -18,6 +18,7 @@
   "customer_display_name",
   "warehouse",
   "customer_token",
+  "medical_service",
   "customer_email",
   "column_break_4",
   "posting_date",
@@ -752,6 +753,13 @@
    "fieldname": "customer_token",
    "fieldtype": "Data",
    "label": "Customer Token"
+  },
+  {
+   "description": "The Medical Services record this invoice was raised from. Written by the Sales Invoice Board so takings can be reported by service.",
+   "fieldname": "medical_service",
+   "fieldtype": "Data",
+   "label": "Medical Service",
+   "read_only": 1
   },
   {
    "default": "1",

@@ -1,0 +1,133 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:user",
+ "creation": "2026-08-19 18:00:00.000000",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "full_name",
+  "column_break_identity",
+  "is_supervisor",
+  "disabled",
+  "section_break_pin",
+  "new_pin",
+  "pin_set_on",
+  "column_break_pin",
+  "pin_hash",
+  "pin_salt"
+ ],
+ "fields": [
+  {
+   "description": "The ERP user this cashier signs in as. Sales made at the till are attributed to this user.",
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "User",
+   "options": "User",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "Shown in the till's sign-in list. Defaults to the user's full name.",
+   "fetch_from": "user.full_name",
+   "fetch_if_empty": 1,
+   "fieldname": "full_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Full Name"
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Permits price overrides, discounts beyond the threshold, and voids at the till.",
+   "fieldname": "is_supervisor",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Supervisor"
+  },
+  {
+   "default": "0",
+   "description": "Removes the cashier from the sign-in list on every terminal. Disable rather than delete: a deleted record is never sent to the tills, so it would stay usable there.",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "section_break_pin",
+   "fieldtype": "Section Break",
+   "label": "Counter PIN"
+  },
+  {
+   "description": "Type a new PIN to set or replace it. It is hashed on save and never stored. Leave blank to keep the current PIN.",
+   "fieldname": "new_pin",
+   "fieldtype": "Data",
+   "label": "New PIN",
+   "no_copy": 1
+  },
+  {
+   "fieldname": "pin_set_on",
+   "fieldtype": "Datetime",
+   "label": "PIN Set On",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_pin",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "PBKDF2-HMAC-SHA256 digest, base64. Read by the POS terminal; never edit by hand.",
+   "fieldname": "pin_hash",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "PIN Hash",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "pin_salt",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "PIN Salt",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-19 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Setup",
+ "name": "Cashier",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "user,full_name",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

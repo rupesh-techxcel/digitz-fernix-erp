@@ -146,3 +146,61 @@ let stock_ledgers = function (frm) {
 // Export the function to make it reusable
 // export { general_ledgers };
 // export { stock_ledgers };
+
+// ---------------------------------------------------------------------------
+// Keep --page-head-height in sync with the real page head height.
+//
+// Frappe pins the form tab bar at
+// calc(var(--navbar-height) + var(--page-head-height) - 1px) and paints
+// .page-head above it, so anything that makes the head taller than the stock
+// 60px does not push the tabs down - it covers them. The premium theme's 24px
+// title makes the custom action buttons (Permissions / Password / Create User
+// Email ...) wrap onto a second row on normal screen widths, which is exactly
+// that case. Measuring the head and feeding the real value back into the
+// variable keeps the tab bar below the head at any width, zoom or title length.
+//
+// No feedback loop: the CSS gives .page-head-content `height: auto`, so the
+// head's height is content-driven and does not depend on this variable.
+// ---------------------------------------------------------------------------
+frappe.provide("digitz.page_head");
+
+digitz.page_head.sync_height = function () {
+	let head = null;
+	for (const el of document.querySelectorAll(".page-head")) {
+		if (el.offsetHeight > 0 && el.getClientRects().length) {
+			head = el;
+			break;
+		}
+	}
+	if (!head) return;
+
+	const height = Math.ceil(head.getBoundingClientRect().height);
+	if (!height) return;
+
+	const value = Math.max(height, 60) + "px";
+	if (value !== digitz.page_head._last) {
+		digitz.page_head._last = value;
+		document.documentElement.style.setProperty("--page-head-height", value);
+	}
+};
+
+$(document).ready(function () {
+	const sync = frappe.utils.debounce(digitz.page_head.sync_height, 50);
+
+	// The head is rebuilt per page, so re-attach the observer on every route.
+	if (window.ResizeObserver) {
+		const observer = new ResizeObserver(sync);
+		digitz.page_head._observe = function () {
+			observer.disconnect();
+			document.querySelectorAll(".page-head").forEach((el) => observer.observe(el));
+			sync();
+		};
+	} else {
+		digitz.page_head._observe = sync;
+	}
+
+	digitz.page_head._observe();
+	$(window).on("resize", sync);
+	$(document).on("page-change", () => digitz.page_head._observe());
+	frappe.router && frappe.router.on("change", () => digitz.page_head._observe());
+});

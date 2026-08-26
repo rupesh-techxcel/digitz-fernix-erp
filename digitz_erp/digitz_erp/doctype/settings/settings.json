@@ -9,7 +9,9 @@
   "add_customer_url",
   "column_break_nonl",
   "update_customer_url",
-  "delete_customer_url"
+  "delete_customer_url",
+  "section_break_token_sync",
+  "token_sync_enabled"
  ],
  "fields": [
   {
@@ -35,6 +37,18 @@
    "fieldname": "add_customer_url",
    "fieldtype": "Data",
    "label": "ADD Customer Company URL"
+  },
+  {
+   "fieldname": "section_break_token_sync",
+   "fieldtype": "Section Break",
+   "label": "Medical Token Sync"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, a scheduled job pulls medical tokens every minute and raises the matching Sales Invoices. Leave off until Token URL and Cashier records are configured.",
+   "fieldname": "token_sync_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Token Sync"
   }
  ],
  "grid_page_length": 50,

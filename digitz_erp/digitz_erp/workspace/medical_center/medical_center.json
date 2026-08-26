@@ -9,9 +9,14 @@
    "label": "Count Summary"
   }
  ],
- "content": "[{\"id\":\"AND-skrLRi\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Medical Center</span>\",\"col\":12}},{\"id\":\"XwuKUhHy85\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Account Summary\",\"col\":12}},{\"id\":\"nhyNVLhvrX\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"UEcb5samf2\",\"type\":\"chart\",\"data\":{\"chart_name\":\"Count Summary\",\"col\":12}},{\"id\":\"ardueJT4ot\",\"type\":\"paragraph\",\"data\":{\"text\":\"<b>Quick Guide</b>\",\"col\":12}},{\"id\":\"VSeZgyDF5e\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice Board\",\"col\":4}},{\"id\":\"RlGDyU1xpk\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"oHUbq4Ey74\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Medical Services\",\"col\":3}},{\"id\":\"j5kmhrBc3y\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Item\",\"col\":3}},{\"id\":\"Z5M4TEqT_q\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Medical Service Logs\",\"col\":4}},{\"id\":\"RaK0wmtyaA\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"q1XgpcW0br\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Reports</b></span>\",\"col\":12}},{\"id\":\"DVGp9Q02xo\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Counter based Sales report\",\"col\":4}},{\"id\":\"gHLgMA1w7a\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Service Wise Sales Report\",\"col\":4}},{\"id\":\"HQHcGrqPjD\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Item Category Wise Sales\",\"col\":4}},{\"id\":\"OB62R7w_gZ\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Itemwise Sales Report\",\"col\":4}},{\"id\":\"Ne7v_wipNl\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Details Report\",\"col\":4}}]",
- "creation": "2025-09-02 15:00:03.298467",
- "custom_blocks": [],
+ "content": "[{\"id\": \"mcNavBlock01\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"Medical Center Navigator\", \"col\": 12}}, {\"id\": \"mcNavSpacer1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"XwuKUhHy85\", \"type\": \"chart\", \"data\": {\"chart_name\": \"Account Summary\", \"col\": 12}}, {\"id\": \"nhyNVLhvrX\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"UEcb5samf2\", \"type\": \"chart\", \"data\": {\"chart_name\": \"Count Summary\", \"col\": 12}}]",
+ "creation": "2026-08-23 17:25:00.399587",
+ "custom_blocks": [
+  {
+   "custom_block_name": "Medical Center Navigator",
+   "label": "Medical Center Navigator"
+  }
+ ],
  "docstatus": 0,
  "doctype": "Workspace",
  "for_user": "",
@@ -22,7 +27,7 @@
  "is_hidden": 0,
  "label": "Medical Center",
  "links": [],
- "modified": "2025-09-02 16:11:18.688395",
+ "modified": "2026-08-23 17:29:17.762638",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Medical Center",

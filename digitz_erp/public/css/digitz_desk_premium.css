@@ -180,16 +180,23 @@ header.navbar,
     font-size: 24px !important;
 }
 
-.page-head::after,
-.page-head-content::after {
+.page-head::after {
     content: "";
-    display: block;
+    position: absolute;
+    left: 50%;
+    bottom: 4px;
+    transform: translateX(-50%);
     width: 44px;
     height: 4px;
     border-radius: 999px;
     background: linear-gradient(90deg, #e0a62f 0%, #f1cb72 100%);
-    margin: 8px auto 0 auto;
+    margin: 0;
     opacity: 0.9;
+    pointer-events: none;
+}
+
+.page-head-content::after {
+    content: none !important;
 }
 
 /* =========================================================
@@ -479,7 +486,8 @@ header.navbar,
 .widget-title::after,
 .widget-head .widget-title::after,
 .card-title::after,
-.ellipsis.title-text::after {
+.widget .ellipsis.title-text::after,
+.widget-head .ellipsis.title-text::after {
     content: "";
     width: 30px;
     height: 4px;
@@ -950,8 +958,7 @@ hr,
         font-size: 13px !important;
     }
 
-    .page-head::after,
-    .page-head-content::after {
+    .page-head::after {
         width: 34px;
     }
 
@@ -1083,4 +1090,65 @@ hr,
 	overflow: visible !important;
 	text-overflow: unset !important;
 	white-space: nowrap !important;
+}
+/* =========================================================
+   Fix custom action buttons overlapping the form tab bar
+   ---------------------------------------------------------
+   Frappe pins `.form-tabs-list` at
+   calc(var(--navbar-height) + var(--page-head-height) - 1px)
+   and paints `.page-head` above it (z-index 6 vs 5), while
+   `.page-head-content` is hard-locked to var(--page-head-height)
+   (60px). This theme's 24px title leaves too little room for the
+   custom action buttons, so on normal screen widths the actions
+   wrap onto a second line - which spills out of that locked 60px
+   box and gets drawn ON TOP of the tab labels instead of pushing
+   them down.
+
+   So: let the head grow to fit whatever it holds, and keep
+   --page-head-height in sync with its real height from JS
+   (see sync_page_head_height() in public/js/digitz_common.js),
+   which is what moves the tab bar down to match.
+   ========================================================= */
+.page-head .page-head-content {
+	height: auto !important;
+	min-height: 60px !important;
+	/* allow the wrap, but keep the two rows from touching */
+	flex-wrap: wrap !important;
+	row-gap: 8px !important;
+	/* no column gap: the actions need ~950px of unshrinkable button
+	   width, so every px counts in deciding whether they fit on the
+	   title's row (they do from ~1400px viewport up) */
+	column-gap: 0 !important;
+	padding: 8px 0 !important;
+}
+
+.page-head .page-actions .btn,
+.page-head .page-actions .btn-group > .btn,
+.page-head .page-actions .custom-btn-group > .btn {
+	white-space: nowrap !important;
+}
+
+/* The real reason the actions wrapped: the "title clipping" fix further up
+   gives .page-title `flex: 1 1 auto`, so a short title still GROWS and eats
+   the room the buttons need (measured: title 784px wide for "Administrator",
+   leaving .page-actions 490px for 626px of buttons -> wrap -> overlap).
+   Size the title to its content instead and give the slack to the actions;
+   `justify-content-end` on .page-actions keeps them right-aligned, and
+   min-width: 0 still lets a very long title shrink. */
+.page-head .page-title {
+	flex: 0 1 auto !important;
+	min-width: 0 !important;
+}
+
+/* Keep Bootstrap's `.col` flex-basis of 0 here: it is the reason stock
+   Frappe never wraps this row (the actions contribute 0 to the flex
+   line-break calculation, then grow into whatever is left). Leave
+   min-width at `auto` too, so the buttons never shrink below their own
+   width - the title is what gives way when space runs out. */
+.page-head .page-actions {
+	flex: 1 1 0% !important;
+	align-items: center !important;
+	/* only wraps below ~950px, where Frappe hides .custom-actions anyway */
+	flex-wrap: wrap !important;
+	row-gap: 8px !important;
 }
