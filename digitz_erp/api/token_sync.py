@@ -4,9 +4,13 @@
 """Server side sync of medical tokens into Sales Invoices.
 
 This replaces the browser driven loop that used to live in the Sales Invoice
-Board page. A cron job pulls new tokens for every enabled Cashier, records each
-one in Medical Service Logs and raises the matching Sales Invoice, then pushes a
-realtime event so open desks update without polling.
+Board page. A cron job pulls the new token stream, records each token in Medical
+Service Logs and raises the matching Sales Invoice, then pushes a realtime event
+so open desks update without polling.
+
+The remote request carries no username -- it returns the whole stream -- so the
+sync fetches once per run. Each token names its own desk in `UserName`, and that
+is only used to decide who the resulting invoice belongs to.
 
 The design goals, in order:
 
@@ -123,10 +127,9 @@ def sync_report(state, message=None, **extra):
 		"generated_at": str(now_datetime()),
 		"scheduler_inactive": scheduler_is_inactive(),
 		"url": None,
-		"desks": [],
+		"stream": stream_report(),
 		"retried": [],
 		"totals": {
-			"desks": 0,
 			"fetched": 0,
 			"created": 0,
 			"already": 0,
@@ -169,25 +172,12 @@ def run_sync():
 			message=_("No Token URL is set in Settings."),
 		)
 
-	desks = []
-
-	for username in get_sync_usernames():
-		try:
-			desks.append(sync_for_username(url, username))
-		except Exception:
-			# One desk failing must not stop the others.
-			frappe.db.rollback()
-			frappe.log_error(
-				message=frappe.get_traceback(),
-				title=f"Medical token sync failed for {username}",
-			)
-			desks.append(desk_report(username, error=short_error()))
-
+	stream = sync_stream(url)
 	retried = retry_stalled_logs()
 
 	created = [
 		outcome
-		for outcome in all_outcomes(desks, retried)
+		for outcome in all_outcomes(stream, retried)
 		if outcome["status"] == STATUS_COMPLETED
 	]
 	if created:
@@ -196,23 +186,20 @@ def run_sync():
 	return sync_report(
 		state="completed",
 		url=url,
-		desks=desks,
+		stream=stream,
 		retried=retried,
-		totals=tally(desks, retried),
+		totals=tally(stream, retried),
 	)
 
 
-def all_outcomes(desks, retried):
-	for desk in desks:
-		yield from desk["outcomes"]
-
+def all_outcomes(stream, retried):
+	yield from stream["outcomes"]
 	yield from retried
 
 
-def tally(desks, retried):
+def tally(stream, retried):
 	counts = {
-		"desks": len(desks),
-		"fetched": sum(desk["fetched"] for desk in desks),
+		"fetched": stream["fetched"],
 		"created": 0,
 		"already": 0,
 		"skipped": 0,
@@ -226,7 +213,7 @@ def tally(desks, retried):
 		STATUS_FAILED: "failed",
 	}
 
-	for outcome in all_outcomes(desks, retried):
+	for outcome in all_outcomes(stream, retried):
 		key = key_for.get(outcome["status"])
 		if key:
 			counts[key] += 1
@@ -265,12 +252,13 @@ def get_token_url():
 
 
 def get_sync_usernames():
-	"""Usernames to poll, one per enabled Cashier.
+	"""Usernames of the enabled Cashiers.
 
-	The remote API is scoped by `username`, so each reception desk has its own
-	token stream. Previously this came from `frappe.session.user` in whichever
-	browser happened to have the board open; on the server we enumerate the
-	Cashier records instead so the sync no longer depends on who is logged in.
+	The sync itself no longer calls this: the remote request carries no
+	username, so nothing about the fetch depends on the Cashier list. It is
+	kept because the simulator in api/test_token_api.py stamps `UserName` on
+	the tokens it queues, and that has to match a real desk for attribution to
+	be exercised.
 	"""
 	if not frappe.db.exists("DocType", "Cashier"):
 		frappe.log_error(
@@ -343,13 +331,16 @@ def as_user(user):
 # ---------------------------------------------------------------------------
 
 
-def get_cursor(username):
-	"""Return the (timestamp, last_token_no) watermark for a desk.
+def get_cursor():
+	"""Return the (timestamp, last_token_no) watermark for today's stream.
 
 	Token numbers restart each day, so the watermark is scoped to today and
 	falls back to midnight/0 at the start of a new day. The timestamp is taken
 	from the raw `api_response` where possible so we hand the API back exactly
 	the value it gave us, rather than a value round-tripped through MariaDB.
+
+	One watermark for the whole site, not one per desk: the request carries no
+	username, so every desk would be handed the identical stream anyway.
 	"""
 	day_start = f"{today()} 00:00:00"
 	day_end = f"{today()} 23:59:59.999999"
@@ -357,7 +348,6 @@ def get_cursor(username):
 	last = frappe.db.get_value(
 		"Medical Service Logs",
 		{
-			"synced_for_username": username,
 			"added_on": ["between", [day_start, day_end]],
 		},
 		["created_date", "token_number", "api_response"],
@@ -435,7 +425,7 @@ def token_request_url(url, timestamp):
 		return url
 
 
-def fetch_tokens(url, username, timestamp, last_token_no):
+def fetch_tokens(url, timestamp):
 	"""Return (tokens, request_url).
 
 	The fully built request URL comes back so the report can show exactly what
@@ -460,7 +450,7 @@ def fetch_tokens(url, username, timestamp, last_token_no):
 
 	if not isinstance(body, list):
 		frappe.log_error(
-			message=f"Expected a list of tokens for {username}, got {type(body).__name__}.",
+			message=f"Expected a list of tokens, got {type(body).__name__}.",
 			title="Medical token sync",
 		)
 		return [], request_url
@@ -468,11 +458,9 @@ def fetch_tokens(url, username, timestamp, last_token_no):
 	return body, request_url
 
 
-def desk_report(username, **extra):
-	"""Skeleton report for one desk, so a failed desk has the same shape."""
+def stream_report(**extra):
+	"""Skeleton report for the one fetch this sync makes."""
 	report = {
-		"username": username,
-		"counter_user": None,
 		"request_url": None,
 		"fetched": 0,
 		"error": None,
@@ -482,40 +470,44 @@ def desk_report(username, **extra):
 	return report
 
 
-def sync_for_username(url, username):
-	timestamp, last_token_no = get_cursor(username)
-	counter_user = get_counter_user(username)
+def sync_stream(url):
+	"""Fetch the whole token stream once and process every token in it.
+
+	The remote service takes no username, so there is exactly one stream for
+	the site. Each token names its own desk in `UserName`, and that is what
+	decides who the resulting invoice belongs to -- the sync no longer needs a
+	list of Cashiers before it is allowed to call the API.
+	"""
+	timestamp, last_token_no = get_cursor()
 
 	# Known before the call, so a connection failure still reports the URL.
 	request_url = token_request_url(url, timestamp)
 
 	try:
-		tokens, request_url = fetch_tokens(url, username, timestamp, last_token_no)
+		tokens, request_url = fetch_tokens(url, timestamp)
 	except Exception:
 		frappe.db.rollback()
 		frappe.log_error(
 			message=frappe.get_traceback(),
-			title=f"Medical token fetch failed for {username}",
+			title="Medical token fetch failed",
 		)
-		return desk_report(
-			username,
-			counter_user=counter_user,
-			request_url=request_url,
-			error=short_error(),
-		)
+		return stream_report(request_url=request_url, error=short_error())
 
 	outcomes = []
 
-	with as_user(counter_user):
-		for item in tokens:
-			if not isinstance(item, dict):
-				continue
+	for item in tokens:
+		if not isinstance(item, dict):
+			continue
 
+		# Attribute the invoice to the desk the token came from. An unknown or
+		# missing UserName leaves the session user as owner rather than
+		# dropping the token.
+		username = item.get("UserName")
+
+		with as_user(get_counter_user(username)):
 			outcomes.append(process_token(item, username))
 
-	return desk_report(
-		username,
-		counter_user=counter_user,
+	return stream_report(
 		request_url=request_url,
 		fetched=len(outcomes),
 		outcomes=outcomes,
@@ -533,6 +525,7 @@ def token_outcome(item, **extra):
 		"token_number": cint(item.get("TokenNumber")),
 		"customer_name": item.get("Name"),
 		"service": item.get("Service"),
+		"username": item.get("UserName"),
 		"status": None,
 		"sales_invoice": None,
 		"customer": None,

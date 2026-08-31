@@ -123,12 +123,10 @@ digitz_erp.token_notifications = {
 	sync_report_html(report) {
 		const esc = frappe.utils.escape_html;
 		const totals = report.totals || {};
-		const desks = report.desks || [];
+		const stream = report.stream || {};
 		const retried = report.retried || [];
 
-		const desk_error = desks.some((desk) => desk.error);
-		const bad = !report.ok || totals.failed || desk_error;
-
+		const bad = !report.ok || totals.failed || stream.error;
 		const parts = [];
 
 		parts.push(`
@@ -156,11 +154,24 @@ digitz_erp.token_notifications = {
 			`);
 		}
 
-		if (report.ok && !desks.length) {
-			parts.push(`<p class="text-muted">${__("No desks to poll. Check the Cashier records.")}</p>`);
+		if (stream.request_url) {
+			parts.push(`
+				<div class="text-muted" style="margin-bottom:2px;">${__("Request")}</div>
+				<div style="margin-bottom:10px;word-break:break-all;">
+					<code>${esc(stream.request_url)}</code>
+				</div>
+			`);
 		}
 
-		desks.forEach((desk) => parts.push(this.sync_desk_html(desk)));
+		if (stream.error) {
+			parts.push(`<p class="text-danger">${esc(stream.error)}</p>`);
+		}
+
+		if (stream.outcomes && stream.outcomes.length) {
+			parts.push(this.sync_table_html(stream.outcomes));
+		} else if (report.ok && !stream.error) {
+			parts.push(`<p class="text-muted">${__("No new tokens.")}</p>`);
+		}
 
 		if (retried.length) {
 			parts.push(`<h5 style="margin-top:16px;">${__("Retried earlier tokens")}</h5>`);
@@ -186,40 +197,6 @@ digitz_erp.token_notifications = {
 		]);
 	},
 
-	sync_desk_html(desk) {
-		const esc = frappe.utils.escape_html;
-		const parts = [];
-
-		parts.push(`
-			<h5 style="margin-top:16px;">
-				${esc(desk.username || __("Unknown desk"))}
-				<span class="text-muted" style="font-weight:normal;">
-					&middot; ${__("{0} fetched", [desk.fetched || 0])}
-				</span>
-			</h5>
-		`);
-
-		if (desk.request_url) {
-			parts.push(`
-				<div style="margin-bottom:6px;word-break:break-all;">
-					<code>${esc(desk.request_url)}</code>
-				</div>
-			`);
-		}
-
-		if (desk.error) {
-			parts.push(`<p class="text-danger">${esc(desk.error)}</p>`);
-		}
-
-		if (desk.outcomes && desk.outcomes.length) {
-			parts.push(this.sync_table_html(desk.outcomes));
-		} else if (!desk.error) {
-			parts.push(`<p class="text-muted">${__("No new tokens.")}</p>`);
-		}
-
-		return parts.join("");
-	},
-
 	sync_table_html(outcomes) {
 		const esc = frappe.utils.escape_html;
 
@@ -230,6 +207,7 @@ digitz_erp.token_notifications = {
 						<td>${esc(String(o.token_number || ""))}</td>
 						<td>${esc(o.customer_name || "")}</td>
 						<td>${esc(o.service || "")}</td>
+						<td>${esc(o.username || "")}</td>
 						<td>${this.sync_status_html(o)}</td>
 						<td>${this.sync_details_html(o)}</td>
 					</tr>
@@ -245,6 +223,7 @@ digitz_erp.token_notifications = {
 							<th>${__("Token")}</th>
 							<th>${__("Person")}</th>
 							<th>${__("Service")}</th>
+							<th>${__("Desk")}</th>
 							<th>${__("Status")}</th>
 							<th>${__("Details")}</th>
 						</tr>
