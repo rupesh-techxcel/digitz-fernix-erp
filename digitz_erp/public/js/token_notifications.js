@@ -89,6 +89,207 @@ digitz_erp.token_notifications = {
 			frappe.set_route("Form", "Sales Invoice", invoice_name);
 		});
 	},
+
+	// ------------------------------------------------------------ manual sync
+
+	// Shared by the Sales Invoice Board and the Medical Center Dashboard, which
+	// both carry a "Sync Now" button. The server runs the sync inline and hands
+	// back a report, so the popup can say what actually happened.
+	run_sync_now(on_done) {
+		frappe.call({
+			method: "digitz_erp.api.token_sync.run_token_sync_now",
+			freeze: true,
+			freeze_message: __("Syncing tokens..."),
+			callback: (r) => {
+				if (r.message) {
+					this.show_sync_report(r.message);
+				}
+
+				if (on_done) {
+					on_done(r.message);
+				}
+			},
+		});
+	},
+
+	show_sync_report(report) {
+		frappe.msgprint({
+			title: __("Token Sync Result"),
+			message: this.sync_report_html(report),
+			wide: true,
+		});
+	},
+
+	sync_report_html(report) {
+		const esc = frappe.utils.escape_html;
+		const totals = report.totals || {};
+		const desks = report.desks || [];
+		const retried = report.retried || [];
+
+		const desk_error = desks.some((desk) => desk.error);
+		const bad = !report.ok || totals.failed || desk_error;
+
+		const parts = [];
+
+		parts.push(`
+			<div class="${bad ? "text-danger" : "text-success"}" style="font-weight:600;margin-bottom:8px;">
+				${esc(this.sync_headline(report))}
+			</div>
+		`);
+
+		if (report.message) {
+			parts.push(`<p>${esc(report.message)}</p>`);
+		}
+
+		if (report.scheduler_inactive) {
+			parts.push(`
+				<p class="text-warning">
+					${__("The scheduler is inactive, so tokens are not syncing automatically.")}
+				</p>
+			`);
+		}
+
+		if (report.url) {
+			parts.push(`
+				<div class="text-muted" style="margin-bottom:2px;">${__("Token URL")}</div>
+				<div style="margin-bottom:10px;word-break:break-all;"><code>${esc(report.url)}</code></div>
+			`);
+		}
+
+		if (report.ok && !desks.length) {
+			parts.push(`<p class="text-muted">${__("No desks to poll. Check the Cashier records.")}</p>`);
+		}
+
+		desks.forEach((desk) => parts.push(this.sync_desk_html(desk)));
+
+		if (retried.length) {
+			parts.push(`<h5 style="margin-top:16px;">${__("Retried earlier tokens")}</h5>`);
+			parts.push(this.sync_table_html(retried));
+		}
+
+		return parts.join("");
+	},
+
+	sync_headline(report) {
+		if (!report.ok) {
+			return __("Sync did not run");
+		}
+
+		const t = report.totals || {};
+
+		return __("{0} fetched · {1} invoiced · {2} already done · {3} skipped · {4} failed", [
+			t.fetched || 0,
+			t.created || 0,
+			t.already || 0,
+			t.skipped || 0,
+			t.failed || 0,
+		]);
+	},
+
+	sync_desk_html(desk) {
+		const esc = frappe.utils.escape_html;
+		const parts = [];
+
+		parts.push(`
+			<h5 style="margin-top:16px;">
+				${esc(desk.username || __("Unknown desk"))}
+				<span class="text-muted" style="font-weight:normal;">
+					&middot; ${__("{0} fetched", [desk.fetched || 0])}
+				</span>
+			</h5>
+		`);
+
+		if (desk.request_url) {
+			parts.push(`
+				<div style="margin-bottom:6px;word-break:break-all;">
+					<code>${esc(desk.request_url)}</code>
+				</div>
+			`);
+		}
+
+		if (desk.error) {
+			parts.push(`<p class="text-danger">${esc(desk.error)}</p>`);
+		}
+
+		if (desk.outcomes && desk.outcomes.length) {
+			parts.push(this.sync_table_html(desk.outcomes));
+		} else if (!desk.error) {
+			parts.push(`<p class="text-muted">${__("No new tokens.")}</p>`);
+		}
+
+		return parts.join("");
+	},
+
+	sync_table_html(outcomes) {
+		const esc = frappe.utils.escape_html;
+
+		const rows = outcomes
+			.map(
+				(o) => `
+					<tr>
+						<td>${esc(String(o.token_number || ""))}</td>
+						<td>${esc(o.customer_name || "")}</td>
+						<td>${esc(o.service || "")}</td>
+						<td>${this.sync_status_html(o)}</td>
+						<td>${this.sync_details_html(o)}</td>
+					</tr>
+				`
+			)
+			.join("");
+
+		return `
+			<div class="table-responsive">
+				<table class="table table-bordered table-condensed" style="margin-bottom:0;">
+					<thead>
+						<tr>
+							<th>${__("Token")}</th>
+							<th>${__("Person")}</th>
+							<th>${__("Service")}</th>
+							<th>${__("Status")}</th>
+							<th>${__("Details")}</th>
+						</tr>
+					</thead>
+					<tbody>${rows}</tbody>
+				</table>
+			</div>
+		`;
+	},
+
+	sync_status_html(outcome) {
+		const esc = frappe.utils.escape_html;
+		const colour = {
+			Completed: "green",
+			"Already invoiced": "blue",
+			Skipped: "orange",
+			Failed: "red",
+		}[outcome.status];
+
+		return `<span class="indicator ${colour || "gray"}">${esc(outcome.status || "")}</span>`;
+	},
+
+	sync_details_html(outcome) {
+		const esc = frappe.utils.escape_html;
+		const bits = [];
+
+		if (outcome.sales_invoice) {
+			const name = esc(outcome.sales_invoice);
+			bits.push(`<a href="/app/sales-invoice/${encodeURIComponent(outcome.sales_invoice)}">${name}</a>`);
+		}
+
+		if (outcome.reason) {
+			bits.push(esc(outcome.reason));
+		}
+
+		// The log holds the full traceback for a failure; keep the popup short
+		// and let the reader click through for the rest.
+		if (outcome.log && outcome.status !== "Completed") {
+			bits.push(
+				`<a href="/app/medical-service-logs/${encodeURIComponent(outcome.log)}">${__("View log")}</a>`
+			);
+		}
+
+		return bits.join(" &middot; ") || "&mdash;";
+	},
 };
 
 $(document).on("app_ready", function () {

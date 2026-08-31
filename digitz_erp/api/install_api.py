@@ -25,6 +25,12 @@ def after_install():
     # HR after_install
     after_install_hr()
 
+    # Patches are marked as already-applied on a fresh install, so the branding
+    # patch never runs here. Apply it directly instead.
+    from digitz_erp.api.branding import apply_branding
+
+    apply_branding()
+
 def insert_accounts():
     accounts = [
     {"account_name": "Accounts", "is_group": 1, "parent_account": "", "account_type": "", "root_type": "", "balance": 0, "balance_dr_cr": ""},

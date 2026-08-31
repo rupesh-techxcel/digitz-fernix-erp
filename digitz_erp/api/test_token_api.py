@@ -42,19 +42,27 @@ SAMPLE_NAMES = [
 
 
 @frappe.whitelist(allow_guest=True)
-def mock_tokens(username=None, timestamp=None, last_token_no=None):
+def mock_tokens(username=None, last_token_no=None):
 	"""Stand-in for the real token service.
 
-	Returns queued tokens strictly newer than the caller's watermark, ordered
-	oldest first, mirroring how the real API pages forward.
+	Returns queued tokens inside the caller's [from, to] window, oldest first,
+	mirroring how the real API pages forward.
+
+	`from` is a Python keyword and `to` is not in this signature, so both are
+	read off form_dict rather than declared as parameters.
 	"""
+	from_time = frappe.form_dict.get("from")
+	to_time = frappe.form_dict.get("to")
+
 	tokens = get_queue()
 	last_token_no = cint(last_token_no)
 
 	fresh = [
 		t
 		for t in tokens
-		if is_for_desk(t, username) and is_after_watermark(t, timestamp, last_token_no)
+		if is_for_desk(t, username)
+		and is_after_watermark(t, from_time, last_token_no)
+		and is_before_end(t, to_time)
 	]
 	fresh.sort(key=lambda t: (t["CreatedDate"], t["TokenNumber"]))
 
@@ -73,20 +81,28 @@ def is_for_desk(token, username):
 	return str(token_user).lower() == str(username).lower()
 
 
-def is_after_watermark(token, timestamp, last_token_no):
+def is_after_watermark(token, from_time, last_token_no):
 	"""Same ordering the sync assumes: created date first, then token number."""
-	if not timestamp:
+	if not from_time:
 		return True
 
 	created = token.get("CreatedDate") or ""
 
-	if created > timestamp:
+	if created > from_time:
 		return True
 
-	if created == timestamp:
+	if created == from_time:
 		return cint(token.get("TokenNumber")) > last_token_no
 
 	return False
+
+
+def is_before_end(token, to_time):
+	"""Upper bound of the window; inclusive, as the end-of-day value implies."""
+	if not to_time:
+		return True
+
+	return (token.get("CreatedDate") or "") <= to_time
 
 
 # ---------------------------------------------------------------------------

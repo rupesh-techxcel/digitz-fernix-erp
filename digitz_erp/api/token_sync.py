@@ -28,11 +28,15 @@ import requests
 import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, get_datetime, now_datetime, today
+from frappe.utils.file_lock import LockTimeoutError
+from frappe.utils.scheduler import is_scheduler_inactive
+from frappe.utils.synchronization import filelock
 
 from digitz_erp.api.medical_services import get_medical_service_items
 
 REALTIME_EVENT = "digitz_token_invoice_created"
 SYNC_JOB_ID = "digitz_erp::medical_token_sync"
+SYNC_LOCK = "digitz_medical_token_sync"
 REQUEST_TIMEOUT = 30
 RETRY_LOOKBACK_DAYS = 2
 MAX_ATTEMPTS = 5
@@ -42,6 +46,10 @@ STATUS_PENDING = "Pending"
 STATUS_COMPLETED = "Completed"
 STATUS_SKIPPED = "Skipped"
 STATUS_FAILED = "Failed"
+
+# Reported by process_token but never stored on a log: the token was already
+# invoiced by an earlier run and this sighting is a replay.
+OUTCOME_ALREADY = "Already invoiced"
 
 
 class TokenSkipped(Exception):
@@ -75,27 +83,80 @@ def enqueue_medical_token_sync():
 
 @frappe.whitelist()
 def run_token_sync_now():
-	"""Manual 'Sync now' trigger from the Sales Invoice Board."""
+	"""Manual 'Sync now' trigger from the board and the dashboard.
+
+	Runs inline rather than enqueueing, so the caller gets the report back and
+	the button still works when no background worker is running -- which is
+	exactly the situation somebody clicks it to diagnose.
+	"""
 	frappe.only_for(("System Manager", "Cashier"))
 
-	if not is_sync_enabled():
-		frappe.throw(_("Token sync is disabled in Settings."))
-
-	frappe.enqueue(
-		"digitz_erp.api.token_sync.sync_medical_tokens",
-		queue="long",
-		job_id=SYNC_JOB_ID,
-		deduplicate=True,
-		timeout=600,
-	)
-
-	return {"queued": True}
+	return sync_medical_tokens()
 
 
 def sync_medical_tokens():
-	"""Pull new tokens for every enabled Cashier, then retry past failures."""
+	"""Pull new tokens for every enabled Cashier, then retry past failures.
+
+	Returns a report of everything that happened, which the desk renders in the
+	'Sync Now' popup. The scheduled run ignores it.
+	"""
+	try:
+		with filelock(SYNC_LOCK, timeout=0):
+			return run_sync()
+	except LockTimeoutError:
+		# The scheduled run enqueues with deduplicate=True, but that lock does
+		# not cover an inline caller. Without this, a manual click landing on
+		# top of a cron run could invoice the same token twice: both would see
+		# the log as Pending, one via the DuplicateEntryError re-read.
+		return sync_report(
+			state="busy",
+			message=_("A token sync is already running. Try again in a moment."),
+		)
+
+
+def sync_report(state, message=None, **extra):
+	"""Skeleton report, so every exit path has the same shape."""
+	report = {
+		"ok": state == "completed",
+		"state": state,
+		"message": message,
+		"generated_at": str(now_datetime()),
+		"scheduler_inactive": scheduler_is_inactive(),
+		"url": None,
+		"desks": [],
+		"retried": [],
+		"totals": {
+			"desks": 0,
+			"fetched": 0,
+			"created": 0,
+			"already": 0,
+			"skipped": 0,
+			"failed": 0,
+		},
+	}
+	report.update(extra)
+	return report
+
+
+def scheduler_is_inactive():
+	"""Whether automatic syncing is off, regardless of the enable checkbox.
+
+	Surfaced in the report because a paused scheduler is the usual reason for
+	"it is enabled but nothing is syncing".
+	"""
+	try:
+		return bool(is_scheduler_inactive(verbose=False))
+	except Exception:
+		return False
+
+
+def run_sync():
+	"""The sync itself. Always returns a report; never raises to the caller."""
 	if not is_sync_enabled():
-		return
+		return sync_report(
+			state="disabled",
+			message=_("Token sync is disabled in Settings."),
+		)
 
 	url = get_token_url()
 	if not url:
@@ -103,13 +164,16 @@ def sync_medical_tokens():
 			message="Settings.url is empty, cannot fetch medical tokens.",
 			title="Medical token sync",
 		)
-		return
+		return sync_report(
+			state="no_url",
+			message=_("No Token URL is set in Settings."),
+		)
 
-	created = []
+	desks = []
 
 	for username in get_sync_usernames():
 		try:
-			created.extend(sync_for_username(url, username))
+			desks.append(sync_for_username(url, username))
 		except Exception:
 			# One desk failing must not stop the others.
 			frappe.db.rollback()
@@ -117,11 +181,67 @@ def sync_medical_tokens():
 				message=frappe.get_traceback(),
 				title=f"Medical token sync failed for {username}",
 			)
+			desks.append(desk_report(username, error=short_error()))
 
-	created.extend(retry_stalled_logs())
+	retried = retry_stalled_logs()
 
+	created = [
+		outcome
+		for outcome in all_outcomes(desks, retried)
+		if outcome["status"] == STATUS_COMPLETED
+	]
 	if created:
 		notify_invoices_created(created)
+
+	return sync_report(
+		state="completed",
+		url=url,
+		desks=desks,
+		retried=retried,
+		totals=tally(desks, retried),
+	)
+
+
+def all_outcomes(desks, retried):
+	for desk in desks:
+		yield from desk["outcomes"]
+
+	yield from retried
+
+
+def tally(desks, retried):
+	counts = {
+		"desks": len(desks),
+		"fetched": sum(desk["fetched"] for desk in desks),
+		"created": 0,
+		"already": 0,
+		"skipped": 0,
+		"failed": 0,
+	}
+
+	key_for = {
+		STATUS_COMPLETED: "created",
+		OUTCOME_ALREADY: "already",
+		STATUS_SKIPPED: "skipped",
+		STATUS_FAILED: "failed",
+	}
+
+	for outcome in all_outcomes(desks, retried):
+		key = key_for.get(outcome["status"])
+		if key:
+			counts[key] += 1
+
+	return counts
+
+
+def short_error():
+	"""The last line of the current traceback, for display.
+
+	The full traceback still goes to Error Log and to the log's error_message;
+	this is only what the popup shows.
+	"""
+	traceback = frappe.get_traceback(with_context=False).strip()
+	return traceback.splitlines()[-1] if traceback else _("Unknown error")
 
 
 # ---------------------------------------------------------------------------
@@ -282,16 +402,52 @@ def format_dotnet_datetime(value):
 	return value.strftime("%Y-%m-%dT%H:%M:%S.%f") + "0"
 
 
+def get_day_end(timestamp):
+	"""The last moment of the day `timestamp` falls on, in the API's format.
+
+	The cursor is always scoped to a single day (token numbers restart daily),
+	so the window we ask for is "from the watermark, to the end of that day".
+	The date is taken from `timestamp` rather than from `today()` so the two
+	bounds can never straddle a midnight rollover mid-run.
+	"""
+	day = str(timestamp or "")[:10] or today()
+	return f"{day}T23:59:59.9999999"
+
+
+def token_request_params(timestamp):
+	"""The query the remote service is asked for: one day, from the watermark."""
+	return {
+		"from": timestamp,
+		"to": get_day_end(timestamp),
+	}
+
+
+def token_request_url(url, timestamp):
+	"""The URL fetch_tokens will call, built without sending anything.
+
+	Worked out up front so the report can show the exact request even when the
+	call itself never completes -- an unreachable host is precisely when the
+	reader wants to see what was being asked for.
+	"""
+	try:
+		return requests.Request("GET", url, params=token_request_params(timestamp)).prepare().url
+	except Exception:
+		return url
+
+
 def fetch_tokens(url, username, timestamp, last_token_no):
+	"""Return (tokens, request_url).
+
+	The fully built request URL comes back so the report can show exactly what
+	was asked of the remote service; when a desk unexpectedly gets nothing, the
+	`from`/`to` window is the first thing worth looking at.
+	"""
 	response = requests.get(
 		url,
-		params={
-			"username": username,
-			"timestamp": timestamp,
-			"last_token_no": last_token_no,
-		},
+		params=token_request_params(timestamp),
 		timeout=REQUEST_TIMEOUT,
 	)
+	request_url = response.url
 	response.raise_for_status()
 
 	body = response.json()
@@ -307,28 +463,63 @@ def fetch_tokens(url, username, timestamp, last_token_no):
 			message=f"Expected a list of tokens for {username}, got {type(body).__name__}.",
 			title="Medical token sync",
 		)
-		return []
+		return [], request_url
 
-	return body
+	return body, request_url
+
+
+def desk_report(username, **extra):
+	"""Skeleton report for one desk, so a failed desk has the same shape."""
+	report = {
+		"username": username,
+		"counter_user": None,
+		"request_url": None,
+		"fetched": 0,
+		"error": None,
+		"outcomes": [],
+	}
+	report.update(extra)
+	return report
 
 
 def sync_for_username(url, username):
 	timestamp, last_token_no = get_cursor(username)
-	tokens = fetch_tokens(url, username, timestamp, last_token_no)
-
-	created = []
 	counter_user = get_counter_user(username)
+
+	# Known before the call, so a connection failure still reports the URL.
+	request_url = token_request_url(url, timestamp)
+
+	try:
+		tokens, request_url = fetch_tokens(url, username, timestamp, last_token_no)
+	except Exception:
+		frappe.db.rollback()
+		frappe.log_error(
+			message=frappe.get_traceback(),
+			title=f"Medical token fetch failed for {username}",
+		)
+		return desk_report(
+			username,
+			counter_user=counter_user,
+			request_url=request_url,
+			error=short_error(),
+		)
+
+	outcomes = []
 
 	with as_user(counter_user):
 		for item in tokens:
 			if not isinstance(item, dict):
 				continue
 
-			invoice = process_token(item, username)
-			if invoice:
-				created.append(invoice)
+			outcomes.append(process_token(item, username))
 
-	return created
+	return desk_report(
+		username,
+		counter_user=counter_user,
+		request_url=request_url,
+		fetched=len(outcomes),
+		outcomes=outcomes,
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -336,8 +527,28 @@ def sync_for_username(url, username):
 # ---------------------------------------------------------------------------
 
 
+def token_outcome(item, **extra):
+	"""Skeleton outcome for one token, so every path reports the same shape."""
+	outcome = {
+		"token_number": cint(item.get("TokenNumber")),
+		"customer_name": item.get("Name"),
+		"service": item.get("Service"),
+		"status": None,
+		"sales_invoice": None,
+		"customer": None,
+		"log": None,
+		"reason": None,
+	}
+	outcome.update(extra)
+	return outcome
+
+
 def process_token(item, username):
-	"""Record one token and raise its invoice. Commits or rolls back on its own."""
+	"""Record one token and raise its invoice. Commits or rolls back on its own.
+
+	Always returns an outcome dict describing what happened, so the caller can
+	report skips and failures instead of only successes.
+	"""
 	try:
 		log = get_or_create_log(item, username)
 
@@ -346,23 +557,40 @@ def process_token(item, username):
 		# must not be re-invoiced if the API ever replays the token.
 		if log.status == STATUS_COMPLETED:
 			frappe.db.commit()
-			return None
+			return token_outcome(
+				item,
+				status=OUTCOME_ALREADY,
+				sales_invoice=log.sales_invoice,
+				customer=log.customer,
+				log=log.name,
+			)
 
 		invoice = create_invoice_for_log(log, item)
 		frappe.db.commit()
-		return invoice
+		return token_outcome(item, status=STATUS_COMPLETED, log=log.name, **invoice)
 	except TokenSkipped as skip:
 		frappe.db.rollback()
-		mark_log(item, username, STATUS_SKIPPED, str(skip))
-		return None
+		return token_outcome(
+			item,
+			status=STATUS_SKIPPED,
+			reason=str(skip),
+			log=mark_log(item, username, STATUS_SKIPPED, str(skip)),
+		)
 	except Exception:
 		frappe.db.rollback()
 		frappe.log_error(
 			message=frappe.get_traceback(),
 			title=f"Medical token {item.get('TokenNumber')} failed",
 		)
-		mark_log(item, username, STATUS_FAILED, frappe.get_traceback(with_context=False)[-1000:])
-		return None
+		# The log keeps the tail of the traceback; the report shows one line.
+		return token_outcome(
+			item,
+			status=STATUS_FAILED,
+			reason=short_error(),
+			log=mark_log(
+				item, username, STATUS_FAILED, frappe.get_traceback(with_context=False)[-1000:]
+			),
+		)
 
 
 def make_token_key(item):
@@ -437,7 +665,11 @@ def parse_created_date(value):
 
 
 def mark_log(item, username, status, message=None):
-	"""Record the outcome of a token on its log, in its own transaction."""
+	"""Record the outcome of a token on its log, in its own transaction.
+
+	Returns the log name so the caller can link to it, or None if even the log
+	could not be written.
+	"""
 	try:
 		token_key = make_token_key(item)
 		name = frappe.db.get_value("Medical Service Logs", {"token_key": token_key}, "name")
@@ -462,6 +694,7 @@ def mark_log(item, username, status, message=None):
 				}
 			)
 			log.insert(ignore_permissions=True)
+			name = log.name
 		else:
 			frappe.db.set_value(
 				"Medical Service Logs",
@@ -475,12 +708,14 @@ def mark_log(item, username, status, message=None):
 			)
 
 		frappe.db.commit()
+		return name
 	except Exception:
 		frappe.db.rollback()
 		frappe.log_error(
 			message=frappe.get_traceback(),
 			title="Could not record medical token outcome",
 		)
+		return None
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +726,12 @@ def mark_log(item, username, status, message=None):
 def resolve_customer(item):
 	"""Return (customer, discount) for a token, creating the customer if needed.
 
-	Raises TokenSkipped when the token deliberately produces no invoice.
+	A token carrying a CompanyId is billed to the mapped company Customer and
+	picks up that company's discount; one without falls back to a per person
+	Customer keyed on the token's Name.
+
+	Raises TokenSkipped when the token deliberately produces no invoice, which
+	now only means the token cannot be attributed to any customer at all.
 	"""
 	company_id = item.get("CompanyId")
 
@@ -506,17 +746,10 @@ def resolve_customer(item):
 		if not customer:
 			raise TokenSkipped(f"No Customer is mapped to CompanyId {company_id}.")
 
-		# One invoice per company customer per day.
-		existing = frappe.db.get_value(
-			"Sales Invoice",
-			{"customer": customer.name, "posting_date": today()},
-			"name",
-		)
-		if existing:
-			raise TokenSkipped(
-				f"Company customer {customer.name} already has invoice {existing} today."
-			)
-
+		# Every token gets its own invoice, including several on the same day for
+		# the same company. The company is only who the invoice is billed to; the
+		# person the token belongs to is kept on the log's `customer_name`, and
+		# the invoice is told apart by its `customer_token` and `medical_service`.
 		return customer.name, flt(customer.discount)
 
 	customer_name = (item.get("Name") or "").strip()
@@ -604,6 +837,12 @@ def create_invoice_for_log(log, item):
 			# is exactly what happened to the old arithmetic in the board page.
 		}
 	)
+
+	# A company billed invoice is raised against the company, so the person the
+	# token belongs to would otherwise not appear on it at all.
+	if item.get("CompanyId") not in (None, "", 0) and log.customer_name:
+		invoice.remarks = log.customer_name
+
 	invoice.insert(ignore_permissions=True)
 
 	log.db_set(
@@ -652,7 +891,7 @@ def retry_stalled_logs():
 		limit=50,
 	)
 
-	created = []
+	outcomes = []
 	for row in stalled:
 		try:
 			item = json.loads(row.api_response or "{}")
@@ -663,12 +902,9 @@ def retry_stalled_logs():
 			continue
 
 		with as_user(get_counter_user(row.synced_for_username)):
-			invoice = process_token(item, row.synced_for_username)
+			outcomes.append(process_token(item, row.synced_for_username))
 
-		if invoice:
-			created.append(invoice)
-
-	return created
+	return outcomes
 
 
 # ---------------------------------------------------------------------------

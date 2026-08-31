@@ -17,6 +17,11 @@ app_include_css = ["/assets/digitz_erp/css/digitz_desk_premium.css"]
 # include js, css files in header of web template
 # web_include_css = "/assets/digitz_erp/css/digitz_erp.css"
 # web_include_js = "/assets/digitz_erp/js/digitz_erp.js"
+# Framework fallback for the desk navbar and the login page, used whenever
+# Website Settings has no app_logo. Shipping it as an app asset means a fresh
+# install is branded before any patch or upload has run.
+app_logo_url = "/assets/digitz_erp/images/fernix-logo.jpg"
+
 app_include_js = [
 	"/assets/digitz_erp/js/digitz_common.js",
 	"/assets/digitz_erp/js/token_notifications.js",

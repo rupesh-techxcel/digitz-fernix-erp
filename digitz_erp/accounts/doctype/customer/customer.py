@@ -47,11 +47,6 @@ class Customer(Document):
         if emirate_required and not self.emirate:
             frappe.throw("Emirate is mandatory for the customer")
 
-        if self.customer_type == "Company":
-           
-            if not frappe.db.get_value("Settings",None,"add_customer_url") or not frappe.db.get_value("Settings",None, "update_customer_url") or not frappe.db.get_value("Settings",None,"delete_customer_url"):
-                frappe.throw("Please set Customer Company API URLs in Settings")
-
     
     
     
@@ -62,7 +57,12 @@ class Customer(Document):
         """
         if self.customer_type == "Company" and not  self.company_id:
             self.company_id = frappe.db.count("Customer",{"customer_type":"Company"}) + 1
-            add_customer_url = frappe.db.get_value("Settings",None,"add_customer_url")
+            add_customer_url = get_customer_company_url("add_customer_url")
+            if not add_customer_url:
+                # The push integration is not configured on this site. company_id
+                # is still assigned, so tokens carrying it resolve locally.
+                return
+
             params = {
                             "id": self.company_id,
                             "name": self.customer_name,
@@ -78,7 +78,10 @@ class Customer(Document):
         elif self.customer_type == "Company" and self.company_id:
             doc = self.get_doc_before_save()
             if doc and doc.customer_name != self.customer_name:
-                update_customer_url = frappe.db.get_value("Settings",None,"update_customer_url")
+                update_customer_url = get_customer_company_url("update_customer_url")
+                if not update_customer_url:
+                    return
+
                 params = {
                             "id": self.company_id,
                             "name": self.customer_name,
@@ -95,11 +98,14 @@ class Customer(Document):
 
     def on_trash(self):
         if self.customer_type == "Company" and self.company_id:
-            details = frappe.db.get_value("Settings",None,["delete_customer_url"],as_dict=1)
+            delete_customer_url = get_customer_company_url("delete_customer_url")
+            if not delete_customer_url:
+                return
+
             params = {
                             "id": self.company_id,
             }
-            flag,response = add_update_delete_customer_company(details.delete_customer_url,params,"DELETE")
+            flag,response = add_update_delete_customer_company(delete_customer_url,params,"DELETE")
             if flag:
                 frappe.msgprint("Customer Company deleted successfully.")
             else:
@@ -174,7 +180,20 @@ def merge_customer(current_customer, merge_customer):
 
 
 
+def get_customer_company_url(fieldname):
+    """The configured push endpoint, or None when it is not set up.
+
+    A blank URL means this site does not mirror company customers to the token
+    system, so the caller skips the HTTP call instead of failing the save.
+    """
+    url = frappe.db.get_value("Settings", None, fieldname)
+    return url.strip() if url else None
+
+
 def add_update_delete_customer_company(url: str,query_params: dict, method: str):
+    if not url:
+        return False, "No URL is configured for this operation in Settings."
+
     try:
         if method.upper() == "POST":
             response = requests.post(url, params=query_params, timeout=30)

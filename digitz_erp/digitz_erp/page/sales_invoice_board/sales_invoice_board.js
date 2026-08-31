@@ -124,14 +124,7 @@ digitz_erp.SalesInvoiceBoard = class SalesInvoiceBoard {
 	}
 
 	sync_now() {
-		frappe.call({
-			method: "digitz_erp.api.token_sync.run_token_sync_now",
-			freeze: true,
-			freeze_message: __("Queueing token sync..."),
-			callback: () => {
-				frappe.show_alert({ message: __("Token sync queued"), indicator: "blue" }, 4);
-			},
-		});
+		digitz_erp.token_notifications.run_sync_now(() => this.refresh());
 	}
 
 	set_status(text) {
