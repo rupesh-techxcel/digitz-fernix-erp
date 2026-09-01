@@ -323,8 +323,7 @@
   {
    "fieldname": "reference_no",
    "fieldtype": "Data",
-   "label": "Reference No",
-   "mandatory_depends_on": "eval:doc.mode == 'Bank'"
+   "label": "Reference No"
   },
   {
    "fieldname": "column_break_4",
@@ -559,8 +558,7 @@
   {
    "fieldname": "reference_date",
    "fieldtype": "Date",
-   "label": "Reference Date",
-   "mandatory_depends_on": "eval:doc.mode == 'Bank'"
+   "label": "Reference Date"
   },
   {
    "fieldname": "in_words",
