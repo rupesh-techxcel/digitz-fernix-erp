@@ -252,19 +252,23 @@ def get_services_with_items():
 
 
 def get_next_token_number(queue):
-	"""Continue today's numbering, across both the queue and existing logs."""
+	"""Continue today's numbering, across both the queue and existing logs.
+
+	`token_number` is a Data field -- real tokens can look like 'T-104' -- so
+	MAX() on it would sort lexicographically and put '9' above '10'. The numeric
+	ones are pulled back and compared as integers instead; anything non numeric
+	simply does not take part in the numbering.
+	"""
 	queued_max = max((cint(t.get("TokenNumber")) for t in queue), default=0)
 
-	logged_max = (
-		frappe.db.get_value(
-			"Medical Service Logs",
-			{"added_on": ["between", [f"{today()} 00:00:00", f"{today()} 23:59:59.999999"]]},
-			"max(token_number)",
-		)
-		or 0
+	logged = frappe.get_all(
+		"Medical Service Logs",
+		filters={"added_on": ["between", [f"{today()} 00:00:00", f"{today()} 23:59:59.999999"]]},
+		pluck="token_number",
 	)
+	logged_max = max((cint(value) for value in logged), default=0)
 
-	return max(queued_max, cint(logged_max)) + 1
+	return max(queued_max, logged_max) + 1
 
 
 def get_sync_username():

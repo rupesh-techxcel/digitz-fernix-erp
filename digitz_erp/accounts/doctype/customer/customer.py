@@ -47,7 +47,29 @@ class Customer(Document):
         if emirate_required and not self.emirate:
             frappe.throw("Emirate is mandatory for the customer")
 
-    
+        self.validate_company_customer()
+
+    def validate_company_customer(self):
+        """`company_customer` points an individual at the company they belong to.
+
+        Kept one level deep and pointing only at companies, so the link can be
+        followed without walking a chain or looping back on itself.
+        """
+        if not self.company_customer:
+            return
+
+        if self.customer_type == "Company":
+            frappe.throw("A Company customer cannot itself belong to another company.")
+
+        if self.company_customer == self.name:
+            frappe.throw("A customer cannot be its own company.")
+
+        if frappe.db.get_value("Customer", self.company_customer, "customer_type") != "Company":
+            frappe.throw(
+                f"'{self.company_customer}' is not a Company customer, so it cannot be set as Company."
+            )
+
+
     
     
     def before_save(self):

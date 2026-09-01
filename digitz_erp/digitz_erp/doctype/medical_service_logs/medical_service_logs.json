@@ -27,7 +27,7 @@
   },
   {
    "fieldname": "token_number",
-   "fieldtype": "Int",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "in_preview": 1,
    "in_standard_filter": 1,

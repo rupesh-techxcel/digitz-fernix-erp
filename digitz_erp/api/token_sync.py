@@ -375,22 +375,26 @@ def get_cursor():
 	day_start = f"{day} 00:00:00"
 	day_end = f"{day} 23:59:59.999999"
 
+	# Ordered on created_date alone. token_number is text -- it can be 'T-104' --
+	# so it sorts lexicographically and is no use as a tie break; rows sharing a
+	# created_date all yield the same watermark anyway, which is the only part of
+	# this row the caller uses.
 	last = frappe.db.get_value(
 		"Medical Service Logs",
 		{
 			"added_on": ["between", [day_start, day_end]],
 		},
 		["created_date", "token_number", "api_response"],
-		order_by="created_date desc, token_number desc",
+		order_by="created_date desc",
 		as_dict=True,
 	)
 
 	if not last:
-		return f"{day}T00:00:00.0000000", 0
+		return f"{day}T00:00:00.0000000", None
 
 	return (
 		extract_created_date(last.api_response) or format_dotnet_datetime(last.created_date),
-		cint(last.token_number),
+		last.token_number,
 	)
 
 
@@ -556,10 +560,25 @@ def sync_stream(url):
 # ---------------------------------------------------------------------------
 
 
+def token_text(item):
+	"""The token number as the API sent it, trimmed, or None.
+
+	Token numbers are text, not integers: the remote issues values like 'T-104'
+	alongside plain numbers. Nothing on this path may coerce them, because
+	cint() turns every non numeric token into 0 and they all collide.
+	"""
+	raw = item.get("TokenNumber")
+
+	if raw is None:
+		return None
+
+	return str(raw).strip() or None
+
+
 def token_outcome(item, **extra):
 	"""Skeleton outcome for one token, so every path reports the same shape."""
 	outcome = {
-		"token_number": cint(item.get("TokenNumber")),
+		"token_number": token_text(item),
 		"customer_name": item.get("Name"),
 		"service": item.get("Service"),
 		"username": item.get("UserName"),
@@ -658,7 +677,7 @@ def get_or_create_log(item, username):
 			"doctype": "Medical Service Logs",
 			"token_key": token_key,
 			"customer_name": item.get("Name"),
-			"token_number": cint(item.get("TokenNumber")),
+			"token_number": token_text(item),
 			"service": item.get("Service"),
 			"status": STATUS_PENDING,
 			"api_response": json.dumps(item),
@@ -712,7 +731,7 @@ def mark_log(item, username, status, message=None):
 					"doctype": "Medical Service Logs",
 					"token_key": token_key,
 					"customer_name": item.get("Name"),
-					"token_number": cint(item.get("TokenNumber")),
+					"token_number": token_text(item),
 					"service": item.get("Service"),
 					"status": status,
 					"api_response": json.dumps(item),
@@ -756,31 +775,30 @@ def mark_log(item, username, status, message=None):
 def resolve_customer(item):
 	"""Return (customer, discount) for a token, creating the customer if needed.
 
-	A token carrying a CompanyId is billed to the mapped company Customer and
-	picks up that company's discount; one without falls back to a per person
-	Customer keyed on the token's Name.
+	A token carrying a CompanyId is billed to the company Customer for that id,
+	creating it when the id is not mapped yet, and picks up that company's
+	discount; one without falls back to a per person Customer keyed on the
+	token's Name.
 
 	Raises TokenSkipped when the token deliberately produces no invoice, which
 	now only means the token cannot be attributed to any customer at all.
 	"""
 	company_id = item.get("CompanyId")
 
-	if company_id not in (None, "", 0):
-		customer = frappe.db.get_value(
-			"Customer",
-			{"company_id": cint(company_id)},
-			["name", "discount"],
-			as_dict=True,
-		)
+	# CompanyId arrives from the API as a string, so "0" has to be ruled out
+	# alongside the integer.
+	if company_id not in (None, "", 0) and cint(company_id):
+		company = get_or_create_company_customer(company_id)
 
-		if not customer:
-			raise TokenSkipped(f"No Customer is mapped to CompanyId {company_id}.")
+		# The company exists before the person is touched, so the link the
+		# person carries always has something to point at.
+		ensure_person_customer(item, company)
 
 		# Every token gets its own invoice, including several on the same day for
 		# the same company. The company is only who the invoice is billed to; the
 		# person the token belongs to is kept on the log's `customer_name`, and
 		# the invoice is told apart by its `customer_token` and `medical_service`.
-		return customer.name, flt(customer.discount)
+		return company, flt(frappe.db.get_value("Customer", company, "discount"))
 
 	customer_name = (item.get("Name") or "").strip()
 	if not customer_name:
@@ -800,6 +818,108 @@ def resolve_customer(item):
 	customer.insert(ignore_permissions=True)
 
 	return customer.name, 0
+
+
+def get_or_create_company_customer(company_id):
+	"""The company Customer for a token's CompanyId, created if it is unknown.
+
+	`company_id` is passed explicitly on insert, and that is load bearing.
+	Customer.before_save only allocates `count + 1` and POSTs to
+	`add_customer_url` when the field is empty, so supplying the remote's own id
+	both keeps that id and suppresses the outbound push -- which is correct,
+	since the remote is where the id came from and already knows this company.
+
+	The token carries no company name, so a new record gets a placeholder to be
+	renamed by hand later. Renaming then pushes the real name out through the
+	existing update_customer_url path.
+	"""
+	company_id = cint(company_id)
+
+	name = frappe.db.get_value("Customer", {"company_id": company_id}, "name")
+	if name:
+		return name
+
+	customer = frappe.get_doc(
+		{
+			"doctype": "Customer",
+			"customer_name": f"Company {company_id}",
+			"customer_type": "Company",
+			"company_id": company_id,
+			"customer_group": "Default Customer Group",
+		}
+	)
+
+	try:
+		customer.insert(ignore_permissions=True)
+	except frappe.DuplicateEntryError:
+		# Another worker created it between the lookup and the insert.
+		frappe.db.rollback()
+		name = frappe.db.get_value("Customer", {"company_id": company_id}, "name")
+		if not name:
+			raise
+		return name
+	except frappe.ValidationError as error:
+		# Usually one of the Company's customer_*_required flags: a placeholder
+		# company has no address, mobile or TRN to give. Reported as a skip with
+		# the reason rather than a failure, since retrying cannot help until the
+		# company is created by hand.
+		raise TokenSkipped(
+			f"Could not create a customer for CompanyId {company_id}: {error}"
+		) from error
+
+	return customer.name
+
+
+def ensure_person_customer(item, company):
+	"""Record the person on a company token as a Customer under that company.
+
+	Never raises. The invoice is billed to the company either way, so a person
+	record that cannot be written -- most likely because the Company has one of
+	the customer_*_required flags set -- must not cost the site its invoice.
+
+	`customer_type` stays Individual on purpose: marking a patient as a Company
+	would make Customer.before_save allocate them a company_id and push them to
+	the external token service.
+	"""
+	customer_name = (item.get("Name") or "").strip()
+
+	if not customer_name or not company:
+		return None
+
+	try:
+		existing = frappe.db.get_value(
+			"Customer", {"customer_name": customer_name}, ["name", "company_customer"], as_dict=True
+		)
+
+		if existing:
+			# An existing link is left alone: the same name under a different
+			# company is more likely two people than a move, and reassigning
+			# would make the link flip back and forth between them.
+			if not existing.company_customer:
+				frappe.db.set_value(
+					"Customer", existing.name, "company_customer", company, update_modified=False
+				)
+
+			return existing.name
+
+		person = frappe.get_doc(
+			{
+				"doctype": "Customer",
+				"customer_name": customer_name,
+				"customer_type": "Individual",
+				"company_customer": company,
+				"customer_group": "Default Customer Group",
+			}
+		)
+		person.insert(ignore_permissions=True)
+
+		return person.name
+	except Exception:
+		frappe.log_error(
+			message=frappe.get_traceback(),
+			title=f"Could not record person customer for {customer_name}",
+		)
+		return None
 
 
 def resolve_medical_service(service_name):
@@ -867,6 +987,16 @@ def build_invoice_items(service_name):
 	return rows, gross_total, tax_total
 
 
+def token_for_invoice(item, log):
+	"""The token number to put on the invoice.
+
+	Taken from the API payload, falling back to the log's copy when the payload
+	has no usable value -- which is what the retry path relies on, since it
+	replays a stored `api_response`.
+	"""
+	return token_text(item) or (str(log.token_number).strip() or None if log.token_number else None)
+
+
 def create_invoice_for_log(log, item):
 	"""Create the Sales Invoice for a log and mark it Completed."""
 	customer, discount = resolve_customer(item)
@@ -880,7 +1010,7 @@ def create_invoice_for_log(log, item):
 			"customer": customer,
 			"customer_email": item.get("Email"),
 			"payment_mode": "Card",
-			"customer_token": log.token_number,
+			"customer_token": token_for_invoice(item, log),
 			"medical_service": log.service,
 			"items": rows,
 			"gross_total": gross_total - calculated_discount,
