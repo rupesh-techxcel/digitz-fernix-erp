@@ -983,36 +983,59 @@ def build_invoice_items(service_name):
 		raise TokenSkipped(f"Medical Service '{title}' has no items.")
 
 	rows = []
-	gross_total = 0
-	tax_total = 0
+	totals = {"gross": 0, "taxable": 0, "tax": 0, "net": 0}
 
 	for service_item in service_doc.services:
+		qty = cint(service_item.qty) or 1
 		com = flt(service_item.com)
-		tax_name, tax_rate, tax_amount = item_tax(service_item.item, com)
+		gov = flt(service_item.gov)
 
-		gross_total += com
-		tax_total += tax_amount
+		com_amount = qty * com
+		gov_amount = qty * gov
+
+		tax_name, tax_rate, _ = item_tax(service_item.item, com_amount)
+
+		# Mirrors the amounts the desk computes in sales_invoice.js, so an
+		# invoice raised from a token and one keyed in by hand agree. Only the
+		# service charge is taxable; the government fee is passed through
+		# untaxed but still billed.
+		if tax_rate:
+			taxable_amount = com_amount
+			tax_amount = taxable_amount * tax_rate / 100.0
+		else:
+			taxable_amount = 0
+			tax_amount = 0
+
+		gross_amount = com_amount + gov_amount
+		net_amount = gross_amount + tax_amount
+
+		totals["gross"] += gross_amount
+		totals["taxable"] += taxable_amount
+		totals["tax"] += tax_amount
+		totals["net"] += net_amount
 
 		rows.append(
 			{
 				"item": service_item.item,
 				"item_name": service_item.item_name,
 				"display_name": service_item.item_name,
-				"qty": cint(service_item.qty) or 1,
-				"rate": com,
-				"gross_amount": com,
+				"qty": qty,
+				# rate is the whole line, service charge plus government fee.
+				"rate": com + gov,
+				"gross_amount": gross_amount,
+				"taxable_amount": taxable_amount,
 				# `tax` is a Link to Tax; the old JS coerced an empty value to 0,
 				# which is not a valid link target.
 				"tax": tax_name,
 				"tax_rate": tax_rate,
 				"tax_amount": tax_amount,
-				"net_amount": com,
+				"net_amount": net_amount,
 				"com": com,
-				"gov": flt(service_item.gov),
+				"gov": gov,
 			}
 		)
 
-	return rows, gross_total, tax_total
+	return rows, totals
 
 
 def token_for_invoice(item, log):
@@ -1029,8 +1052,8 @@ def create_invoice_for_log(log, item):
 	"""Create the Sales Invoice for a log and mark it Completed."""
 	customer, discount = resolve_customer(item)
 
-	rows, gross_total, tax_total = build_invoice_items(log.service)
-	calculated_discount = (gross_total * flt(discount)) / 100
+	rows, totals = build_invoice_items(log.service)
+	calculated_discount = (totals["gross"] * flt(discount)) / 100
 
 	invoice = frappe.get_doc(
 		{
@@ -1041,11 +1064,14 @@ def create_invoice_for_log(log, item):
 			"customer_token": token_for_invoice(item, log),
 			"medical_service": log.service,
 			"items": rows,
-			"gross_total": gross_total - calculated_discount,
-			"tax_total": tax_total,
-			"net_total": (gross_total + tax_total) - calculated_discount,
-			"net_amount": gross_total - calculated_discount,
-			"rounded_total": (gross_total + tax_total) - calculated_discount,
+			"gross_total": totals["gross"] - calculated_discount,
+			# Sum of the lines' taxable amounts: the service charges only, since
+			# government fees are billed but not taxed.
+			"taxable_total": totals["taxable"],
+			"tax_total": totals["tax"],
+			"net_total": totals["net"] - calculated_discount,
+			"net_amount": totals["gross"] - calculated_discount,
+			"rounded_total": totals["net"] - calculated_discount,
 			# `paid_amount` is deliberately not set. SalesInvoice.before_validate
 			# owns it: a non credit sale is forced to rounded_total, a credit
 			# sale to 0. Passing a value here would be silently discarded, which

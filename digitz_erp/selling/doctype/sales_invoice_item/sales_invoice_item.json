@@ -61,27 +61,28 @@
   {
    "fieldname": "qty_in_base_unit",
    "fieldtype": "Float",
-   "in_list_view": 1,
    "label": "Qty In Base Unit",
-   "read_only": 1
+   "read_only": 1,
+   "hidden": 1
   },
   {
    "fieldname": "unit",
    "fieldtype": "Link",
-   "in_list_view": 1,
    "label": "Unit",
-   "options": "Unit"
+   "options": "Unit",
+   "hidden": 1
   },
   {
    "fieldname": "base_unit",
    "fieldtype": "Data",
-   "label": "Base Unit"
+   "label": "Base Unit",
+   "hidden": 1
   },
   {
    "fieldname": "conversion_factor",
    "fieldtype": "Float",
-   "in_list_view": 1,
-   "label": "Conversion Factor"
+   "label": "Conversion Factor",
+   "hidden": 1
   },
   {
    "fieldname": "rate",
@@ -92,9 +93,9 @@
   {
    "fieldname": "rate_in_base_unit",
    "fieldtype": "Currency",
-   "in_list_view": 1,
    "label": "Rate In Base Unit",
-   "read_only": 1
+   "read_only": 1,
+   "hidden": 1
   },
   {
    "fieldname": "rate_excluded_tax",
@@ -170,7 +171,8 @@
    "fieldname": "unit_conversion_details",
    "fieldtype": "Small Text",
    "label": "Unit Conversion Details",
-   "read_only": 1
+   "read_only": 1,
+   "hidden": 1
   },
   {
    "allow_on_submit": 1,

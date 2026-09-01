@@ -143,7 +143,7 @@
       <th style="width: 8%;">Qty<span style="display:block; font-size:11px; font-weight:normal; direction:rtl;">الكمية</span></th>
       <th style="width: 12%;">Gov Fee<span style="display:block; font-size:11px; font-weight:normal; direction:rtl;">الرسوم الحكومية</span></th>
       <th style="width: 12%;">Service Fee<span style="display:block; font-size:11px; font-weight:normal; direction:rtl;">رسوم الخدمة</span></th>
-      <th style="width: 10%;">Discount<span style="display:block; font-size:11px; font-weight:normal; direction:rtl;">الخصم</span></th>
+      <th style="width: 10%;">Taxable Amount<span style="display:block; font-size:11px; font-weight:normal; direction:rtl;">المبلغ الخاضع للضريبة</span></th>
       <th style="width: 12%;">Tax Amount<span style="display:block; font-size:11px; font-weight:normal; direction:rtl;">مبلغ الضريبة</span></th>
       <th style="width: 13%;">Net Amount<span style="display:block; font-size:11px; font-weight:normal; direction:rtl;">المبلغ الصافي</span></th>
     </tr>
@@ -156,7 +156,7 @@
       <td style="text-align: center;">{{ item.qty }}</td>
       <td style="text-align: right;">{{ "%.2f"|format(item.gov) }}</td>
       <td style="text-align: right;">{{ "%.2f"|format(item.com) }}</td>
-      <td style="text-align: right;">{{ "%.2f"|format(item.discount_amount) }}</td>
+      <td style="text-align: right;">{{ "%.2f"|format(item.taxable_amount) }}</td>
       <td style="text-align: right;">{{ "%.2f"|format(item.tax_amount) }}</td>
       <td style="text-align: right;">{{ "%.2f"|format(item.net_amount) }}</td>
     </tr>
