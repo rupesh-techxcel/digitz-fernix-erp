@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Rupesh P and contributors
 # For license information, please see license.txt
 
-"""Seed Medical Services, with their Service Items child rows, from a sheet.
+"""Seed Medical Services, with their Service Items child rows.
 
 Run manually; this is deliberately not a patch, so `bench migrate` never
 triggers it.
@@ -12,134 +12,134 @@ triggers it.
 	bench --site <site> execute digitz_erp.seeds.medical_service_seed.run \
 		--kwargs "{'dry_run': 1}"
 
-	# a different workbook or sheet
-	bench --site <site> execute digitz_erp.seeds.medical_service_seed.run \
-		--kwargs "{'file_path': '/path/to/book.xlsx', 'sheet': 'Sheet1'}"
+The rows are held in SERVICES below rather than read from a spreadsheet, so
+this runs on a server that has no copy of the file. They were taken from
+"Service List_Altaj_31-08-2026.xlsx", one tuple per service:
 
-Column mapping, all located by header name:
+	(title, display_name, (item_code, ...))
 
-	Service Name -> title         (also the record name; Medical Services is
-	                               autonamed `field:title`)
-	Display Name -> display_name
-	item         -> one `services` child row, linked to that Item
+title is also the record name -- Medical Services is autonamed `field:title`.
+Rows in the sheet that shared a Service Name are already merged here into one
+entry with several item codes.
 
-Rows sharing a Service Name are merged into one Medical Services record with a
-child row each, so a service made of several items can be expressed as several
-lines in the sheet.
+The child row is priced from the linked Item -- see child_row() for the
+arithmetic.
 
-The child row is filled from the linked Item to match the shape of the records
-already on the site -- see child_row() for the arithmetic.
-
-Run item_seed first: every row links to an Item that must already exist.
+Run item_seed first: every entry links to an Item that must already exist.
 Re-running is safe: an existing title is skipped, never rewritten.
 """
 
 import frappe
 from frappe.utils import cint, flt
 
-from digitz_erp.seeds.workbook import load_sheet, require_columns, text
+# (title, display_name, (item_code, ...))
+SERVICES = (
+	('MED-C-M-001', 'MEDICAL-CAT-C-Male-New', ('M03',)),
+	('MED-C-M-004', 'MEDICAL-CAT-C-Male-Renew-Pre-typed', ('M03',)),
+	('MED-C-F-003', 'MEDICAL-CAT-C-Female-Renew', ('M03',)),
+	('MED-A-F-005', 'MEDICAL-CAT-A-Female-Renew', ('M01',)),
+	('MED-B-M-002', 'MEDICAL-CAT-B-Male-New-Pre-typed', ('M02',)),
+	('EID-R-003', 'RENEW-3YEARS', ('M06',)),
+	('MED-B-F-002', 'MEDICAL-CAT-BP-Female-New-Pre-typed', ('M06',)),
+	('MED-A-M-003', 'MEDICAL-CAT-A-Male-Renew-without-X-ray', ('M06',)),
+	('MED-A-F-001', 'MEDICAL-CAT-A-Female-New', ('M06',)),
+	('EID-R-002', 'RENEW-2YEARS', ('M06',)),
+	('DXB', 'DXB', ('M06',)),
+	('MED-A-M-005', 'MEDICAL-CAT-A-Male-Renew-X-ray', ('M06',)),
+	('TAWJEEH', 'TAWJEEH-SERVICE', ('M06',)),
+	('EID-N-002', 'NEW-2YEARS', ('M06',)),
+	('MED-C-F-001', 'MEDICAL-CAT-C-Female-New', ('M06',)),
+	('VISIT VISA', 'VISIT VISA', ('M06',)),
+	('MED-A-F-002', 'MEDICAL-CAT-A-Female-New-without-X-ray', ('M06',)),
+	('MED-A-F-006', 'MEDICAL-CAT-A-Female-Renew-Pre-typed', ('M06',)),
+	('EID-R-001', 'RENEW-1YEAR', ('M06',)),
+	('MED-B-M-003', 'MEDICAL-CAT-B-Male-Renew', ('M06',)),
+	('AOE', 'AOE', ('M06',)),
+	('MED-A-M-002', 'MEDICAL-CAT-A-Male-New-Pre-typed', ('M06',)),
+	('MED-C-M-002', 'MEDICAL-CAT-C-Male-New-Pre-typed', ('M06',)),
+	('EID-R-004', 'RENEW-5YEARS', ('M06',)),
+	('MED-B-M-004', 'MEDICAL-CAT-B-Male-Renew-Pre-typed', ('M06',)),
+	('CHANGE STATUS', 'CHANGE STATUS', ('M06',)),
+	('MED-B-F-001', 'MEDICAL-CAT-BP-Female-New', ('M06',)),
+	('ENTRY PERMIT', 'ENTRY PERMIT', ('M06',)),
+	('EID-N-005', 'NEW-10YEARS', ('M06',)),
+	('MED-C-M-003', 'MEDICAL-CAT-C-Male-Renew', ('M06',)),
+	('EID-N-003', 'NEW-3YEARS', ('M06',)),
+	('MED-B-M-001', 'MEDICAL-CAT-B-Male-New', ('M06',)),
+	('MED-BP-F-001', 'MED-BP-Female Pregnant', ('M06',)),
+	('MED-B-F-003', 'MEDICAL-CAT-BP-Female-Renew', ('M06',)),
+	('EID-N-001', 'NEW-1YEAR', ('M06',)),
+	('MED-A-M-001', 'MEDICAL-CAT-A-Male-New', ('M06',)),
+	('MED-A-F-004', 'MEDICAL-CAT-A-Female-New-Pre-typed-without-X-ray', ('M06',)),
+	('MED-A-F-003', 'MEDICAL-CAT-A-Female-New-Pre-typed', ('M06',)),
+	('EID-N-004', 'NEW-5YEARS', ('M06',)),
+	('HEALTH CARD', 'HEALTH CARD', ('M06',)),
+	('MED-A-M-004', 'MEDICAL-CAT-A-Male-Renew-Pre-typed', ('M06',)),
+	('EID-R-005', 'RENEW-10YEARS', ('M06',)),
+	('MED-B-F-004', 'MEDICAL-CAT-BP-Female-Renew-Pre-typed', ('M06',)),
+	('MED-C-F-004', 'MEDICAL-CAT-C-Female-Renew-Pre-typed', ('M06',)),
+	('MED-C-F-002', 'MEDICAL-CAT-C-Female-New-Pre-typed', ('M06',)),
+)
 
-DEFAULT_FILE = "/home/rupesh/Downloads/Service List_Altaj_31-08-2026.xlsx"
 
-TITLE = "Service Name"
-DISPLAY = "Display Name"
-ITEM = "item"
+def run(dry_run=0):
+	"""Create one Medical Services record per entry in SERVICES.
 
-
-def run(file_path=None, sheet=None, dry_run=0):
-	"""Create one Medical Services record per distinct Service Name.
-
-	:param file_path: workbook to read. Defaults to DEFAULT_FILE.
-	:param sheet: sheet name. Defaults to the first sheet.
 	:param dry_run: report what would happen without writing.
 	"""
-	file_path = file_path or DEFAULT_FILE
 	dry_run = cint(dry_run)
 
-	header, rows = load_sheet(file_path, sheet)
-	columns = require_columns(header, [TITLE, DISPLAY, ITEM], file_path)
+	created, existing, problems = [], [], []
 
-	services, problems = collect(rows, columns)
+	for position, (title, display_name, item_codes) in enumerate(SERVICES, start=1):
+		missing = [code for code in item_codes if not frappe.db.exists("Item", code)]
 
-	created, existing = [], []
+		if missing:
+			problems.append((position, title, f"Item(s) not found: {', '.join(missing)}"))
+			continue
 
-	for title, service in services.items():
 		if frappe.db.exists("Medical Services", title):
 			existing.append(title)
 			continue
 
 		if not dry_run:
-			doc = frappe.get_doc(
+			frappe.get_doc(
 				{
 					"doctype": "Medical Services",
 					"title": title,
-					"display_name": service["display_name"],
-					"services": [child_row(item_code) for item_code in service["items"]],
+					"display_name": display_name,
+					"services": [child_row(code) for code in item_codes],
 				}
-			)
-			doc.insert(ignore_permissions=True)
+			).insert(ignore_permissions=True)
 
-		created.append((title, service["items"]))
+		created.append((title, item_codes))
 
 	if not dry_run:
 		frappe.db.commit()
 
-	report(file_path, len(rows), created, existing, problems, dry_run)
+	prefix = "[dry run] would create" if dry_run else "created"
+	print("\nMedical Services seed")
+	print(f"  defined          : {len(SERVICES)}")
+	print(f"  {prefix:<16} : {len(created)}")
+	print(f"  already present  : {len(existing)}")
+	print(f"  not seeded       : {len(problems)}")
+
+	for position, title, reason in problems:
+		print(f"    ! #{position}: {title} -- {reason}")
+
+	for title in existing:
+		print(f"    = {title} (unchanged)")
+
+	for title, codes in created:
+		print(f"    + {title}  [{', '.join(codes)}]")
 
 	return {
-		"file": file_path,
-		"rows": len(rows),
+		"defined": len(SERVICES),
 		"created": [title for title, _ in created],
 		"existing": existing,
 		"problems": problems,
 		"dry_run": bool(dry_run),
 	}
-
-
-def collect(rows, columns):
-	"""Group sheet rows into one entry per Service Name.
-
-	Returns (services, problems). A row that cannot be used is recorded with
-	its sheet row number rather than raised, so one bad line does not abandon
-	the rest of the sheet halfway through.
-	"""
-	services = {}
-	problems = []
-
-	for number, row in enumerate(rows, start=2):
-		title = text(row, columns[TITLE])
-		display_name = text(row, columns[DISPLAY])
-		item_code = text(row, columns[ITEM])
-
-		if not any((title, display_name, item_code)):
-			continue
-
-		if not title:
-			problems.append((number, "-", "no Service Name"))
-			continue
-
-		if not item_code:
-			problems.append((number, title, "no item"))
-			continue
-
-		if not frappe.db.exists("Item", item_code):
-			problems.append((number, title, f"Item '{item_code}' does not exist"))
-			continue
-
-		service = services.setdefault(title, {"display_name": display_name, "items": []})
-
-		# First non-empty Display Name wins; later rows for the same service
-		# only contribute their item.
-		if not service["display_name"] and display_name:
-			service["display_name"] = display_name
-
-		if item_code in service["items"]:
-			problems.append((number, title, f"Item '{item_code}' already listed for this service"))
-			continue
-
-		service["items"].append(item_code)
-
-	return services, problems
 
 
 def child_row(item_code):
@@ -169,22 +169,3 @@ def child_row(item_code):
 		"com": com,
 		"gov": gov,
 	}
-
-
-def report(file_path, total, created, existing, problems, dry_run):
-	prefix = "[dry run] would create" if dry_run else "created"
-
-	print(f"\nMedical Services seed from {file_path}")
-	print(f"  data rows        : {total}")
-	print(f"  {prefix:<16} : {len(created)}")
-	print(f"  already present  : {len(existing)}")
-	print(f"  not seeded       : {len(problems)}")
-
-	for number, title, reason in problems:
-		print(f"    ! row {number}: {title} -- {reason}")
-
-	for title in existing:
-		print(f"    = {title} (unchanged)")
-
-	for title, items in created:
-		print(f"    + {title}  [{', '.join(items)}]")
