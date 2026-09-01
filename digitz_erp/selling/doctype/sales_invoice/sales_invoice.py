@@ -213,6 +213,8 @@ class SalesInvoice(Document):
 
     def on_update(self):
 
+        self.take_ownership()
+
         self.update_item_prices()
 
         if not self.tab_sales and not self.for_advance_payment:
@@ -289,6 +291,31 @@ class SalesInvoice(Document):
         update_posting_status(self.doctype, self.name, 'posting_status','Completed')
         self.update_customer_last_transaction_date()
         
+
+    def take_ownership(self):
+        """Hand the invoice to whoever saved or submitted it.
+
+        `owner` is what the Sales Invoice list filters on
+        (get_sales_invoice_permission_query) and what the counter reports group
+        by, so the counter that handles an invoice gets both the row in their
+        list and the takings.
+
+        Written straight to the column rather than assigned on the document:
+        `owner` is a set_only_once field, so changing it during a save raises
+        CannotChangeConstantError. on_update runs after the row is written, for
+        save and submit but not for cancel, so cancelling cannot move a sale.
+
+        The in-memory value is updated to match, otherwise a later save of the
+        same object would compare a stale owner against the database and trip
+        that same constant check.
+        """
+        if self.owner == frappe.session.user:
+            return
+
+        frappe.db.set_value(
+            "Sales Invoice", self.name, "owner", frappe.session.user, update_modified=False
+        )
+        self.owner = frappe.session.user
 
     def update_customer_last_transaction_date(self):
 
