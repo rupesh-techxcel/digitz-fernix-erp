@@ -802,12 +802,39 @@ def resolve_customer(item):
 	return customer.name, 0
 
 
+def resolve_medical_service(service_name):
+	"""The Medical Services title for the value the API sends in `Service`.
+
+	The remote system identifies a service by its *display name*, while Medical
+	Services is autonamed on `title`, so the token value usually is not the
+	record name at all -- 'MEDICAL-CAT-C-Male-New' is the display name of
+	'MED-C-M-001'.
+
+	`display_name` is matched first and `title` second: six of the current
+	services carry the same text in both fields, and logs recorded before this
+	change stored the title, so the fallback keeps those retryable.
+	"""
+	if not service_name:
+		return None
+
+	return frappe.db.get_value(
+		"Medical Services", {"display_name": service_name}, "name"
+	) or frappe.db.get_value("Medical Services", {"title": service_name}, "name")
+
+
 def build_invoice_items(service_name):
 	"""Price the service off the Item master and return (rows, gross, tax)."""
-	service_doc = get_medical_service_items(service_name)
+	title = resolve_medical_service(service_name)
+
+	if not title:
+		raise TokenSkipped(
+			f"No Medical Service matches '{service_name}' by display name or title."
+		)
+
+	service_doc = get_medical_service_items(title)
 
 	if not service_doc or not service_doc.get("services"):
-		raise TokenSkipped(f"Medical Service '{service_name}' has no items or does not exist.")
+		raise TokenSkipped(f"Medical Service '{title}' has no items.")
 
 	rows = []
 	gross_total = 0

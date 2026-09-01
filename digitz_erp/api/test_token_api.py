@@ -226,13 +226,29 @@ def set_queue(tokens):
 
 
 def get_services_with_items():
-	"""Only services with a populated items table can produce an invoice."""
-	return frappe.get_all(
+	"""Display names of the services that can actually produce an invoice.
+
+	Display names, not titles: the real service identifies a service by its
+	display name in the token's `Service` field, and token_sync resolves that
+	back to the record. Queueing titles here would exercise only the fallback
+	path and hide a broken lookup.
+
+	Only services with a populated items table qualify -- one with an empty
+	table is Skipped by design.
+	"""
+	parents = frappe.get_all(
 		"Service Items",
 		filters={"parenttype": "Medical Services"},
 		distinct=True,
 		pluck="parent",
 	)
+
+	names = []
+	for parent in parents:
+		display_name = frappe.db.get_value("Medical Services", parent, "display_name")
+		names.append(display_name or parent)
+
+	return names
 
 
 def get_next_token_number(queue):
