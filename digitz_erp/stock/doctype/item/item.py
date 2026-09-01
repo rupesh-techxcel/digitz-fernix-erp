@@ -34,9 +34,18 @@ class Item(Document):
 				frappe.throw("Cannot change base unit as it's being used in stock ledgers.")
     
 	def before_save(self):
-		if not self.is_new():  # editing existing
-			if "Cashier" in frappe.get_roles(frappe.session.user):
-				frappe.throw("You are not allowed to edit Items.")
+		if self.is_new():
+			return
+
+		# Administrator holds every role in Frappe, Cashier included, so a bare
+		# role check locks the superuser out of the item master it owns. The
+		# companion hook, medical_services.item_has_permission, already makes
+		# this exemption; this method was missing it.
+		if frappe.session.user == "Administrator":
+			return
+
+		if "Cashier" in frappe.get_roles(frappe.session.user):
+			frappe.throw("You are not allowed to edit Items.")
 	def before_validate(self):
 		
 		base_unit_exists = False

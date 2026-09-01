@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      color: #000;
+    }
+
+    .rcpt-wrap {
+      width: 99%;
+      margin: 0 auto;
+      font-size: 14px;
+    }
+
+    .rcpt-title {
+      text-align: center;
+      padding: 10px 12px;
+      background-color: #f2f2f2;
+      border-radius: 6px;
+    }
+
+    .rcpt-title .en {
+      font-size: 20px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    .rcpt-title .ar {
+      font-size: 15px;
+      font-weight: bold;
+      direction: rtl;
+      margin-top: 2px;
+    }
+
+    .rcpt-meta {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+    }
+
+    .rcpt-meta td {
+      padding: 7px 10px;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    .rcpt-meta .label {
+      width: 22%;
+      font-weight: bold;
+      background-color: #fbfbfb;
+      border: 1px solid #ddd;
+    }
+
+    .rcpt-meta .value {
+      width: 28%;
+      border: 1px solid #ddd;
+    }
+
+    .rcpt-meta .ar {
+      display: block;
+      font-size: 11px;
+      font-weight: normal;
+      direction: rtl;
+      color: #555;
+    }
+
+    .rcpt-amount {
+      margin-top: 18px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background-color: #f8f8f8;
+      padding: 14px 16px;
+    }
+
+    .rcpt-amount .caption {
+      font-size: 13px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .rcpt-amount .figure {
+      font-size: 24px;
+      font-weight: bold;
+      text-align: right;
+    }
+
+    .rcpt-amount .words {
+      margin-top: 6px;
+      font-size: 13px;
+      font-style: italic;
+    }
+
+    .rcpt-for {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+      font-size: 13px;
+    }
+
+    .rcpt-for th,
+    .rcpt-for td {
+      border: 1px solid #000;
+      padding: 7px 8px;
+    }
+
+    .rcpt-for thead th {
+      background-color: #eaeaea;
+      text-transform: uppercase;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .rcpt-for .ar {
+      display: block;
+      font-size: 10px;
+      font-weight: normal;
+      direction: rtl;
+    }
+
+    .rcpt-sign {
+      margin-top: 46px;
+      width: 100%;
+      font-size: 13px;
+    }
+
+    .rcpt-sign td {
+      vertical-align: bottom;
+      padding-top: 26px;
+    }
+
+    .rcpt-line {
+      border-top: 1px solid #000;
+      width: 210px;
+      padding-top: 4px;
+    }
+
+    .rcpt-note {
+      margin-top: 26px;
+      font-size: 11px;
+      color: #555;
+    }
+  </style>
+</head>
+<body style="padding-top: {{ total_pixels }}px;">
+
+<div class="rcpt-wrap">
+
+  <div class="rcpt-title">
+    <div class="en">RECEIPT</div>
+    <div class="ar">إيصال</div>
+  </div>
+
+  <table class="rcpt-meta">
+    <tr>
+      <td class="label">Receipt No<span class="ar">رقم الإيصال</span></td>
+      <td class="value">{{ doc.name }}</td>
+      <td class="label">Date<span class="ar">التاريخ</span></td>
+      <td class="value">{{ date }}</td>
+    </tr>
+    <tr>
+      <td class="label">Received From<span class="ar">استلمنا من</span></td>
+      <td class="value">{{ customer_name }}</td>
+      <td class="label">Payment Mode<span class="ar">طريقة الدفع</span></td>
+      <td class="value">{{ doc.payment_mode or "" }}</td>
+    </tr>
+    {% if doc.customer_token or doc.medical_service %}
+    <tr>
+      <td class="label">Token<span class="ar">رقم الدور</span></td>
+      <td class="value">{{ doc.customer_token or "" }}</td>
+      <td class="label">Service<span class="ar">الخدمة</span></td>
+      <td class="value">{{ doc.medical_service or "" }}</td>
+    </tr>
+    {% endif %}
+    {% if trn_no %}
+    <tr>
+      <td class="label">TRN<span class="ar">الرقم الضريبي</span></td>
+      <td class="value" colspan="3">{{ trn_no }}</td>
+    </tr>
+    {% endif %}
+  </table>
+
+  <div class="rcpt-amount">
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr>
+        <td class="caption" style="vertical-align: middle;">
+          Amount Received
+          <span class="ar" style="display:block; font-size:11px; font-weight:normal; direction:rtl;">المبلغ المستلم</span>
+        </td>
+        <td class="figure">{{ "%.2f"|format(doc.paid_amount or doc.rounded_total or 0) }} &nbsp;د.إ</td>
+      </tr>
+    </table>
+    {% if doc.in_words %}
+    <div class="words">{{ doc.in_words }}</div>
+    {% endif %}
+  </div>
+
+  <table class="rcpt-for">
+    <thead>
+      <tr>
+        <th style="width: 6%;">Sl No.<span class="ar">م</span></th>
+        <th style="width: 62%;">Description<span class="ar">البيان</span></th>
+        <th style="width: 32%;">Amount<span class="ar">المبلغ</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td style="text-align: center;">{{ loop.index }}</td>
+        <td>{{ item.display_name }}</td>
+        <td style="text-align: right;">{{ "%.2f"|format(item.net_amount) }}</td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <td colspan="2" style="text-align: right; font-weight: bold;">
+          Total<span class="ar" style="display:inline; margin-right:6px;">الإجمالي</span>
+        </td>
+        <td style="text-align: right; font-weight: bold;">
+          {{ "%.2f"|format(doc.rounded_total or 0) }}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <table class="rcpt-sign">
+    <tr>
+      <td style="width: 50%;">
+        <div><b>Received By</b> <span style="direction:rtl;">المستلم</span></div>
+        <div class="rcpt-line">{{ doc.owner }}</div>
+      </td>
+      <td style="width: 50%; text-align: right;">
+        <div><b>Authorized Signature</b> <span style="direction:rtl;">التوقيع المعتمد</span></div>
+        <div class="rcpt-line" style="margin-left: auto;">&nbsp;</div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="rcpt-note">
+    This receipt confirms payment received against invoice {{ doc.name }}.
+    <span style="direction:rtl;">هذا الإيصال يؤكد استلام الدفعة مقابل الفاتورة المذكورة.</span>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -43,6 +43,16 @@ class SalesInvoice(Document):
     def before_save(self):
         if self.items:
             generate_custom_invoice_pdf(self)
+
+            # A credit sale is billed now and paid later, so there is nothing to
+            # receipt yet. Everything else is settled at the counter and gets a
+            # RECEIPT alongside the invoice, attached to the same record.
+            if not self.credit_sale:
+                generate_custom_invoice_pdf(
+                    self,
+                    template_override="digitz_erp/templates/receipt_template.html",
+                    file_suffix_override="receipt",
+                )
     def before_validate(self):
         self.company = frappe.get_last_doc("Company").name
         # Optional: Enforce required fields

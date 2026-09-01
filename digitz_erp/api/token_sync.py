@@ -942,6 +942,32 @@ def resolve_medical_service(service_name):
 	) or frappe.db.get_value("Medical Services", {"title": service_name}, "name")
 
 
+def item_tax(item_code, taxable_amount):
+	"""Return (tax name, rate, amount) for one invoice line.
+
+	Read from the Item master, not from the Medical Service's child row. Those
+	rows are a snapshot: `get_medical_service_items` only refreshes their tax
+	fields when com or gov happens to differ, so a service set up with tax off
+	keeps reporting no tax even after the Item is marked taxable. The Item is
+	the authority, which is what the invoice import path also uses
+	(SalesInvoice.populate_item_details_during_import).
+
+	Nothing recalculates this afterwards: make_taxes_and_totals only runs from
+	do_import(), so whatever is set here is what the invoice keeps.
+	"""
+	item = frappe.db.get_value("Item", item_code, ["tax", "tax_excluded"], as_dict=True)
+
+	# Tax applies only when the Item is not tax excluded and names a Tax.
+	if not item or item.tax_excluded or not item.tax:
+		return None, 0, 0
+
+	rate = cint(frappe.db.get_value("Tax", item.tax, "tax_rate"))
+
+	# Charged on the service charge only. `rate`/`gross_amount` on the line are
+	# the com, so the government fee stays outside the taxable amount.
+	return item.tax, rate, flt(taxable_amount) * rate / 100.0
+
+
 def build_invoice_items(service_name):
 	"""Price the service off the Item master and return (rows, gross, tax)."""
 	title = resolve_medical_service(service_name)
@@ -962,8 +988,10 @@ def build_invoice_items(service_name):
 
 	for service_item in service_doc.services:
 		com = flt(service_item.com)
+		tax_name, tax_rate, tax_amount = item_tax(service_item.item, com)
+
 		gross_total += com
-		tax_total += flt(service_item.tax_amount)
+		tax_total += tax_amount
 
 		rows.append(
 			{
@@ -975,9 +1003,9 @@ def build_invoice_items(service_name):
 				"gross_amount": com,
 				# `tax` is a Link to Tax; the old JS coerced an empty value to 0,
 				# which is not a valid link target.
-				"tax": service_item.tax or None,
-				"tax_rate": 0 if service_item.tax_excluded else DEFAULT_TAX_RATE,
-				"tax_amount": flt(service_item.tax_amount),
+				"tax": tax_name,
+				"tax_rate": tax_rate,
+				"tax_amount": tax_amount,
 				"net_amount": com,
 				"com": com,
 				"gov": flt(service_item.gov),

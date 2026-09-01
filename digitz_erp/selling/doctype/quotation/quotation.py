@@ -369,7 +369,14 @@ def generate_sales_order(quotation):
 
 	return new_so.name
 
-def generate_custom_invoice_pdf(doc):
+def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_override=None):
+	"""Render `doc` to a PDF and attach it.
+
+	`template_override` / `file_suffix_override` let the same pipeline -- context,
+	header/footer overlay, page transform -- produce a second document for the
+	same record, which is how the RECEIPT for a non credit Sales Invoice is
+	made. Left unset, behaviour is unchanged.
+	"""
 	import io, os
 	from PyPDF2 import PdfReader, PdfWriter, Transformation
 	from PIL import Image
@@ -443,7 +450,11 @@ def generate_custom_invoice_pdf(doc):
 		"terms_and_conditions": (terms_and_conditions or "").strip(),
 		"lpo_no": lpo_no,
 		"payment_terms": payment_terms,
-		"party_trn_no": party_trn_no
+		"party_trn_no": party_trn_no,
+		# Top padding the template reserves for the overlaid header image, so
+		# the content starts just below the letterhead instead of being pushed
+		# down by a fixed offset. Tune per company; 120px suits the default.
+		"total_pixels": company_doc.total_pixels if company_doc.total_pixels else 120
 	}
 
 	# Template selection
@@ -457,11 +468,18 @@ def generate_custom_invoice_pdf(doc):
 		else "digitz_erp/templates/quotation_template.html"
 	)
 
+	if template_override:
+		template_path = template_override
+
+	if file_suffix_override:
+		file_suffix = file_suffix_override
+
 	html = render_template(template_path, context)
 
 	options = {
 		"page-size": "A4",
-		"margin-top": "5mm",
+		# No margin-top: the header clearance comes from the template's
+		# body padding (total_pixels), so a page margin here would add to it.
 		"margin-bottom": "35mm",
 		"margin-left": "5mm",
 		"margin-right": "5mm",
@@ -484,7 +502,10 @@ def generate_custom_invoice_pdf(doc):
 
 	for i, page in enumerate(original_pdf.pages):
 		scale_transform = Transformation().scale(sx=0.98, sy=0.95)
-		translate_transform = Transformation().translate(tx=10, ty=-45)
+		# Positive ty lifts the content back up after the 0.95 vertical scale,
+		# which otherwise drops the top of the page. A negative value here was
+		# pushing the body far below the letterhead.
+		translate_transform = Transformation().translate(tx=10, ty=60)
 		page.add_transformation(scale_transform)
 		page.add_transformation(translate_transform)
 
@@ -504,11 +525,25 @@ def generate_custom_invoice_pdf(doc):
 	output_pdf.write(output_stream)
 
 	from frappe.utils.file_manager import save_file
-	pdfs = frappe.get_all("File", filters={"attached_to_doctype": doc.doctype, "attached_to_name": doc.name}, pluck="name")
-	if pdfs:
-		frappe.get_doc("File", pdfs[0]).delete()
 
 	file_name = f"{doc.name}-{file_suffix}.pdf"
+
+	# Match on the file name, not just the document: an invoice and its receipt
+	# are both attached to the same record, and deleting "the first attachment"
+	# would let one wipe the other. The LIKE catches the hashed variants
+	# save_file produces when a name is already taken.
+	stale = frappe.get_all(
+		"File",
+		filters={
+			"attached_to_doctype": doc.doctype,
+			"attached_to_name": doc.name,
+			"file_name": ["like", f"{doc.name}-{file_suffix}%"],
+		},
+		pluck="name",
+	)
+	for name in stale:
+		frappe.get_doc("File", name).delete()
+
 	save_file(
 		fname=file_name,
 		content=output_stream.getvalue(),

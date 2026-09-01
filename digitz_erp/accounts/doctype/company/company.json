@@ -18,6 +18,7 @@
   "tax_id",
   "header_image",
   "footer_image",
+  "total_pixels",
   "column_break_9",
   "company_logo",
   "default_currency",
@@ -708,7 +709,7 @@
    "label": "Do not create expense head automatically from Expense Account"
   },
   {
-   "description": "Use this option if you want to generate expense heads for all accounts during data migration. Otherwise, expense heads will be created individually for each expense account based on the company\u2019s configuration ",
+   "description": "Use this option if you want to generate expense heads for all accounts during data migration. Otherwise, expense heads will be created individually for each expense account based on the company’s configuration ",
    "fieldname": "create_all_expense_heads",
    "fieldtype": "Button",
    "label": "Create All Expense Heads"
@@ -742,6 +743,12 @@
    "fieldname": "footer_image",
    "fieldtype": "Attach Image",
    "label": "Footer Image"
+  },
+  {
+   "description": "Adjust this field to add enough top margin so that the logo fits properly within the space",
+   "fieldname": "total_pixels",
+   "fieldtype": "Int",
+   "label": "Top Padding Height (Px)"
   },
   {
    "default": "0",
