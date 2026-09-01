@@ -46,6 +46,23 @@ RETRY_LOOKBACK_DAYS = 2
 MAX_ATTEMPTS = 5
 DEFAULT_TAX_RATE = 5
 
+# ---------------------------------------------------------------------------
+# TEMPORARY BACKFILL SWITCH
+#
+#   0 = normal operation, pull today's tokens.
+#   1 = pull yesterday's tokens instead, 2 = the day before, and so on.
+#
+# TO REVERT: set this back to 0. Nothing else needs undoing -- it is server
+# side only, so no asset rebuild and no browser reload are involved.
+#
+# While it is non-zero every sync report says so in the popup, so the switch
+# cannot quietly be left on. Note that invoices are still dated today: the
+# posting date is not backdated (Sales Invoice blocks that unless
+# edit_posting_date_and_time is set), only the tokens fetched are from the
+# earlier day.
+# ---------------------------------------------------------------------------
+SYNC_DAYS_BACK = 1
+
 STATUS_PENDING = "Pending"
 STATUS_COMPLETED = "Completed"
 STATUS_SKIPPED = "Skipped"
@@ -127,6 +144,8 @@ def sync_report(state, message=None, **extra):
 		"generated_at": str(now_datetime()),
 		"scheduler_inactive": scheduler_is_inactive(),
 		"url": None,
+		"sync_date": str(sync_date()),
+		"days_back": SYNC_DAYS_BACK,
 		"stream": stream_report(),
 		"retried": [],
 		"totals": {
@@ -331,19 +350,30 @@ def as_user(user):
 # ---------------------------------------------------------------------------
 
 
-def get_cursor():
-	"""Return the (timestamp, last_token_no) watermark for today's stream.
+def sync_date():
+	"""The day the sync pulls tokens for. Today, unless SYNC_DAYS_BACK is set."""
+	return add_days(today(), -SYNC_DAYS_BACK) if SYNC_DAYS_BACK else today()
 
-	Token numbers restart each day, so the watermark is scoped to today and
+
+def get_cursor():
+	"""Return the (timestamp, last_token_no) watermark for the day's stream.
+
+	Token numbers restart each day, so the watermark is scoped to one day and
 	falls back to midnight/0 at the start of a new day. The timestamp is taken
 	from the raw `api_response` where possible so we hand the API back exactly
 	the value it gave us, rather than a value round-tripped through MariaDB.
 
 	One watermark for the whole site, not one per desk: the request carries no
 	username, so every desk would be handed the identical stream anyway.
+
+	While backfilling an earlier day the watermark will not advance, because
+	the logs written by the backfill carry today's `added_on`. Each run then
+	re-reads the whole day and reports the repeats as "Already invoiced",
+	which is the safe direction for a catch-up.
 	"""
-	day_start = f"{today()} 00:00:00"
-	day_end = f"{today()} 23:59:59.999999"
+	day = sync_date()
+	day_start = f"{day} 00:00:00"
+	day_end = f"{day} 23:59:59.999999"
 
 	last = frappe.db.get_value(
 		"Medical Service Logs",
@@ -356,7 +386,7 @@ def get_cursor():
 	)
 
 	if not last:
-		return f"{today()}T00:00:00.0000000", 0
+		return f"{day}T00:00:00.0000000", 0
 
 	return (
 		extract_created_date(last.api_response) or format_dotnet_datetime(last.created_date),
@@ -385,7 +415,7 @@ def extract_created_date(api_response):
 def format_dotnet_datetime(value):
 	"""Format a Frappe datetime the way the remote (.NET) API expects it."""
 	if not value:
-		return f"{today()}T00:00:00.0000000"
+		return f"{sync_date()}T00:00:00.0000000"
 
 	value = get_datetime(value)
 	# Frappe stores datetime(6); pad the missing 7th digit of .NET ticks.
@@ -393,14 +423,21 @@ def format_dotnet_datetime(value):
 
 
 def get_day_end(timestamp):
-	"""The last moment of the day `timestamp` falls on, in the API's format.
+	"""The end of the window to ask for, in the API's format.
 
-	The cursor is always scoped to a single day (token numbers restart daily),
-	so the window we ask for is "from the watermark, to the end of that day".
-	The date is taken from `timestamp` rather than from `today()` so the two
-	bounds can never straddle a midnight rollover mid-run.
+	Anchored to `sync_date()` rather than to the cursor's own date. Deriving it
+	from the cursor would strand the sync after a backfill: the watermark can
+	still point at an earlier day's token, which would clamp the window shut on
+	that day and today's tokens would never be fetched.
+
+	`timestamp` is accepted so the window can never end before it starts.
 	"""
-	day = str(timestamp or "")[:10] or today()
+	day = str(sync_date())
+	start_day = str(timestamp or "")[:10]
+
+	if start_day > day:
+		day = start_day
+
 	return f"{day}T23:59:59.9999999"
 
 

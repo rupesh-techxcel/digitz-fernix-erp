@@ -139,6 +139,22 @@ digitz_erp.token_notifications = {
 			parts.push(`<p>${esc(report.message)}</p>`);
 		}
 
+		// The backfill switch is temporary; make sure it is impossible to miss.
+		if (report.days_back) {
+			parts.push(`
+				<p class="text-danger" style="font-weight:600;">
+					${__("Backfill mode: fetching tokens for {0} ({1} day(s) back), not today.", [
+						esc(report.sync_date || ""),
+						report.days_back,
+					])}
+					<br>
+					<span style="font-weight:normal;">
+						${__("Set SYNC_DAYS_BACK back to 0 in token_sync.py to resume normal syncing.")}
+					</span>
+				</p>
+			`);
+		}
+
 		if (report.scheduler_inactive) {
 			parts.push(`
 				<p class="text-warning">
