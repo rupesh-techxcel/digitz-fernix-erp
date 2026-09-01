@@ -292,7 +292,13 @@ class SalesInvoice(Document):
 
     def update_customer_last_transaction_date(self):
 
-        frappe.set_value('Customer',self.customer,{'last_transaction_date':self.posting_date})
+        # db.set_value, not set_value: this is bookkeeping the invoice does to
+        # the customer, not an edit the user asked for. frappe.set_value goes
+        # through frappe.client.set_value, which re-saves the whole Customer --
+        # so it demanded write permission on Customer (a Cashier has none, and
+        # every invoice save failed), and it would re-run Customer validation
+        # and the external customer API push on each invoice.
+        frappe.db.set_value('Customer', self.customer, 'last_transaction_date', self.posting_date)
 
     def update_delivery_note_references(self):
 

@@ -8,21 +8,23 @@ def init_document_posting_status(document_type, document_name):
     posting_status_doc.document_name = document_name
     posting_status_doc.postings_start_time = datetime.now()
     posting_status_doc.posting_status = "Pending"
-    posting_status_doc.insert()
+    # Bookkeeping the system creates for its own posting tracking, so it must
+    # not require the signed-in user to hold create permission on this doctype.
+    posting_status_doc.insert(ignore_permissions=True)
 
 def reset_document_posting_status_for_recalc_after_submit(document_type, document_name):
     doc_posting_status = frappe.get_doc("Document Posting Status",{'document_type':document_type,'document_name': document_name})
     doc_posting_status.posting_status = "Pending"
     doc_posting_status.stock_recalc_required_after_submit = True
     doc_posting_status.stock_recalc_after_submit_time = None
-    doc_posting_status.save()     
+    doc_posting_status.save(ignore_permissions=True)     
 
 def reset_document_posting_status_for_recalc_after_cancel(document_type, document_name):
     doc_posting_status = frappe.get_doc("Document Posting Status",{'document_type':document_type,'document_name': document_name})
     doc_posting_status.posting_status = "Pending"
     doc_posting_status.stock_recalc_required_after_cancel = True
     doc_posting_status.stock_recalc_after_cancel_time = None
-    doc_posting_status.save()    
+    doc_posting_status.save(ignore_permissions=True)    
 
 def update_posting_status(document_type,document_name, status, status_value=None):
     
@@ -34,12 +36,18 @@ def update_posting_status(document_type,document_name, status, status_value=None
         
         doc_name = frappe.get_value("Document Posting Status",{'document_type':document_type,'document_name': document_name},['name'])
     
+    # db.set_value, not set_value: this is the system recording its own posting
+    # progress, not a user edit. frappe.set_value re-saves the whole document
+    # through frappe.client, which required the signed-in user to hold write
+    # permission on Document Posting Status -- a role like Cashier has none, so
+    # submitting an invoice failed on bookkeeping rather than on anything the
+    # user actually did.
     # To update current time status_value passing as None
     if not status_value:
-        frappe.set_value('Document Posting Status', doc_name, status,datetime.now())
-        
+        frappe.db.set_value('Document Posting Status', doc_name, status, datetime.now())
+
     else:
-        frappe.set_value('Document Posting Status', doc_name, status,status_value)
+        frappe.db.set_value('Document Posting Status', doc_name, status, status_value)
         
     
     
