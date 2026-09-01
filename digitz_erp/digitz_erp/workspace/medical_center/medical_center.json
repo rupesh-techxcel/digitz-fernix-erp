@@ -27,7 +27,7 @@
  "is_hidden": 0,
  "label": "Medical Center",
  "links": [],
- "modified": "2026-08-23 17:29:17.762638",
+ "modified": "2026-09-01 13:41:28.852354",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Medical Center",
@@ -38,7 +38,7 @@
  "quick_lists": [],
  "roles": [
   {
-   "role": "Workspace Manager"
+   "role": "Cashier"
   }
  ],
  "sequence_id": 0.0,
