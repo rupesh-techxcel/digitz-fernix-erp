@@ -1146,15 +1146,28 @@ def notify_invoices_created(invoices):
 
 @frappe.whitelist()
 def get_board_invoices(limit=100):
-	"""Draft invoices for the Sales Invoice Board.
+	"""Draft invoices for the Sales Invoice Board -- the whole counter's, not
+	just the caller's.
 
-	Returned through a whitelisted method rather than `frappe.client.get_list`
-	so the board gets exactly the fields it needs and the permission query on
-	Sales Invoice still applies.
+	`get_all` rather than `get_list` on purpose: it is the same query builder
+	with `ignore_permissions=True`, which skips the `permission_query_conditions`
+	hook that restricts a Cashier to invoices they own. The board is a shared
+	queue, so every desk sees every draft waiting for payment.
+
+	The Sales Invoice *list* is unaffected and stays per cashier: the desk's own
+	list path always runs that hook, and nothing there can opt out of it. A
+	clicked row still opens, because reading one document never consults the
+	hook -- it only filters lists.
+
+	Because permissions are bypassed, the role check below is what keeps this
+	method safe; it must not be removed. `only_for` lets Administrator through.
 	"""
-	return frappe.get_list(
+	frappe.only_for(("System Manager", "Cashier", "Cashier Approver"))
+
+	return frappe.get_all(
 		"Sales Invoice",
 		fields=["name", "customer", "customer_token", "medical_service", "posting_date", "rounded_total"],
+		# Drafts only. The board is the queue of invoices still to be taken.
 		filters={"docstatus": 0},
 		order_by="creation desc",
 		limit_page_length=cint(limit) or 100,
