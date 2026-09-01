@@ -61,7 +61,7 @@ DEFAULT_TAX_RATE = 5
 # edit_posting_date_and_time is set), only the tokens fetched are from the
 # earlier day.
 # ---------------------------------------------------------------------------
-SYNC_DAYS_BACK = 1
+SYNC_DAYS_BACK = 0
 
 STATUS_PENDING = "Pending"
 STATUS_COMPLETED = "Completed"
