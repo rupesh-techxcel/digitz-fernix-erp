@@ -42,8 +42,9 @@ app_include_js = [
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
-fixtures = ["Custom Field", "Custom DocPerm",{"doctype": "Role", "filters": [["role_name", "in", ["Cashier"]]]},
-                {"doctype": "Custom DocPerm", "filters": [["role", "=", "Cashier"]]},
+fixtures = ["Custom Field", "Custom DocPerm",
+                {"doctype": "Role", "filters": [["role_name", "in", ["Cashier", "Cashier Approver"]]]},
+                {"doctype": "Custom DocPerm", "filters": [["role", "in", ["Cashier", "Cashier Approver"]]]},
                 # Ships the Medical Center workspace navigator with the app, so a
                 # fresh install gets it too (install_app calls sync_fixtures).
                 {"doctype": "Custom HTML Block", "filters": [["name", "in", ["Medical Center Navigator"]]]}]

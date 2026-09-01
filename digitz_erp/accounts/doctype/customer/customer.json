@@ -16,6 +16,7 @@
   "discount",
   "company_id",
   "company_customer",
+  "pro_customer",
   "salesman",
   "salesman_name",
   "default_price_list",
@@ -285,7 +286,7 @@
    "fieldname": "customer_type",
    "fieldtype": "Select",
    "label": "Customer Type",
-   "options": "Individual\nCompany"
+   "options": "Individual\nCompany\nPRO"
   },
   {
    "depends_on": "eval: doc.customer_type == \"Company\"",
@@ -306,6 +307,14 @@
    "fieldtype": "Link",
    "label": "Company",
    "link_filters": "[[\"Customer\",\"customer_type\",\"=\",\"Company\"]]",
+   "options": "Customer"
+  },
+  {
+   "depends_on": "eval: doc.customer_type != \"PRO\"",
+   "fieldname": "pro_customer",
+   "fieldtype": "Link",
+   "label": "PRO",
+   "link_filters": "[[\"Customer\",\"customer_type\",\"=\",\"PRO\"]]",
    "options": "Customer"
   }
  ],

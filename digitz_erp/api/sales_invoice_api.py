@@ -85,8 +85,16 @@ def get_sales_invoice_permission_query(user):
     if not user or user == "Administrator":
         return None  # Full access for Administrator
 
-    # Check if user has 'System Manager' role
-    if "Cashier" not in frappe.get_roles(user):
+    roles = frappe.get_roles(user)
+
+    # Cashier Approver supervises billing for the whole counter, so it sees
+    # every invoice, not just its own. Checked before Cashier because an
+    # approver usually holds both roles -- Cashier Approver alone reaches
+    # nothing but Sales Invoice -- and the narrower role must not win.
+    if "Cashier Approver" in roles:
+        return None
+
+    if "Cashier" not in roles:
         return None  # None = no filter, full access
 
     # Otherwise, restrict to only their own records

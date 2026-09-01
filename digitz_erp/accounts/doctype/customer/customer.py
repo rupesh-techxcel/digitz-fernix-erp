@@ -48,6 +48,7 @@ class Customer(Document):
             frappe.throw("Emirate is mandatory for the customer")
 
         self.validate_company_customer()
+        self.validate_pro_customer()
 
     def validate_company_customer(self):
         """`company_customer` points an individual at the company they belong to.
@@ -67,6 +68,26 @@ class Customer(Document):
         if frappe.db.get_value("Customer", self.company_customer, "customer_type") != "Company":
             frappe.throw(
                 f"'{self.company_customer}' is not a Company customer, so it cannot be set as Company."
+            )
+
+    def validate_pro_customer(self):
+        """`pro_customer` points a customer at the PRO acting for them.
+
+        Same shape as `company_customer`: one level deep, pointing only at PRO
+        customers, and never at itself.
+        """
+        if not self.pro_customer:
+            return
+
+        if self.customer_type == "PRO":
+            frappe.throw("A PRO customer cannot itself be assigned to another PRO.")
+
+        if self.pro_customer == self.name:
+            frappe.throw("A customer cannot be its own PRO.")
+
+        if frappe.db.get_value("Customer", self.pro_customer, "customer_type") != "PRO":
+            frappe.throw(
+                f"'{self.pro_customer}' is not a PRO customer, so it cannot be set as PRO."
             )
 
 
