@@ -1089,3 +1089,81 @@ hr,
 	flex-wrap: wrap !important;
 	row-gap: 8px !important;
 }
+
+/* =========================================================
+   Form columns as cards
+
+   Frappe nests .form-section > .section-body > .form-column, and the shared
+   card rule near the top of this file borders BOTH outer wrappers - so a
+   plain section already draws two boxes inside each other, while the columns
+   themselves run together with nothing between them. Bordering the column on
+   top of that would stack a third box.
+
+   Instead the two wrappers go flat and the column becomes the card. Scoped to
+   .std-form-layout (frappe/public/js/frappe/form/form.js) so dialogs and quick
+   entry, which live outside it, are untouched; the grid row editor is reset
+   separately at the end because it sits inside the main form.
+   ========================================================= */
+.std-form-layout .form-section,
+.std-form-layout .form-section > .section-body {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Frappe sizes every column equally - Column.resize_all_columns() sets
+   col-sm-{12/count} on all of them - so flex: 1 reproduces the Bootstrap
+   widths exactly, while giving a real gutter that column padding cannot.
+   It also rescues the 5 column case, where Frappe emits a col-sm-20 that
+   Bootstrap has no rule for. */
+.std-form-layout .form-section > .section-body {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.std-form-layout .form-section > .section-body > .form-column {
+    flex: 1 1 240px !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 14px 16px !important;
+    border: 1px solid var(--digitz-blue-border) !important;
+    border-radius: var(--digitz-radius-md) !important;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
+    box-shadow: var(--digitz-shadow-sm) !important;
+    transition: var(--digitz-transition) !important;
+}
+
+.std-form-layout .form-section > .section-body > .form-column:hover {
+    border-color: var(--digitz-blue-border-strong) !important;
+}
+
+/* Let the section label breathe above the row of cards. */
+.std-form-layout .form-section > .section-head {
+    margin-bottom: 8px !important;
+}
+
+/* A column whose fields are all hidden would otherwise render as an empty
+   bordered box: Layout.refresh_sections() only ever marks whole SECTIONS
+   empty, never columns, so this has to be done here. :has() re-evaluates
+   live, so the card returns the moment a depends_on field appears. */
+.std-form-layout .form-section > .section-body > .form-column:not(:has(.frappe-control:not(.hide-control))) {
+    padding: 0 !important;
+    border: none !important;
+    background: none !important;
+    box-shadow: none !important;
+}
+
+/* The grid row editor keeps the plain layout - the borders were asked for on
+   form columns, not in the grid. (The grid table itself uses .grid-static-col,
+   so it never matched these rules anyway.) */
+.form-in-grid .form-column {
+    padding: 0 !important;
+    border: none !important;
+    background: none !important;
+    box-shadow: none !important;
+}
