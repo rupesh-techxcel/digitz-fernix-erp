@@ -12,7 +12,9 @@ app_license = "MIT"
 # ------------------
 
 # include js, css files in header of desk.html
-app_include_css = ["/assets/digitz_erp/css/digitz_desk_premium.css"]
+# Bundled (not a raw /assets path) so esbuild fingerprints the file and a
+# change reaches browsers immediately instead of waiting out a 12 hour cache.
+app_include_css = ["digitz_desk.bundle.css"]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/digitz_erp/css/digitz_erp.css"
@@ -20,7 +22,7 @@ app_include_css = ["/assets/digitz_erp/css/digitz_desk_premium.css"]
 # Framework fallback for the desk navbar and the login page, used whenever
 # Website Settings has no app_logo. Shipping it as an app asset means a fresh
 # install is branded before any patch or upload has run.
-app_logo_url = "/assets/digitz_erp/images/fernix-logo.jpg"
+app_logo_url = "/assets/digitz_erp/images/weqayati-logo.png"
 
 app_include_js = [
 	"/assets/digitz_erp/js/digitz_common.js",
@@ -81,6 +83,9 @@ on_login = "digitz_erp.notifications.send_notification.login_notification"
 
 # before_install = "digitz_erp.install.before_install"
 after_install = "digitz_erp.api.install_api.after_install"
+# Re-attaches the images the app ships (public/images) as public Files on
+# every migration, so they are always present and selectable in the desk.
+after_migrate = "digitz_erp.api.bundled_files.ensure_bundled_files"
 
 # Uninstallation
 # ------------

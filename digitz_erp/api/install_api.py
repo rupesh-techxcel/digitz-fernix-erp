@@ -27,9 +27,13 @@ def after_install():
 
     # Patches are marked as already-applied on a fresh install, so the branding
     # patch never runs here. Apply it directly instead.
-    from digitz_erp.api.branding import apply_branding
+    from digitz_erp.api.bundled_files import ensure_bundled_files
+    ensure_bundled_files()
+
+    from digitz_erp.api.branding import apply_app_name, apply_branding
 
     apply_branding()
+    apply_app_name()
 
 def insert_accounts():
     accounts = [

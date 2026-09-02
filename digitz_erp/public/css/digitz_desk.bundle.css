@@ -1,3 +1,13 @@
+/* Desk theme for Digitz ERP.
+ *
+ * Named *.bundle.css so esbuild emits a fingerprinted file
+ * (digitz_desk.bundle.<HASH>.css) that the desk resolves through assets.json.
+ * The previous raw /assets/... path was served with a 12 hour max-age and no
+ * hash, so edits stayed invisible until a browser's cache expired.
+ *
+ * Rebuild after editing:  bench build --app digitz_erp
+ */
+
 /* =========================================================
    DIGITZ ERP - Top Tier Premium Theme
    Final interactive workspace hierarchy version
@@ -201,126 +211,53 @@ header.navbar,
 
 /* =========================================================
    Sidebar
-   ========================================================= */
-.layout-side-section,
-.standard-sidebar,
-.desk-sidebar,
-.layout-main .layout-side-section {
-    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+   =========================================================
+   Deliberately light. Frappe already lays this out: the row is a flex
+   container with padding: 0 whose inner .item-anchor carries the spacing, and
+   .layout-side-section is a scrolling gutter, not a panel. Earlier revisions
+   overrode padding, min-height, margins and added pseudo-element accents,
+   which fought that geometry and produced oversized, misaligned rows. Colour
+   only from here on; the framework keeps the measurements. */
+
+.desk-sidebar {
+    background: #ffffff !important;
     border: 1px solid var(--digitz-blue-border) !important;
     border-radius: var(--digitz-radius-lg) !important;
-    box-shadow: var(--digitz-shadow-sm) !important;
+    /* Breathing room between the border and the rows. Applied to the container
+       so the rows keep the framework's own padding and height. */
+    padding: 6px 10px !important;
 }
 
-.standard-sidebar .standard-sidebar-item,
-.layout-side-section .sidebar-item,
-.desk-sidebar .standard-sidebar-item,
-.tree-link,
-.sidebar-item-label,
-.standard-sidebar-label {
+.desk-sidebar .standard-sidebar-item {
     color: #233553 !important;
-    font-weight: 500 !important;
-    border-radius: 12px !important;
-    transition: var(--digitz-transition) !important;
 }
 
-.standard-sidebar .standard-sidebar-item,
-.layout-side-section .sidebar-item,
-.tree-link {
-    position: relative !important;
-    margin: 3px 8px !important;
-    padding: 10px 12px !important;
-    min-height: 42px !important;
-    display: flex !important;
-    align-items: center !important;
-    border-radius: 14px !important;
-    border: 1px solid transparent !important;
+.desk-sidebar .standard-sidebar-item:hover {
+    background-color: #f2f7ff !important;
 }
 
-.standard-sidebar .standard-sidebar-item:hover,
-.layout-side-section .sidebar-item:hover,
-.tree-link:hover {
-    background: linear-gradient(180deg, #f6faff 0%, #edf5ff 100%) !important;
+.desk-sidebar .standard-sidebar-item.selected {
+    background-color: #e8f0ff !important;
     color: var(--digitz-blue-dark) !important;
-    border-color: #d9e7ff !important;
-    box-shadow: 0 4px 10px rgba(33, 77, 187, 0.06) !important;
-    transform: translateX(2px) !important;
+    font-weight: 600 !important;
 }
 
-.standard-sidebar .standard-sidebar-item.selected,
-.standard-sidebar .standard-sidebar-item.active,
-.layout-side-section .sidebar-item.selected,
-.layout-side-section .sidebar-item.active,
-.tree-link.active {
-    position: relative !important;
-    background: linear-gradient(180deg, #eaf2ff 0%, #dcebff 100%) !important;
-    color: var(--digitz-blue-dark) !important;
-    font-weight: 700 !important;
-    border: 1px solid #bfd7ff !important;
-    box-shadow:
-        0 6px 14px rgba(33, 77, 187, 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.55) !important;
-}
-
-.standard-sidebar .standard-sidebar-item.selected::before,
-.standard-sidebar .standard-sidebar-item.active::before,
-.layout-side-section .sidebar-item.selected::before,
-.layout-side-section .sidebar-item.active::before,
-.tree-link.active::before {
-    content: "" !important;
-    position: absolute !important;
-    left: -1px !important;
-    top: 7px !important;
-    bottom: 7px !important;
-    width: 4px !important;
-    border-radius: 999px !important;
-    background: linear-gradient(180deg, #214dbb 0%, #4da3ff 100%) !important;
-}
-
-.standard-sidebar .standard-sidebar-item.selected::after,
-.standard-sidebar .standard-sidebar-item.active::after,
-.layout-side-section .sidebar-item.selected::after,
-.layout-side-section .sidebar-item.active::after,
-.tree-link.active::after {
-    content: "" !important;
-    position: absolute !important;
-    right: 10px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    width: 18px !important;
-    height: 4px !important;
-    border-radius: 999px !important;
-    background: linear-gradient(90deg, #e0a62f 0%, #f0c96a 100%) !important;
-    opacity: 0.9 !important;
-}
-
-.standard-sidebar .icon,
-.layout-side-section .icon,
-.tree-link .icon {
-    color: inherit !important;
-    opacity: 0.95;
-    font-size: 16px !important;
-}
-
-.sidebar-label,
-.standard-sidebar-label,
-.section-head .indicator,
-.indicator-pill,
-.filter-pill {
-    border-radius: 999px !important;
-    background: linear-gradient(180deg, #f3f8ff 0%, #eaf2ff 100%) !important;
-    color: var(--digitz-blue) !important;
-    border: 1px solid var(--digitz-blue-border) !important;
-    font-weight: 700 !important;
-    box-shadow: 0 1px 3px rgba(33, 77, 187, 0.06) !important;
-}
-
+/* Section heading, not a pill. */
 .standard-sidebar-label,
 .sidebar-label {
-    margin: 6px 10px 10px !important;
-    padding: 6px 12px !important;
-    letter-spacing: 0.3px !important;
-    font-size: 12px !important;
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--digitz-blue) !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.6px !important;
+    text-transform: uppercase !important;
+}
+
+/* Room for longer workspace names. */
+[data-page-route="Workspaces"] .layout-side-section {
+    min-width: 240px !important;
 }
 
 /* =========================================================
