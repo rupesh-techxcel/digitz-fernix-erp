@@ -27,6 +27,7 @@
   "tax_excluded",
   "tax",
   "tax_rate",
+  "taxable_amount",
   "tax_amount",
   "discount_percentage",
   "discount_amount",
@@ -90,10 +91,9 @@
    "label": "GOV"
   },
   {
-   "columns": 1,
    "fieldname": "unit",
    "fieldtype": "Link",
-   "in_list_view": 1,
+   "hidden": 1,
    "label": "Unit",
    "options": "Unit"
   },
@@ -107,24 +107,28 @@
   {
    "fieldname": "base_unit",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "Base Unit",
    "read_only": 1
   },
   {
    "fieldname": "qty_in_base_unit",
    "fieldtype": "Float",
+   "hidden": 1,
    "label": "Qty In Base Unit",
    "read_only": 1
   },
   {
    "fieldname": "rate_in_base_unit",
    "fieldtype": "Currency",
+   "hidden": 1,
    "label": "Rate In Base Unit",
    "read_only": 1
   },
   {
    "fieldname": "conversion_factor",
    "fieldtype": "Float",
+   "hidden": 1,
    "label": "Conversion Factor"
   },
   {
@@ -169,6 +173,12 @@
    "label": "Tax Rate"
   },
   {
+   "fieldname": "taxable_amount",
+   "fieldtype": "Float",
+   "label": "Taxable Amount",
+   "read_only": 1
+  },
+  {
    "columns": 1,
    "fieldname": "tax_amount",
    "fieldtype": "Float",
@@ -197,6 +207,7 @@
   {
    "fieldname": "unit_conversion_details",
    "fieldtype": "Small Text",
+   "hidden": 1,
    "label": "Unit Conversion Details",
    "read_only": 1
   },

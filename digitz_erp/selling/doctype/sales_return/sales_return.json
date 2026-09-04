@@ -54,6 +54,7 @@
   "column_break_ozno",
   "section_break_25",
   "gross_total",
+  "taxable_total",
   "tax_total",
   "net_total",
   "column_break_33",
@@ -308,6 +309,7 @@
   {
    "fieldname": "item_units",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "Item Units"
   },
   {
@@ -325,6 +327,12 @@
    "fieldname": "total_discount_in_line_items",
    "fieldtype": "Currency",
    "label": "Total Discount In Line Items"
+  },
+  {
+   "fieldname": "taxable_total",
+   "fieldtype": "Currency",
+   "label": "Taxable Total",
+   "read_only": 1
   },
   {
    "fieldname": "tax_total",

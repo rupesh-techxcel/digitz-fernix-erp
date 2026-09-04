@@ -112,9 +112,16 @@ frappe.ui.form.on('Sales Return', {
 			customer: frm.doc.customer
 		},
 		callback: (r) => {
-			pending_invoices_data = r.message;
-			console.log("pending_invoices_data");
-			console.log(pending_invoices_data);
+			pending_invoices_data = r.message || [];
+
+			if (!pending_invoices_data.length) {
+				frappe.msgprint({
+					title: __("No sales to return"),
+					indicator: "orange",
+					message: __("No submitted sales invoice for {0} has quantity left to return.", [frm.doc.customer])
+				});
+				return;
+			}
 
 			var dialog = new frappe.ui.Dialog({
 				title: "Sales Selection",
@@ -299,9 +306,14 @@ credit_days(frm)
 		frm.refresh_field("taxes");
 
 		var gross_total = 0;
+		var taxable_total = 0;
 		var tax_total = 0;
 		var net_total = 0;
 		var discount_total = 0;
+
+		// Check field, but can arrive as undefined/null/"0"/"1" depending on how the
+		// document was created. Normalise it once.
+		const rate_includes_tax = cint(frm.doc.rate_includes_tax) ? 1 : 0;
 
 		//Avoid Possible NaNs
 		frm.doc.gross_total = 0;
@@ -310,143 +322,96 @@ credit_days(frm)
 		frm.doc.total_discount_in_line_items = 0;
 		frm.doc.round_off = 0;
 		frm.doc.rounded_total = 0;
+		frm.doc.taxable_total = 0;
 
-		frm.doc.items.forEach(function (entry) {
-			var tax_in_rate = 0;
+		(frm.doc.items || []).forEach(function (entry) {
 
-			//rate_includes_tax column in items table is readonly and it depends the form's rate_includes_tax column
-			entry.rate_includes_tax = frm.doc.rate_includes_tax;
+			// rate_includes_tax column in items table is readonly and it depends the form's rate_includes_tax column
+			entry.rate_includes_tax = rate_includes_tax;
 
-			// Rate is driven by its two components, the same way sales_invoice.js does it
-			entry.rate = flt(entry.com) + flt(entry.gov);
-
-			entry.gross_amount = 0
+			entry.gross_amount = 0;
+			entry.taxable_amount = 0;
 			entry.tax_amount = 0;
-			entry.net_amount = 0
-			//To avoid complexity mentioned below, rate_includes_tax option do not support with line item discount
+			entry.net_amount = 0;
 
-			if (entry.rate_includes_tax) //Disclaimer - since tax is calculated after discounted amount. this implementation
-			{							// has a mismatch with it. But still it approves to avoid complexity for the customer
-				// also this implementation is streight forward than the other way
+			const qty = flt(entry.qty);
 
-				if( entry.tax_rate >0){
-					tax_in_rate = entry.rate * (entry.tax_rate / (100 + entry.tax_rate));
-					entry.rate_excluded_tax = entry.rate - tax_in_rate;
-					entry.tax_amount = (entry.qty * entry.rate) * (entry.tax_rate / (100 + entry.tax_rate))
-				}
-				else
-				{
-					entry.rate_excluded_tax = entry.rate
-					entry.tax_amount = 0
-				}
-				entry.net_amount = ((entry.qty * entry.rate) - entry.discount_amount);
-				entry.gross_amount = entry.net_amount - entry.tax_amount;
+			// A blank discount column arrives as undefined/null/"" - keep it out of the
+			// arithmetic and never let it exceed the line value.
+			let discount_amount = flt(entry.discount_amount);
+			if (!isFinite(discount_amount) || discount_amount < 0) {
+				discount_amount = 0;
 			}
-      else {
-				entry.rate_excluded_tax = entry.rate;
+			entry.discount_amount = discount_amount;
+			entry.discount_percentage = flt(entry.discount_percentage);
 
-				if( entry.tax_rate >0){
-					entry.tax_amount = (((entry.qty * entry.rate) - entry.discount_amount) * (entry.tax_rate / 100))
-					entry.net_amount = ((entry.qty * entry.rate) - entry.discount_amount)
-					+ (((entry.qty * entry.rate) - entry.discount_amount) * (entry.tax_rate / 100))
-				}
-				else{
+			// Rate is driven by its two components, the same way sales_invoice.js does it.
+			const com_rate = flt(entry.com);
+			const gov_rate = flt(entry.gov);
+			entry.rate = com_rate + gov_rate;
 
-					entry.tax_amount = 0;
-					entry.net_amount = ((entry.qty * entry.rate) - entry.discount_amount)
-				}
+			const tax_rate = flt(entry.tax_rate);
+			const tax_excluded = cint(entry.tax_excluded) ? 1 : 0;
 
-
-				console.log("entry.tax_amount")
-				console.log(entry.tax_amount)
-
-				console.log("Net amount %f", entry.net_amount);
-				entry.gross_amount = entry.qty * entry.rate_excluded_tax;
+			// TAX APPLIES TO COM ONLY. GOV is a government fee - a disbursement outside
+			// VAT scope - and is added to the line untaxed. This return used to tax the
+			// whole of (COM + GOV), which refunded VAT that the invoice never charged.
+			// Identical to make_taxes_and_totals in sales_invoice.js.
+			let com_amount = (qty * com_rate) - discount_amount;
+			if (com_amount < 0) {
+				com_amount = 0;
 			}
+			const gov_amount = qty * gov_rate;
 
-			//var taxesTable = frm.add_child("taxes");
-			//taxesTable.tax = entry.tax;
-			gross_total = gross_total + entry.gross_amount;
-			tax_total = tax_total + entry.tax_amount;
-			discount_total = discount_total + entry.discount_amount;
+			if (!tax_excluded && tax_rate > 0) {
 
-			entry.qty_in_base_unit = entry.qty * entry.conversion_factor;
-			entry.rate_in_base_unit = entry.rate / entry.conversion_factor;
-
-			if (!isNaN(entry.qty) && !isNaN(entry.rate)) {
-
-				frappe.call({
-					method: 'digitz_erp.api.items_api.get_item_uoms',
-					async: false,
-					args: {
-						item: entry.item
-					},
-					callback: (r) => {
-						console.log("get_item_uoms result")
-						console.log(r.message);
-
-						var units = r.message;
-						var output = "";
-						var output2 = "";
-						entry.unit_conversion_details = "";
-						$.each(units, (a, b) => {
-
-							var conversion = b.conversion_factor
-							var unit = b.unit
-							console.log("uomqty")
-
-							var uomqty = entry.qty_in_base_unit / conversion;
-							console.log("uomrate")
-							var uomrate = entry.rate_in_base_unit * conversion;
-
-							console.log(uomqty)
-							console.log(uomrate)
-
-							var uomqty2 = "";
-
-							if (uomqty == entry.qty_in_base_unit) {
-								uomqty2 = uomqty + " " + unit + " @ " + uomrate
-							}
-							else {
-								if (uomqty > Math.trunc(uomqty)) {
-									var excessqty = Math.round((uomqty - Math.trunc(uomqty)) * conversion, 0);
-									uomqty2 = uomqty + " " + unit + "(" + Math.trunc(uomqty) + " " + unit + " " + excessqty + " " + entry.base_unit + ")" + " @ " + uomrate;
-								}
-								else {
-									uomqty2 = uomqty + " " + unit + " @ " + uomrate
-								}
-							}
-
-							output = output + uomqty2 + "\n";
-							//output2 = output2 + unit + " rate: " + uomrate + "\n";
-
-						}
-						)
-						console.log(output + output2);
-						entry.unit_conversion_details = output
-					}
+				if (rate_includes_tax) {
+					// Rate already carries the tax: strip it back out.
+					entry.taxable_amount = com_amount / (1 + (tax_rate / 100));
+					entry.tax_amount = com_amount - flt(entry.taxable_amount);
+					entry.net_amount = com_amount + gov_amount;
+				} else {
+					// Rate is net of tax: add it on top.
+					entry.taxable_amount = com_amount;
+					entry.tax_amount = flt(entry.taxable_amount) * (tax_rate / 100);
+					entry.net_amount = com_amount + gov_amount + flt(entry.tax_amount);
 				}
-
-				)
 			}
 			else {
-				console.log("Qty and Rate are NaN");
+				entry.taxable_amount = 0;
+				entry.tax_amount = 0;
+				entry.net_amount = com_amount + gov_amount;
 			}
 
+			entry.rate_excluded_tax = flt(entry.taxable_amount) && qty
+				? flt(entry.taxable_amount) / qty
+				: entry.rate;
+
+			entry.gross_amount = qty * (com_rate + gov_rate);
+
+			gross_total = gross_total + flt(entry.gross_amount);
+			tax_total = tax_total + flt(entry.tax_amount);
+			net_total = net_total + flt(entry.net_amount);
+			taxable_total = taxable_total + flt(entry.taxable_amount);
+			discount_total = discount_total + discount_amount;
+
+			// Units are not used in this app. conversion_factor has only ever been 0 or 1,
+			// and a 0 made qty_in_base_unit 0 - which is what Sales Return writes back to
+			// the invoice as qty_returned_in_base_unit, so a returned invoice stayed
+			// "pending" forever. Dividing the rate by it also produced Infinity.
+			entry.conversion_factor = 1;
+			entry.qty_in_base_unit = qty;
+			entry.rate_in_base_unit = flt(entry.rate);
 		});
 
+		// Blank Currency fields arrive as undefined/null, and "" * 1 is NaN.
+		frm.doc.additional_discount = flt(frm.doc.additional_discount);
 
-
-		if (isNaN(frm.doc.additional_discount)) {
-			frm.doc.additional_discount = 0;
-		}
-
-		frm.doc.gross_total = gross_total;
-		frm.doc.net_total = gross_total + tax_total - frm.doc.additional_discount;
-		frm.doc.tax_total = tax_total;
-		frm.doc.total_discount_in_line_items = discount_total;
-		console.log("Net Total Before Round Off")
-		console.log(frm.doc.net_total)
+		frm.doc.gross_total = flt(gross_total);
+		frm.doc.taxable_total = flt(taxable_total);
+		frm.doc.tax_total = flt(tax_total);
+		frm.doc.total_discount_in_line_items = flt(discount_total);
+		frm.doc.net_total = flt(net_total) - flt(frm.doc.additional_discount);
 
 		if (frm.doc.net_total != Math.round(frm.doc.net_total)) {
 			frm.doc.round_off = Math.round(frm.doc.net_total) - frm.doc.net_total;
@@ -461,6 +426,7 @@ credit_days(frm)
 		frm.refresh_field("items");
 		frm.refresh_field("taxes");
 		frm.refresh_field("gross_total");
+		frm.refresh_field("taxable_total");
 		frm.refresh_field("net_total");
 		frm.refresh_field("tax_total");
 		frm.refresh_field("round_off");
@@ -529,13 +495,22 @@ credit_days(frm)
 							'fieldname': ['default_warehouse', 'rate_includes_tax']
 						},
 						callback: (r2) => {
-							console.log("Before assign default warehouse");
-							console.log(r2.message.default_warehouse);
-							frm.doc.warehouse = r2.message.default_warehouse;
-							console.log(frm.doc.warehouse);
-							//frm.doc.rate_includes_tax = r2.message.rate_includes_tax;
+							const company_data = r2.message || {};
+
+							frm.doc.warehouse = company_data.default_warehouse;
+
+							// This assignment was commented out, so the flag was fetched
+							// from the Company and then thrown away - every Sales Return
+							// calculated as EXCLUSIVE regardless of the company setting,
+							// while Sales Invoice honoured it. On an inclusive company
+							// that made the return add tax on top of a rate that already
+							// contained it. Same behaviour as sales_invoice.js now.
+							frm.doc.rate_includes_tax = cint(company_data.rate_includes_tax);
+
 							frm.refresh_field("warehouse");
 							frm.refresh_field("rate_includes_tax");
+
+							frm.trigger("make_taxes_and_totals");
 						}
 					}
 
@@ -626,7 +601,11 @@ function update_total_big_display(frm) {
 
 
     // Directly update the HTML content of the 'total_big' field
-    frm.fields_dict['total_big'].$wrapper.html(displayHtml);
+    // The field is absent on some customised layouts; without this guard the throw
+    // aborts the caller before it refreshes the tax fields.
+    if (frm.fields_dict && frm.fields_dict['total_big'] && frm.fields_dict['total_big'].$wrapper) {
+        frm.fields_dict['total_big'].$wrapper.html(displayHtml);
+    }
 
 }
 
@@ -849,35 +828,9 @@ frappe.ui.form.on('Sales Return Item', {
 	rate_includes_tax(frm, cdt, cdn) {
 		frm.trigger("make_taxes_and_totals");
 	},
-	unit(frm, cdt, cdn) {
-		let row = frappe.get_doc(cdt, cdn);
-		frappe.call(
-			{
-				method: 'digitz_erp.api.items_api.get_item_uom',
-				async: false,
-				args: {
-					item: row.item,
-					unit: row.unit
-				},
-				callback(r) {
-					if (r.message.length == 0) {
-						frappe.msgprint("Invalid unit, Unit does not exists for the item.");
-						row.unit = row.base_unit;
-						row.conversion_factor = 1;
-					}
-					else {
-						console.log(r.message[0].conversion_factor);
-						row.conversion_factor = r.message[0].conversion_factor;
-						row.rate = row.rate_in_base_unit * row.conversion_factor;
-					}
-					frm.trigger("make_taxes_and_totals");
-
-					frm.refresh_field("items");
-				}
-
-			}
-		);
-	},
+	// The `unit` handler looked up a UOM conversion factor and rescaled the rate from
+	// it. Units are not used here, and a non-1 factor is exactly what broke the
+	// returned-qty write-back. Deliberately removed.
 	discount_percentage(frm, cdt, cdn) {
 		let row = frappe.get_doc(cdt, cdn);
 		console.log("from discount_percentage")
