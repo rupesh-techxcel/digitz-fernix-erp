@@ -12,6 +12,8 @@
   "item_name",
   "display_name",
   "qty",
+  "com",
+  "gov",
   "unit",
   "rate",
   "base_unit",
@@ -59,7 +61,7 @@
    "label": "Item Name"
   },
   {
-   "columns": 2,
+   "columns": 1,
    "fieldname": "display_name",
    "fieldtype": "Small Text",
    "in_list_view": 1,
@@ -72,6 +74,20 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Qty"
+  },
+  {
+   "columns": 1,
+   "fieldname": "com",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "COM"
+  },
+  {
+   "columns": 1,
+   "fieldname": "gov",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "GOV"
   },
   {
    "columns": 1,

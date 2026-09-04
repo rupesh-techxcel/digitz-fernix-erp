@@ -185,6 +185,8 @@ frappe.ui.form.on('Sales Return', {
 												return_item.unit = newRow.unit
 												return_item.base_unit = newRow.base_unit
 												return_item.rate = newRow.rate
+												return_item.com = newRow.com
+												return_item.gov = newRow.gov
 												return_item.rate_in_base_unit = newRow.rate_in_base_unit
 												return_item.tax = newRow.tax
 												return_item.tax_rate = newRow.tax_rate
@@ -314,6 +316,10 @@ credit_days(frm)
 
 			//rate_includes_tax column in items table is readonly and it depends the form's rate_includes_tax column
 			entry.rate_includes_tax = frm.doc.rate_includes_tax;
+
+			// Rate is driven by its two components, the same way sales_invoice.js does it
+			entry.rate = flt(entry.com) + flt(entry.gov);
+
 			entry.gross_amount = 0
 			entry.tax_amount = 0;
 			entry.net_amount = 0
@@ -732,7 +738,7 @@ frappe.ui.form.on('Sales Return Item', {
 				args: {
 					'doctype': 'Item',
 					'filters': { 'item_code': row.item },
-					'fieldname': ['item_name','description','base_unit', 'tax', 'tax_excluded']
+					'fieldname': ['item_name','description','base_unit', 'tax', 'tax_excluded', 'com', 'gov']
 				},
 				callback: (r) => {
 
@@ -751,6 +757,9 @@ frappe.ui.form.on('Sales Return Item', {
 					row.base_unit = r.message.base_unit;
 					row.unit = r.message.base_unit;
 					row.conversion_factor = 1;
+					row.com = flt(r.message.com);
+					row.gov = flt(r.message.gov);
+					row.rate = flt(r.message.com) + flt(r.message.gov);
 					row.display_name = row.item_name
 					frm.item = row.item
 					frm.warehouse = row.warehouse
@@ -781,39 +790,9 @@ frappe.ui.form.on('Sales Return Item', {
 					console.log("Price List");
 					console.log(frm.doc.price_list);
 
-					let currency = ""
-					console.log("before call digitz_erp.api.settings_api.get_default_currency")
-					frappe.call(
-						{
-							method:'digitz_erp.api.settings_api.get_default_currency',
-							async:false,
-							callback(r){
-								console.log(r)
-								currency = r.message
-								console.log("currency")
-								console.log(currency)
-							}
-						}
-					);
-
-					frappe.call(
-						{
-							method: 'digitz_erp.api.item_price_api.get_item_price',
-							async: false,
-
-							args: {
-								'item': row.item,
-								'price_list': frm.doc.price_list,
-								'currency': currency,
-								'date': frm.doc.posting_date
-							},
-							callback(r) {
-								console.log("digitz_erp.api.item_price_api.get_item_price")
-								console.log(r)
-								row.rate = parseFloat(r.message);
-								row.rate_in_base_unit = parseFloat(r.message);
-							}
-						});
+					// Rate comes from the item's COM and GOV above, so the price list
+					// is no longer consulted here - same as sales_invoice.js.
+					// rate_in_base_unit is derived from the rate in make_taxes_and_totals.
 
 					frm.trigger("make_taxes_and_totals");
 					frm.refresh_field("items");
@@ -857,6 +836,15 @@ frappe.ui.form.on('Sales Return Item', {
 	},
 	rate(frm, cdt, cdn) {
 		frm.trigger("make_taxes_and_totals");
+	},
+	com(frm, cdt, cdn) {
+		// make_taxes_and_totals recomputes rate as com + gov
+		frm.trigger("make_taxes_and_totals");
+		frm.refresh_field("items");
+	},
+	gov(frm, cdt, cdn) {
+		frm.trigger("make_taxes_and_totals");
+		frm.refresh_field("items");
 	},
 	rate_includes_tax(frm, cdt, cdn) {
 		frm.trigger("make_taxes_and_totals");
