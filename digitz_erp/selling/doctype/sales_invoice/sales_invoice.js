@@ -342,6 +342,8 @@ frappe.ui.form.on('Sales Invoice', {
 		var tax_total = 0;
 		var net_total = 0;
 		var discount_total = 0;
+		var gov_only_rows = 0;
+		var taxable_rows = 0;
 
 		// The parent flag is the single source of truth for inclusive/exclusive.
 		// It is a Check field, but can arrive as undefined/null/"0"/"1" depending on
@@ -450,12 +452,16 @@ frappe.ui.form.on('Sales Invoice', {
 			// Per-row trace. `why_no_tax` is the field to read first when a live site
 			// reports "tax is not calculating".
 			let why_no_tax = "";
+			if (!tax_excluded && tax_rate > 0 && com_rate > 0) {
+				taxable_rows++;
+			}
 			if (tax_excluded) {
 				why_no_tax = "tax_excluded is checked on this row (comes from Company.tax_excluded or Item.tax_excluded, whose default is 1)";
 			} else if (tax_rate <= 0) {
 				why_no_tax = "tax_rate is " + tax_rate + " - the Item has no Tax link, or the linked Tax record has no rate. NOTE: tax_rate is an Int field, so a rate like 2.5 cannot be stored";
 			} else if (com_rate === 0 && gov_rate > 0) {
-				why_no_tax = "GOV-only line (COM is 0). GOV is a non-taxable pass-through fee, so no tax applies. Expected if the Item is priced as a pure government fee";
+				why_no_tax = "OK - GOV-only line. A government fee is a disbursement outside VAT scope, so no VAT applies. This is correct, not a fault";
+				gov_only_rows++;
 			} else if (com_rate === 0) {
 				why_no_tax = "COM and GOV are both 0, so the rate is 0 and there is nothing to tax. Set COM/GOV on the Item master and re-pick the item on this row";
 			} else if (com_amount === 0) {
@@ -512,8 +518,17 @@ frappe.ui.form.on('Sales Invoice', {
 			rounded_total: frm.doc.rounded_total
 		};
 
+		trace.gov_only_rows = gov_only_rows;
+		trace.taxable_rows = taxable_rows;
+
 		if (tax_total === 0 && trace.item_count > 0) {
-			trace.warnings.push("TAX TOTAL IS 0 - read the `why_no_tax` column of the row table above.");
+			if (taxable_rows > 0) {
+				trace.warnings.push("TAX TOTAL IS 0 even though " + taxable_rows +
+					" row(s) should have been taxed - read the `why_no_tax` column above.");
+			} else if (gov_only_rows === trace.item_count) {
+				// Expected: every line is a government fee, which is outside VAT scope.
+				trace.warnings.push("Tax total is 0 because every line is a GOV-only government fee (outside VAT scope). This is correct.");
+			}
 		}
 
 		// Kept on window so it can be inspected after the fact on a live site:
@@ -879,8 +894,8 @@ window.digitz_tax_doctor = function () {
 			if (it && cint(it.tax_excluded)) {
 				console.warn("[digitz-tax] Item " + row.item + " has 'Tax Not Applicable' checked (the Item field defaults to 1). No tax will be applied to it.");
 			}
-			if (it && !it.tax) {
-				console.warn("[digitz-tax] Item " + row.item + " has no Tax link, so tax_rate stays 0.");
+			if (it && !it.tax && flt(it.com) > 0) {
+				console.warn("[digitz-tax] Item " + row.item + " has COM but no Tax link, so tax_rate stays 0.");
 			}
 			if (it && !flt(it.com) && !flt(it.gov)) {
 				console.error("[digitz-tax] Item " + row.item + " has COM=0 and GOV=0 on the Item master. The rate is derived from COM+GOV, so this line can only ever come out as 0 with no tax. THIS IS THE FIX: set COM (and GOV if applicable) on the Item.");
