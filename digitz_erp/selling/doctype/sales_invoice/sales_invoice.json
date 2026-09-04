@@ -506,6 +506,7 @@
   {
    "fieldname": "item_units",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "Item Units"
   },
   {

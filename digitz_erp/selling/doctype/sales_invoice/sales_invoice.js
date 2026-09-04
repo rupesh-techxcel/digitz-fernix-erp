@@ -321,8 +321,18 @@ frappe.ui.form.on('Sales Invoice', {
 			})
 	},
 	make_taxes_and_totals(frm) {
-		console.clear();
-		console.log("from make totals..");
+		// NOTE: never call console.clear() here. This method runs on every qty/rate/
+		// discount change, and clearing wipes the very logs needed to debug a live site.
+		const DBG = (typeof window !== "undefined" && window.DIGITZ_TAX_DEBUG !== false);
+		const dbg = (...a) => { if (DBG) console.log("[digitz-tax]", ...a); };
+
+		const trace = {
+			rate_includes_tax_parent: frm.doc.rate_includes_tax,
+			additional_discount_raw: frm.doc.additional_discount,
+			item_count: (frm.doc.items || []).length,
+			rows: [],
+			warnings: []
+		};
 
 		frm.clear_table("taxes");
 		frm.refresh_field("taxes");
@@ -332,7 +342,14 @@ frappe.ui.form.on('Sales Invoice', {
 		var tax_total = 0;
 		var net_total = 0;
 		var discount_total = 0;
-		var rate_inbcludes_tax = 0;
+
+		// The parent flag is the single source of truth for inclusive/exclusive.
+		// It is a Check field, but can arrive as undefined/null/"0"/"1" depending on
+		// how the doc was created (new doc, amend, import, API), so normalise it once.
+		const rate_includes_tax = cint(frm.doc.rate_includes_tax) ? 1 : 0;
+		if (frm.doc.rate_includes_tax === undefined || frm.doc.rate_includes_tax === null) {
+			trace.warnings.push("frm.doc.rate_includes_tax was undefined/null - treated as EXCLUSIVE (0). Check Company.rate_includes_tax.");
+		}
 
 		// Avoid Possible NaN
 		frm.doc.gross_total = 0;
@@ -343,70 +360,129 @@ frappe.ui.form.on('Sales Invoice', {
 		frm.doc.rounded_total = 0;
 		frm.doc.taxable_total = 0;
 
-		(frm.doc.items || []).forEach(function (entry) {
+		(frm.doc.items || []).forEach(function (entry, idx) {
 
 			// rate_includes_tax column in items table is readonly and it depends the form's rate_includes_tax column
-			entry.rate_includes_tax = frm.doc.rate_includes_tax;
+			entry.rate_includes_tax = rate_includes_tax;
 			entry.gross_amount = 0;
 			entry.taxable_amount = 0;
 			entry.tax_amount = 0;
 			entry.net_amount = 0;
 
-			entry.rate = flt(entry.com) + flt(entry.gov) 
+			const qty = flt(entry.qty);
 
-			console.log("entry.tax_excluded", entry.tax_excluded);
-			console.log("entry.tax_rate", entry.tax_rate);
+			// A blank discount column comes through as undefined/null/"" - never let it
+			// reach the arithmetic, and never let it exceed the line value.
+			let discount_amount = flt(entry.discount_amount);
+			if (!isFinite(discount_amount) || discount_amount < 0) {
+				discount_amount = 0;
+			}
+			entry.discount_amount = discount_amount;
+			entry.discount_percentage = flt(entry.discount_percentage);
 
-			if (!entry.tax_excluded && flt(entry.tax_rate) > 0) {
-				let com_amount = (flt(entry.qty) * flt(entry.com)) - flt(entry.discount_amount);
-				let gov_amount = (flt(entry.qty) * flt(entry.gov));
+			// COM (taxable component) and GOV (non-taxable pass-through fee) come from
+			// the Item master and are the ONLY source of the rate - the rate column is
+			// derived, never entered. So COM=0 and GOV=0 is not a rate of zero to be
+			// worked around, it is missing Item master data, and it is the single most
+			// likely reason a live site shows no tax at all. Flag it loudly.
+			const com_rate = flt(entry.com);
+			const gov_rate = flt(entry.gov);
 
-				if (entry.rate_includes_tax) {
-					entry.taxable_amount =
-						com_amount / (1 + (flt(entry.tax_rate) / 100));
+			if (com_rate === 0 && gov_rate === 0) {
+				trace.warnings.push(
+					"Row " + (idx + 1) + " (" + (entry.item || "?") +
+					"): COM and GOV are both 0, so rate is 0 and no tax can be calculated. " +
+					"Fill COM/GOV on the Item master, then re-pick the item on this row " +
+					"(the row copies COM/GOV at selection time and does not re-read them later)."
+				);
+			}
 
-					entry.tax_amount =
-						com_amount - flt(entry.taxable_amount);
+			entry.rate = com_rate + gov_rate;
 
-					entry.net_amount =
-						com_amount + gov_amount;
+			const tax_rate = flt(entry.tax_rate);
+			const tax_excluded = cint(entry.tax_excluded) ? 1 : 0;
+
+			// qty * COM, net of the line discount. This is the only part tax applies to.
+			let com_amount = (qty * com_rate) - discount_amount;
+			if (com_amount < 0) {
+				com_amount = 0;
+			}
+			const gov_amount = qty * gov_rate;
+
+			if (!tax_excluded && tax_rate > 0) {
+
+				if (rate_includes_tax) {
+					// Rate already carries the tax: strip it back out.
+					entry.taxable_amount = com_amount / (1 + (tax_rate / 100));
+					entry.tax_amount = com_amount - flt(entry.taxable_amount);
+					entry.net_amount = com_amount + gov_amount;
 				} else {
+					// Rate is net of tax: add it on top.
 					entry.taxable_amount = com_amount;
-
-					entry.tax_amount =
-						flt(entry.taxable_amount) * (flt(entry.tax_rate) / 100);
-
-					entry.net_amount =
-						com_amount + gov_amount + flt(entry.tax_amount);
+					entry.tax_amount = flt(entry.taxable_amount) * (tax_rate / 100);
+					entry.net_amount = com_amount + gov_amount + flt(entry.tax_amount);
 				}
 			}
 			else {
 				entry.taxable_amount = 0;
 				entry.tax_amount = 0;
-				entry.net_amount =
-					(flt(entry.qty) * flt(entry.rate)) - flt(entry.discount_amount);
+				entry.net_amount = com_amount + gov_amount;
 			}
 
-			entry.gross_amount = flt(entry.qty) * (flt(entry.com) + flt(entry.gov));
-
-			console.log("entry.gross_amount")
-			console.log(entry.gross_amount)
+			entry.gross_amount = qty * (com_rate + gov_rate);
 
 			gross_total = gross_total + flt(entry.gross_amount);
 			tax_total = tax_total + flt(entry.tax_amount);
 			net_total = net_total + flt(entry.net_amount);
 			taxable_total = taxable_total + flt(entry.taxable_amount);
-			discount_total = discount_total + flt(entry.discount_amount);
+			discount_total = discount_total + discount_amount;
 
-			entry.qty_in_base_unit = flt(entry.qty) * flt(entry.conversion_factor);
-			entry.rate_in_base_unit = flt(entry.conversion_factor)
-				? flt(entry.rate) / flt(entry.conversion_factor)
-				: 0;
+			// Units are not used in this document: there is no unit conversion, so the
+			// factor is pinned to 1. qty_in_base_unit / rate_in_base_unit still have to
+			// be populated - the stock ledger postings, the stock-balance check and the
+			// sales-return quantities all read them - they are simply qty and rate now.
+			// Pinning the factor to 1 also keeps the returns query, which divides by
+			// conversion_factor, away from a divide-by-zero.
+			entry.conversion_factor = 1;
+			entry.qty_in_base_unit = qty;
+			entry.rate_in_base_unit = flt(entry.rate);
+
+			// Per-row trace. `why_no_tax` is the field to read first when a live site
+			// reports "tax is not calculating".
+			let why_no_tax = "";
+			if (tax_excluded) {
+				why_no_tax = "tax_excluded is checked on this row (comes from Company.tax_excluded or Item.tax_excluded, whose default is 1)";
+			} else if (tax_rate <= 0) {
+				why_no_tax = "tax_rate is " + tax_rate + " - the Item has no Tax link, or the linked Tax record has no rate. NOTE: tax_rate is an Int field, so a rate like 2.5 cannot be stored";
+			} else if (com_rate === 0 && gov_rate > 0) {
+				why_no_tax = "GOV-only line (COM is 0). GOV is a non-taxable pass-through fee, so no tax applies. Expected if the Item is priced as a pure government fee";
+			} else if (com_rate === 0) {
+				why_no_tax = "COM and GOV are both 0, so the rate is 0 and there is nothing to tax. Set COM/GOV on the Item master and re-pick the item on this row";
+			} else if (com_amount === 0) {
+				why_no_tax = "taxable base is 0 - qty=" + qty + ", com=" + com_rate + ", discount=" + discount_amount;
+			}
+
+			trace.rows.push({
+				"#": idx + 1,
+				item: entry.item,
+				qty: qty,
+				com: com_rate,
+				gov: gov_rate,
+				rate: entry.rate,
+				discount: discount_amount,
+				tax_excluded: tax_excluded,
+				tax: entry.tax,
+				tax_rate: tax_rate,
+				incl: rate_includes_tax,
+				taxable_amount: flt(entry.taxable_amount),
+				tax_amount: flt(entry.tax_amount),
+				net_amount: flt(entry.net_amount),
+				why_no_tax: why_no_tax
+			});
 		});
 
-		if (isNaN(flt(frm.doc.additional_discount))) {
-			frm.doc.additional_discount = 0;
-		}
+		// Blank Currency fields arrive as undefined/null, and "" * 1 is NaN.
+		frm.doc.additional_discount = flt(frm.doc.additional_discount);
 
 		frm.doc.gross_total = flt(gross_total);
 		frm.doc.taxable_total = flt(taxable_total);
@@ -414,39 +490,51 @@ frappe.ui.form.on('Sales Invoice', {
 		frm.doc.total_discount_in_line_items = flt(discount_total);
 		frm.doc.net_total = flt(net_total) - flt(frm.doc.additional_discount);
 
-		console.log("frm.doc.additional discount");
-		console.log(frm.doc.additional_discount);
-
-		console.log("gross total");
-		console.log(gross_total);
-
-		console.log("tax total");
-		console.log(tax_total);
-
-		console.log("frm.doc.net_total");
-		console.log(frm.doc.net_total);
-
-		if (frm.doc.net_total != Math.round(frm.doc.net_total)) {
+		if (cint(frm.doc.is_round_off)) {
 			frm.doc.round_off = Math.round(frm.doc.net_total) - frm.doc.net_total;
 			frm.set_value("rounded_total", Math.round(frm.doc.net_total));
-			frm.refresh_field("round_off");
-			frm.refresh_field("rounded_total");
 		}
 		else {
 			frm.doc.round_off = 0;
-			frm.set_value("rounded_total", Math.round(frm.doc.net_total));
-			frm.refresh_field("round_off");
-			frm.refresh_field("rounded_total");
+			frm.set_value("rounded_total", flt(frm.doc.net_total));
+		}
+		frm.refresh_field("round_off");
+		frm.refresh_field("rounded_total");
 
-			console.log(frm.doc.net_total);
-			console.log(frm.doc.rounded_total);
+		trace.totals = {
+			gross_total: frm.doc.gross_total,
+			taxable_total: frm.doc.taxable_total,
+			tax_total: frm.doc.tax_total,
+			discount_in_lines: frm.doc.total_discount_in_line_items,
+			additional_discount: frm.doc.additional_discount,
+			net_total: frm.doc.net_total,
+			round_off: frm.doc.round_off,
+			rounded_total: frm.doc.rounded_total
+		};
+
+		if (tax_total === 0 && trace.item_count > 0) {
+			trace.warnings.push("TAX TOTAL IS 0 - read the `why_no_tax` column of the row table above.");
 		}
 
-		console.log("rounded_total_calculated", frm.doc.rounded_total);
+		// Kept on window so it can be inspected after the fact on a live site:
+		//   copy(JSON.stringify(window.digitz_last_tax_debug, null, 2))
+		if (typeof window !== "undefined") {
+			window.digitz_last_tax_debug = trace;
+		}
 
-		console.log("before call fill_receipt_schedule");
+		if (DBG) {
+			console.groupCollapsed(
+				"[digitz-tax] " + (rate_includes_tax ? "INCLUSIVE" : "EXCLUSIVE") +
+				" | rows=" + trace.item_count + " | tax=" + trace.totals.tax_total +
+				" | net=" + trace.totals.net_total
+			);
+			console.table(trace.rows);
+			console.log("totals", trace.totals);
+			trace.warnings.forEach(w => console.warn("[digitz-tax]", w));
+			console.groupEnd();
+		}
+
 		fill_receipt_schedule(frm);
-		console.log("rounded_total_calculated 2", frm.doc.rounded_total);
 
 		update_total_big_display(frm);
 
@@ -525,8 +613,7 @@ frappe.ui.form.on('Sales Invoice', {
 				{
 					const itemRow = frm.doc.items.find(item => item.item === frm.item && item.warehouse === frm.warehouse);
 					if (itemRow) {
-						const unit = itemRow.unit;
-						frm.doc.selected_item_stock_qty_in_the_warehouse = "Stock Bal: "  + r2.message.stock_qty +  " " + unit + " for " + frm.item + " at w/h: "+ frm.warehouse + ": ";
+						frm.doc.selected_item_stock_qty_in_the_warehouse = "Stock Bal: "  + r2.message.stock_qty + " for " + frm.item + " at w/h: "+ frm.warehouse + ": ";
 						frm.refresh_field("selected_item_stock_qty_in_the_warehouse");
 					}
 				}
@@ -644,34 +731,6 @@ frappe.ui.form.on('Sales Invoice', {
 			console.error("Error in get_default_company_and_warehouse:", err);
 		}
 	},
-	get_item_units(frm) {
-
-		frappe.call({
-			method: 'digitz_erp.api.items_api.get_item_uoms',
-			async: false,
-			args: {
-				item: frm.item
-			},
-			callback: (r) => {
-
-				var units = ""
-				for(var i = 0; i < r.message.length; i++)
-				{
-					if(i==0)
-					{
-						units = r.message[i].unit
-					}
-					else
-					{
-						units = units + ", " + r.message[i].unit
-					}
-				}
-
-				frm.doc.item_units = "Unit(s) for "+ frm.item +": " +units
-				frm.refresh_field("item_units");
-			}
-		})
-	},
 });
 
 function fill_receipt_schedule(frm, refresh=false,refresh_credit_days=false)
@@ -747,23 +806,96 @@ function fill_receipt_schedule(frm, refresh=false,refresh_credit_days=false)
 	}
 }
 
+// Base a line discount is calculated against: qty * (COM + GOV). Mirrors
+// make_taxes_and_totals so the two can never disagree.
+function line_discount_base(row) {
+	// Rate is always COM + GOV; the rate column is derived and never entered directly,
+	// so the discount base must be built from the same two fields.
+	let base = flt(row.qty) * (flt(row.com) + flt(row.gov));
+	return isFinite(base) && base > 0 ? base : 0;
+}
+
 function update_total_big_display(frm) {
 
-	console.log("from big",frm.doc.rounded_total)
-	
-	let total_to_display = isNaN(frm.doc.rounded_total) ? "0.00" : parseFloat(frm.doc.rounded_total).toFixed(2);
+	let total_to_display = flt(frm.doc.rounded_total).toFixed(2);
 
-
-    // Add 'AED' prefix and format net_total for display
-
+	// Add 'AED' prefix and format net_total for display
 	let displayHtml = `<div style="font-size: 25px; text-align: right; color: black;">AED ${total_to_display}</div>`;
 
-	console.log("displayHtml",displayHtml)
-
-    // Directly update the HTML content of the 'total_big' field
-    frm.fields_dict['total_big'].$wrapper.html(displayHtml);
-
+	// The field is missing on some customised layouts / print-only views. Without this
+	// guard the throw aborts the caller before it refreshes the tax fields.
+	if (frm.fields_dict && frm.fields_dict['total_big'] && frm.fields_dict['total_big'].$wrapper) {
+		frm.fields_dict['total_big'].$wrapper.html(displayHtml);
+	} else {
+		console.warn("[digitz-tax] total_big field not present on this form - skipping big-total display.");
+	}
 }
+
+// Production diagnostic. Run `digitz_tax_doctor()` from the browser console while a
+// Sales Invoice is open to see, in one place, every setting that can switch tax off.
+window.digitz_tax_doctor = function () {
+	const frm = cur_frm;
+	if (!frm) {
+		console.error("[digitz-tax] Open a Sales Invoice first.");
+		return;
+	}
+
+	console.group("[digitz-tax] doctor");
+	console.log("doctype:", frm.doc.doctype, "name:", frm.doc.name, "company:", frm.doc.company);
+	console.log("parent rate_includes_tax:", frm.doc.rate_includes_tax,
+		"->", cint(frm.doc.rate_includes_tax) ? "INCLUSIVE" : "EXCLUSIVE");
+	console.log("is_round_off:", frm.doc.is_round_off, "additional_discount:", frm.doc.additional_discount);
+
+	frappe.call({
+		method: 'digitz_erp.api.settings_api.get_company_settings',
+		callback(r) {
+			const s = (r.message && r.message.length) ? r.message[0] : null;
+			console.log("Company settings row:", s);
+			if (s && cint(s.tax_excluded)) {
+				console.warn("[digitz-tax] Company.tax_excluded is ON - every new row is forced to tax_excluded=1, so no tax will ever be calculated. Turn it off in the Company record.");
+			}
+		}
+	});
+
+	frappe.db.get_value('Company', frm.doc.company,
+		['rate_includes_tax', 'do_not_apply_round_off_in_si'], (c) => {
+			console.log("Company tax/rounding config:", c);
+			if (c && cint(c.rate_includes_tax) !== cint(frm.doc.rate_includes_tax)) {
+				console.warn("[digitz-tax] Company.rate_includes_tax (" + c.rate_includes_tax +
+					") differs from this document's value (" + frm.doc.rate_includes_tax +
+					"). rate_includes_tax is read-only on the form and is stamped at creation time.");
+			}
+		});
+
+	(frm.doc.items || []).forEach((row, i) => {
+		if (!row.item) { return; }
+		frappe.db.get_value('Item', row.item, ['com', 'gov', 'tax', 'tax_excluded'], (it) => {
+			console.log("row " + (i + 1) + " " + row.item + " | Item master:", it,
+				"| row:", {
+					com: row.com, gov: row.gov, rate: row.rate, qty: row.qty,
+					tax: row.tax, tax_rate: row.tax_rate, tax_excluded: row.tax_excluded,
+					discount_amount: row.discount_amount
+				});
+			if (it && cint(it.tax_excluded)) {
+				console.warn("[digitz-tax] Item " + row.item + " has 'Tax Not Applicable' checked (the Item field defaults to 1). No tax will be applied to it.");
+			}
+			if (it && !it.tax) {
+				console.warn("[digitz-tax] Item " + row.item + " has no Tax link, so tax_rate stays 0.");
+			}
+			if (it && !flt(it.com) && !flt(it.gov)) {
+				console.error("[digitz-tax] Item " + row.item + " has COM=0 and GOV=0 on the Item master. The rate is derived from COM+GOV, so this line can only ever come out as 0 with no tax. THIS IS THE FIX: set COM (and GOV if applicable) on the Item.");
+			}
+			if (it && (flt(it.com) !== flt(row.com) || flt(it.gov) !== flt(row.gov))) {
+				console.warn("[digitz-tax] Item " + row.item + ": row COM/GOV (" + flt(row.com) + "/" + flt(row.gov) +
+					") differ from the Item master (" + flt(it.com) + "/" + flt(it.gov) +
+					"). The row copies COM/GOV when the item is picked; re-pick the item to refresh them.");
+			}
+		});
+	});
+
+	console.log("Last calculation trace: window.digitz_last_tax_debug");
+	console.groupEnd();
+};
 function show_sales_quotation_dialog(frm){
 	if (!frm.doc.customer) {
         frappe.msgprint("Select a customer");
@@ -864,6 +996,39 @@ function show_delivery_notes_dialog(frm) {
 }
 
 function process_delivery_note_items(frm, items) {
+    // `Delivery Note Item` has no COM/GOV columns, so items pulled from a delivery note
+    // arrive with a rate but with COM=0 and GOV=0. Since the rate is always derived from
+    // COM + GOV, those rows would otherwise collapse to rate 0 and produce no tax at all.
+    // Read COM/GOV from the Item master first, then build the rows.
+    const item_codes = [...new Set((items || []).map(i => i.item).filter(Boolean))];
+
+    if (!item_codes.length) {
+        add_delivery_note_rows(frm, items, {});
+        return;
+    }
+
+    frappe.db.get_list('Item', {
+        filters: { item_code: ['in', item_codes] },
+        fields: ['item_code', 'com', 'gov'],
+        limit_page_length: 0
+    }).then(rows => {
+        const com_gov = {};
+        (rows || []).forEach(r => { com_gov[r.item_code] = r; });
+
+        const missing = item_codes.filter(c => !com_gov[c] || (!flt(com_gov[c].com) && !flt(com_gov[c].gov)));
+        if (missing.length) {
+            frappe.msgprint({
+                title: __("COM / GOV not set"),
+                indicator: "red",
+                message: __("These items have no COM/GOV on the Item master, so their rate and tax will be 0: {0}", [missing.join(", ")])
+            });
+        }
+
+        add_delivery_note_rows(frm, items, com_gov);
+    });
+}
+
+function add_delivery_note_rows(frm, items, com_gov) {
     let any_duplicate = false;
 
     items.forEach(item => {
@@ -878,11 +1043,15 @@ function process_delivery_note_items(frm, items) {
                 warehouse: item.warehouse,
                 display_name: item.display_name,
                 unit: item.unit,
-                rate: item.rate,
+                com: flt((com_gov[item.item] || {}).com),
+                gov: flt((com_gov[item.item] || {}).gov),
+                rate: flt((com_gov[item.item] || {}).com) + flt((com_gov[item.item] || {}).gov),
                 base_unit: item.base_unit,
-                qty_in_base_unit: item.qty_in_base_unit,
-                rate_in_base_unit: item.rate_in_base_unit,
-                conversion_factor: item.conversion_factor,
+                // Units are ignored: no conversion, so base-unit qty/rate are just
+                // qty/rate. make_taxes_and_totals recomputes these anyway.
+                qty_in_base_unit: flt(item.qty),
+                rate_in_base_unit: flt((com_gov[item.item] || {}).com) + flt((com_gov[item.item] || {}).gov),
+                conversion_factor: 1,
                 rate_includes_tax: item.rate_includes_tax,
                 gross_amount: item.gross_amount,
                 tax_excluded: item.tax_excluded,
@@ -927,7 +1096,6 @@ frappe.ui.form.on('Sales Invoice Item', {
 		row.warehouse = frm.doc.warehouse;
 
 		frm.item = row.item;
-		frm.trigger("get_item_units");
 
 		let tax_excluded_for_company = false;
 
@@ -1083,79 +1251,64 @@ frappe.ui.form.on('Sales Invoice Item', {
 	rate_includes_tax(frm, cdt, cdn) {
 		frm.trigger("make_taxes_and_totals");
 	},
-	unit(frm, cdt, cdn) {
-
-		let row = frappe.get_doc(cdt, cdn);
-
-		frappe.call(
-			{
-				method: 'digitz_erp.api.items_api.get_item_uom',
-				async: false,
-				args: {
-					item: row.item,
-					unit: row.unit
-				},
-				callback(r) {
-					if (r.message.length == 0) {
-						frappe.msgprint("Invalid unit, Unit does not exists for the item.");
-						row.unit = row.base_unit;
-						row.conversion_factor = 1;
-					}
-					else {
-
-						row.conversion_factor = r.message[0].conversion_factor;
-						row.rate = row.rate_in_base_unit * row.conversion_factor;
-						//row.rate = row.rate * row.conversion_factor;
-						//frappe.confirm('Rate converted for the unit selected. Do you want to convert the qty as well ?',
-						//() => {
-						//row.qty = row.qty/ row.conversion_factor;
-						//})
-					}
-					frm.trigger("make_taxes_and_totals");
-
-					frm.refresh_field("items");
-				}
-
-			}
-		);
-	},
+	// The `unit` handler used to look up a UOM conversion factor and rescale the rate
+	// from it. Units are ignored in this document and the rate comes only from COM+GOV,
+	// so there is nothing left for it to do. Deliberately removed.
 	discount_percentage(frm, cdt, cdn) {
 		let row = frappe.get_doc(cdt, cdn);
 
-		var discount_percentage = row.discount_percentage;
+		// gross_amount is only populated after make_taxes_and_totals has run, so on a
+		// freshly added row it is still undefined. Derive the base from qty * (COM + GOV)
+		// instead of trusting it, otherwise a percentage silently becomes a 0 discount.
+		let base = line_discount_base(row);
+		let pct = flt(row.discount_percentage);
 
-		if (row.discount_percentage > 0) {
-
-			var discount = row.gross_amount * (row.discount_percentage / 100);
-			row.discount_amount = discount;
+		if (!isFinite(pct) || pct <= 0) {
+			row.discount_percentage = 0;
+			row.discount_amount = 0;
 		}
 		else {
-			row.discount_amount = 0;
-			row.discount_percentage = 0;
+			if (pct > 100) {
+				pct = 100;
+				frappe.msgprint(__("Discount percentage cannot exceed 100."));
+			}
+			row.discount_percentage = pct;
+			row.discount_amount = flt(base) * (pct / 100);
 		}
 
-		frm.trigger("make_taxes_and_totals");
-
 		frm.refresh_field("items");
-
+		frm.trigger("make_taxes_and_totals");
 	},
 	discount_amount(frm, cdt, cdn) {
 
 		let row = frappe.get_doc(cdt, cdn);
-		var discount = row.discount_amount;
 
-		if (row.discount_amount > 0) {
-			var discount_percentage = discount * 100 / row.gross_amount;
-			row.discount_percentage = discount_percentage;
-		}
-		else {
+		let base = line_discount_base(row);
+		let discount = flt(row.discount_amount);
+
+		if (!isFinite(discount) || discount <= 0) {
 			row.discount_amount = 0;
 			row.discount_percentage = 0;
 		}
-
-		frm.trigger("make_taxes_and_totals");
+		else if (!base) {
+			// Base is qty * (COM + GOV). With no qty, or with COM/GOV missing on the
+			// Item, a percentage here would be Infinity or NaN and would be written
+			// straight into the document.
+			row.discount_amount = 0;
+			row.discount_percentage = 0;
+			frappe.msgprint(__("Enter Qty first, and make sure COM/GOV are set on the Item - the rate is derived from them."));
+		}
+		else {
+			if (discount > base) {
+				discount = base;
+				row.discount_amount = discount;
+				frappe.msgprint(__("Discount amount cannot exceed the line amount."));
+			}
+			row.discount_percentage = (discount * 100) / base;
+		}
 
 		frm.refresh_field("items");
+		frm.trigger("make_taxes_and_totals");
 	},
 	warehouse(frm, cdt, cdn) {
 		let row = frappe.get_doc(cdt, cdn);
