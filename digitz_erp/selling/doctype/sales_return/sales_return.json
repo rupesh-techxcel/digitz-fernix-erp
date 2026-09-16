@@ -15,20 +15,20 @@
   "customer_display_name",
   "customer_address",
   "column_break_6",
-  "posting_date",
-  "posting_time",
-  "edit_posting_date_and_time",
   "ship_to_location",
   "salesman",
   "salesman_code",
   "tax_id",
   "column_break_4",
-  "lpo_no",
-  "lpo_date",
+  "posting_date",
+  "posting_time",
+  "edit_posting_date_and_time",
   "price_list",
-  "rate_includes_tax",
   "default_cost_center",
   "column_break_lqll",
+  "lpo_no",
+  "lpo_date",
+  "rate_includes_tax",
   "company",
   "company_tax_id",
   "warehouse",
@@ -196,9 +196,9 @@
   {
    "fieldname": "company",
    "fieldtype": "Link",
+   "hidden": 1,
    "label": "Company",
-   "options": "Company",
-   "reqd": 1
+   "options": "Company"
   },
   {
    "fetch_from": "company.tax_id",
@@ -234,9 +234,9 @@
   {
    "fieldname": "warehouse",
    "fieldtype": "Link",
+   "hidden": 1,
    "label": "Warehouse",
-   "options": "Warehouse",
-   "reqd": 1
+   "options": "Warehouse"
   },
   {
    "fieldname": "accounts_section",
@@ -567,7 +567,7 @@
    "table_fieldname": "receipt_allocation"
   }
  ],
- "modified": "2024-04-23 17:31:45.088678",
+ "modified": "2026-09-04 20:11:36.667360",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Sales Return",
@@ -587,6 +587,7 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": []
