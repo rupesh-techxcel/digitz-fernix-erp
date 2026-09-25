@@ -40,7 +40,16 @@ frappe.ui.form.on('Customer', {
 
 		frm.set_df_property("default_terms","hidden", frm.doc.use_default_customer_terms)
 		frm.set_df_property("terms","hidden", frm.doc.use_default_customer_terms)
-	},	 
+
+		frappe.call({
+			method: "digitz_erp.accounts.doctype.customer.customer.get_customer_code_required",
+			callback: function(r) {
+				const customer_code_required = cint(r.message);
+				frm.set_df_property("customer_code", "hidden", !customer_code_required);
+				frm.set_df_property("customer_code", "reqd", customer_code_required);
+			}
+		});
+	},
 	before_save: function(frm){
 
 		var addressline_1 = frm.doc.address_line_1;

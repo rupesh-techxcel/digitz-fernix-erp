@@ -47,8 +47,25 @@ class Customer(Document):
         if emirate_required and not self.emirate:
             frappe.throw("Emirate is mandatory for the customer")
 
+        self.validate_customer_code()
         self.validate_company_customer()
         self.validate_pro_customer()
+
+    def validate_customer_code(self):
+
+        if self.customer_code:
+            self.customer_code = self.customer_code.strip()
+
+        if not frappe.db.get_single_value("Settings", "customer_code_required"):
+            return
+
+        if not self.customer_code:
+            frappe.throw("Customer Code is mandatory for the customer.")
+
+        duplicate = frappe.db.get_value("Customer",
+            {"customer_code": self.customer_code, "name": ["!=", self.name]}, "name")
+        if duplicate:
+            frappe.throw(f"Customer Code {self.customer_code} is already used by customer {duplicate}.")
 
     def validate_company_customer(self):
         """`company_customer` points an individual at the company they belong to.
@@ -253,3 +270,8 @@ def add_update_delete_customer_company(url: str,query_params: dict, method: str)
             return False, f"Failed to perform operation. Status code: {response.status_code}"
     except requests.RequestException as e:
         return False, f"Error occurred while performing operation: {str(e)}"
+
+@frappe.whitelist()
+def get_customer_code_required():
+    # Settings is readable only by System Manager, so the Customer form reads the flag through here
+    return frappe.db.get_single_value("Settings", "customer_code_required")

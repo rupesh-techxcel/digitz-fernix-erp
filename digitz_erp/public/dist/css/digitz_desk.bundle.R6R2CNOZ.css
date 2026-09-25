@@ -1,6 +1,6 @@
 @import "https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&display=swap";
 
-/* ../../../../../tmp/tmp-381584-7wGEN0EglIY8/digitz_erp/digitz_erp/public/css/digitz_desk.bundle.css */
+/* ../../../../../tmp/tmp-4698-Hv3Hu2iZjgAW/digitz_erp/digitz_erp/public/css/digitz_desk.bundle.css */
 :root {
   --digitz-blue: #214dbb;
   --digitz-blue-dark: #173b96;
@@ -88,14 +88,14 @@ input[type=url] {
   font-family: "Exo 2", sans-serif !important;
 }
 body {
-  background: linear-gradient(-180deg, #f9fbff 0%, #f5f9ff 100%) !important;
+  background: linear-gradient(180deg, #f9fbff 0%, #f5f9ff 100%) !important;
   color: var(--digitz-text) !important;
 }
 .navbar,
 header.navbar,
 .page-head,
 .layout-main-section .page-head {
-  background: linear-gradient(-180deg, #ffffff 0%, #f8fbff 100%) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   border-bottom: 1px solid var(--digitz-blue-border) !important;
   box-shadow: 0 1px 0 rgba(33, 77, 187, 0.03) !important;
 }
@@ -137,7 +137,7 @@ header.navbar,
 }
 .page-head,
 .page-head-content {
-  background: linear-gradient(-180deg, #ffffff 0%, #f8fbff 100%) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   border: 1px solid var(--digitz-blue-border) !important;
   box-shadow: var(--digitz-shadow-sm) !important;
 }
@@ -153,13 +153,13 @@ header.navbar,
 .page-head::after {
   content: "";
   position: absolute;
-  right: 50%;
+  left: 50%;
   bottom: 4px;
-  transform: translateX(50%);
+  transform: translateX(-50%);
   width: 44px;
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(-90deg, #e0a62f 0%, #f1cb72 100%);
+  background: linear-gradient(90deg, #e0a62f 0%, #f1cb72 100%);
   margin: 0;
   opacity: 0.9;
   pointer-events: none;
@@ -217,7 +217,7 @@ header.navbar,
 .layout-main-section-wrapper .widget {
   border: 1px solid var(--digitz-blue-border) !important;
   border-radius: var(--digitz-radius-lg) !important;
-  background: linear-gradient(-180deg, #ffffff 0%, #fbfdff 100%) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
   box-shadow: var(--digitz-shadow-sm) !important;
   transition: var(--digitz-transition) !important;
 }
@@ -237,22 +237,22 @@ header.navbar,
   overflow: hidden !important;
   border-radius: var(--digitz-radius-xl) !important;
   border: 1.5px solid var(--digitz-blue-border-stronger) !important;
-  background: linear-gradient(-180deg, #f4f9ff 0%, #ffffff 100%) !important;
+  background: linear-gradient(180deg, #f4f9ff 0%, #ffffff 100%) !important;
   box-shadow: var(--digitz-shadow-section) !important;
   -webkit-backdrop-filter: blur(2px) !important;
   backdrop-filter: blur(2px) !important;
-  transition: all 0.25s ease, border-right-width 0.15s ease !important;
+  transition: all 0.25s ease, border-left-width 0.15s ease !important;
 }
 .shortcut-widget-box::before,
 .workspace-card::before,
 .widget.shortcut-widget-box::before {
   content: "" !important;
   position: absolute !important;
-  right: 0 !important;
   left: 0 !important;
+  right: 0 !important;
   top: 0 !important;
   height: 72px !important;
-  background: linear-gradient(-180deg, rgba(77, 163, 255, 0.10) 0%, rgba(77, 163, 255, 0.00) 100%) !important;
+  background: linear-gradient(180deg, rgba(77, 163, 255, 0.10) 0%, rgba(77, 163, 255, 0.00) 100%) !important;
   pointer-events: none !important;
   transition: background 0.22s ease !important;
 }
@@ -270,14 +270,14 @@ header.navbar,
 .workspace-card:hover,
 .widget.shortcut-widget-box:hover {
   border-color: var(--digitz-blue-border-deep) !important;
-  border-right-color: var(--digitz-blue-dark) !important;
+  border-left-color: var(--digitz-blue-dark) !important;
   box-shadow: var(--digitz-shadow-section-hover) !important;
   transform: translateY(-2px) !important;
 }
 .shortcut-widget-box:hover::before,
 .workspace-card:hover::before,
 .widget.shortcut-widget-box:hover::before {
-  background: linear-gradient(-180deg, rgba(77, 163, 255, 0.18) 0%, rgba(77, 163, 255, 0.00) 100%) !important;
+  background: linear-gradient(180deg, rgba(77, 163, 255, 0.18) 0%, rgba(77, 163, 255, 0.00) 100%) !important;
 }
 .shortcut-widget-box .widget-body,
 .widget.shortcut-widget-box .widget-body,
@@ -309,7 +309,7 @@ header.navbar,
   gap: 10px !important;
   padding: 8px 16px !important;
   border-radius: 999px !important;
-  background: linear-gradient(-180deg, #f4f9ff 0%, #eaf2ff 100%) !important;
+  background: linear-gradient(180deg, #f4f9ff 0%, #eaf2ff 100%) !important;
   border: 1px solid var(--digitz-blue-border-soft-title) !important;
   color: var(--digitz-blue-dark) !important;
   font-weight: 700 !important;
@@ -321,7 +321,7 @@ header.navbar,
 .workspace-card .widget-head .widget-title,
 .widget.shortcut-widget-box .widget-title {
   border-color: var(--digitz-blue-border-soft-title) !important;
-  background: linear-gradient(-180deg, #f4f9ff 0%, #e8f1ff 100%) !important;
+  background: linear-gradient(180deg, #f4f9ff 0%, #e8f1ff 100%) !important;
 }
 .section-head,
 .form-section .section-head {
@@ -337,7 +337,7 @@ header.navbar,
   width: 30px;
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(-90deg, #e0a62f 0%, #f1cb72 100%);
+  background: linear-gradient(90deg, #e0a62f 0%, #f1cb72 100%);
   display: inline-block;
   opacity: 0.95;
 }
@@ -371,7 +371,7 @@ header.navbar,
 .shortcut-widget-box .link-item:hover,
 .shortcut-widget-box a:hover,
 .widget-body .link-item:hover {
-  background: linear-gradient(-180deg, #f5f9ff 0%, #edf5ff 100%) !important;
+  background: linear-gradient(180deg, #f5f9ff 0%, #edf5ff 100%) !important;
   color: var(--digitz-blue) !important;
   box-shadow: 0 2px 8px rgba(33, 77, 187, 0.05) !important;
 }
@@ -382,7 +382,7 @@ header.navbar,
 }
 .btn-default,
 .btn-secondary {
-  background: linear-gradient(-180deg, #ffffff 0%, #f8fbff 100%) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   border: 1px solid var(--digitz-blue-border) !important;
   color: var(--digitz-blue-dark) !important;
   box-shadow: var(--digitz-shadow-sm) !important;
@@ -390,18 +390,18 @@ header.navbar,
 .btn-default:hover,
 .btn-secondary:hover {
   border-color: var(--digitz-blue-light) !important;
-  background: linear-gradient(-180deg, #f7fbff 0%, #edf5ff 100%) !important;
+  background: linear-gradient(180deg, #f7fbff 0%, #edf5ff 100%) !important;
   transform: translateY(-1px);
 }
 .btn-primary {
-  background: linear-gradient(-180deg, #2b5ad0 0%, #214dbb 100%) !important;
+  background: linear-gradient(180deg, #2b5ad0 0%, #214dbb 100%) !important;
   border: 1px solid #214dbb !important;
   color: #ffffff !important;
   box-shadow: 0 8px 20px rgba(33, 77, 187, 0.18) !important;
 }
 .btn-primary:hover,
 .btn-primary:focus {
-  background: linear-gradient(-180deg, #3264df 0%, #214dbb 100%) !important;
+  background: linear-gradient(180deg, #3264df 0%, #214dbb 100%) !important;
   border-color: #214dbb !important;
   transform: translateY(-1px);
 }
@@ -538,7 +538,7 @@ input[type=radio] {
 }
 .modal-header,
 .dialog-header {
-  background: linear-gradient(-180deg, #fbfdff 0%, #f3f8ff 100%) !important;
+  background: linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%) !important;
   border-bottom: 1px solid var(--digitz-blue-border) !important;
 }
 .modal-title,
@@ -569,18 +569,18 @@ small,
   border-radius: 999px;
 }
 *::-webkit-scrollbar-thumb {
-  background: linear-gradient(-180deg, #c6dafe 0%, #9dc2ff 100%);
+  background: linear-gradient(180deg, #c6dafe 0%, #9dc2ff 100%);
   border-radius: 999px;
   border: 2px solid #f2f6ff;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(-180deg, #aecdff 0%, #7fb1ff 100%);
+  background: linear-gradient(180deg, #aecdff 0%, #7fb1ff 100%);
 }
 .chart-widget,
 .dashboard-graph,
 .frappe-chart {
   position: relative !important;
-  background: linear-gradient(-180deg, #ffffff 0%, #fbfdff 100%) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
   border: 1px solid #cfe0ff !important;
   border-radius: 20px !important;
   box-shadow: 0 8px 24px rgba(33, 77, 187, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
@@ -591,11 +591,11 @@ small,
 .frappe-chart::before {
   content: "" !important;
   position: absolute !important;
-  right: 0 !important;
   left: 0 !important;
+  right: 0 !important;
   top: 0 !important;
   height: 68px !important;
-  background: linear-gradient(-180deg, rgba(77, 163, 255, 0.08) 0%, rgba(77, 163, 255, 0.00) 100%) !important;
+  background: linear-gradient(180deg, rgba(77, 163, 255, 0.08) 0%, rgba(77, 163, 255, 0.00) 100%) !important;
   pointer-events: none !important;
 }
 .chart-widget .widget-head,
@@ -612,7 +612,7 @@ small,
   font-size: 14px !important;
   padding: 8px 16px !important;
   border-radius: 999px !important;
-  background: linear-gradient(-180deg, #f4f9ff 0%, #e8f1ff 100%) !important;
+  background: linear-gradient(180deg, #f4f9ff 0%, #e8f1ff 100%) !important;
   border: 1px solid #cfe0ff !important;
   color: #214dbb !important;
   font-weight: 700 !important;
@@ -629,7 +629,7 @@ small,
 .chart-widget .icon-btn {
   border-radius: 12px !important;
   border: 1px solid #d7e5ff !important;
-  background: linear-gradient(-180deg, #ffffff 0%, #f6faff 100%) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%) !important;
   box-shadow: 0 2px 6px rgba(33, 77, 187, 0.04) !important;
 }
 .chart-widget .widget-control button:hover,
@@ -637,7 +637,7 @@ small,
 .chart-widget .btn:hover,
 .chart-widget .icon-btn:hover {
   border-color: #bdd6ff !important;
-  background: linear-gradient(-180deg, #f7fbff 0%, #edf5ff 100%) !important;
+  background: linear-gradient(180deg, #f7fbff 0%, #edf5ff 100%) !important;
 }
 .chart-widget .widget-body,
 .dashboard-graph .widget-body,
@@ -825,10 +825,10 @@ hr,
   display: flex !important;
   flex-wrap: wrap !important;
   gap: 12px !important;
-  margin-right: 0 !important;
   margin-left: 0 !important;
-  padding-right: 0 !important;
+  margin-right: 0 !important;
   padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 .std-form-layout .form-section > .section-body > .form-column {
   flex: 1 1 240px !important;
@@ -837,7 +837,7 @@ hr,
   padding: 14px 16px !important;
   border: 1px solid var(--digitz-blue-border) !important;
   border-radius: var(--digitz-radius-md) !important;
-  background: linear-gradient(-180deg, #ffffff 0%, #fbfdff 100%) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
   box-shadow: var(--digitz-shadow-sm) !important;
   transition: var(--digitz-transition) !important;
 }
@@ -859,4 +859,4 @@ hr,
   background: none !important;
   box-shadow: none !important;
 }
-/*# sourceMappingURL=digitz_desk.bundle.ZEXCRPDZ.css.map */
+/*# sourceMappingURL=digitz_desk.bundle.R6R2CNOZ.css.map */

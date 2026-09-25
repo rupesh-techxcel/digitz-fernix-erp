@@ -11,7 +11,9 @@
   "update_customer_url",
   "delete_customer_url",
   "section_break_token_sync",
-  "token_sync_enabled"
+  "token_sync_enabled",
+  "section_break_customer",
+  "customer_code_required"
  ],
  "fields": [
   {
@@ -49,13 +51,25 @@
    "fieldname": "token_sync_enabled",
    "fieldtype": "Check",
    "label": "Enable Token Sync"
+  },
+  {
+   "fieldname": "section_break_customer",
+   "fieldtype": "Section Break",
+   "label": "Customer"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, the Customer Code field is shown on the Customer form and must be filled.",
+   "fieldname": "customer_code_required",
+   "fieldtype": "Check",
+   "label": "Customer Code Required"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-08-30 08:47:56.787227",
+ "modified": "2026-09-25 07:15:12.594785",
  "modified_by": "sameer.rather@techxceltech.com",
  "module": "Digitz ERP",
  "name": "Settings",

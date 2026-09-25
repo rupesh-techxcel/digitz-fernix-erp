@@ -8,6 +8,7 @@
  "engine": "InnoDB",
  "field_order": [
   "customer_name",
+  "customer_code",
   "customer_group",
   "tax_id",
   "prospect",
@@ -58,6 +59,14 @@
    "in_list_view": 1,
    "label": "Customer Name",
    "reqd": 1
+  },
+  {
+   "fieldname": "customer_code",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "in_standard_filter": 1,
+   "label": "Customer Code",
+   "search_index": 1
   },
   {
    "default": "Default Customer Group",
@@ -320,7 +329,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-04 17:23:42.801837",
+ "modified": "2026-09-25 07:15:12.594785",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Customer",
