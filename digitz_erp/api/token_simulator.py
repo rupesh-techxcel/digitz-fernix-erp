@@ -30,6 +30,10 @@ FEED_PATH = "/api/method/digitz_erp.api.token_simulator.feed"
 # Settings.url before the simulator took over, so it can be put back
 PREVIOUS_URL_KEY = "digitz_token_url_before_simulator"
 
+# Where the live ERP is reached, and so where its own feed is. "host_name" in
+# site_config.json overrides it.
+PRODUCTION_URL = "http://192.168.85.183"
+
 SAMPLE_NAMES = (
 	"AHMED KHAN", "FATIMA ALI", "MOHAMMED RASHID", "AISHA BEGUM", "JOHN MATHEW", "PRIYA NAIR",
 	"OMAR FAROOQ", "MARIA SANTOS", "RAVI KUMAR", "SARA HUSSAIN", "ABDUL KAREEM", "LINA HADDAD",
@@ -134,14 +138,17 @@ def simulator_url():
 
 	On a bench dev server the request goes to 127.0.0.1 on the webserver port,
 	which serves the default site; any other site has to be addressed by its
-	own name (which must then resolve, e.g. through /etc/hosts).
+	own name (which must then resolve, e.g. through /etc/hosts). Elsewhere it is
+	the site's "host_name", or the production address. Not the request's host:
+	this also runs from migrate, which has no request.
 	"""
 	port = frappe.conf.get("webserver_port")
 	if cint(frappe.conf.get("developer_mode")) and port:
 		serves_default = frappe.conf.get("serve_default_site") and frappe.conf.get("default_site") == frappe.local.site
 		host = "127.0.0.1" if serves_default else frappe.local.site
 		return f"http://{host}:{port}{FEED_PATH}"
-	return frappe.utils.get_url(FEED_PATH)
+	base = (frappe.conf.get("host_name") or PRODUCTION_URL).rstrip("/")
+	return f"{base}{FEED_PATH}"
 
 
 @frappe.whitelist()
@@ -175,6 +182,44 @@ def use_simulator(enable_sync=1):
 	if cint(enable_sync):
 		frappe.db.set_single_value("Settings", "token_sync_enabled", 1)
 	return get_status()
+
+
+def update_token_url_after_migrate():
+	"""Keep Settings > Token URL right for this site after every migrate.
+
+	The simulator's URL names this site's host and port, so it goes stale when a
+	database is copied to another site (staging to production, or between
+	benches). In order:
+
+	1. "token_url" in site_config.json is the URL this site must use. Production
+	   pins its real service there.
+	2. A Token URL pointing at a simulator feed is rebuilt for this site when the
+	   simulator is allowed here. Where it is not (a live site), the URL saved
+	   before the simulator took over is put back; with none saved it is cleared
+	   and token sync switched off, so a live site never polls a test feed.
+	3. Any other URL is left as it is.
+	"""
+	pinned = (frappe.conf.get("token_url") or "").strip()
+	current = (frappe.db.get_single_value("Settings", "url") or "").strip()
+
+	if pinned:
+		new = pinned
+	elif not current.endswith(FEED_PATH):
+		return
+	elif is_enabled():
+		new = simulator_url()
+	else:
+		new = (frappe.db.get_default(PREVIOUS_URL_KEY) or "").strip()
+		frappe.db.set_default(PREVIOUS_URL_KEY, "")
+		if not new:
+			frappe.db.set_single_value("Settings", "token_sync_enabled", 0)
+
+	if new == current:
+		return
+
+	frappe.db.set_single_value("Settings", "url", new)
+	frappe.db.commit()
+	print(f"Token URL: {current or '(empty)'} -> {new or '(empty, token sync turned off)'}")
 
 
 @frappe.whitelist()

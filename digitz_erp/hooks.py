@@ -92,8 +92,12 @@ on_login = "digitz_erp.notifications.send_notification.login_notification"
 # before_install = "digitz_erp.install.before_install"
 after_install = "digitz_erp.api.install_api.after_install"
 # Re-attaches the images the app ships (public/images) as public Files on
-# every migration, so they are always present and selectable in the desk.
-after_migrate = "digitz_erp.api.bundled_files.ensure_bundled_files"
+# every migration, so they are always present and selectable in the desk,
+# and points Settings > Token URL at the right service for this site.
+after_migrate = [
+	"digitz_erp.api.bundled_files.ensure_bundled_files",
+	"digitz_erp.api.token_simulator.update_token_url_after_migrate",
+]
 
 # Uninstallation
 # ------------

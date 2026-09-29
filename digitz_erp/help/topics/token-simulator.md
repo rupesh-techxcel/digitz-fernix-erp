@@ -17,6 +17,12 @@ The banner above the list says whether everything is connected.
 
 ![The Test Token list with the simulator banner](/assets/digitz_erp/images/help/test-token-list.png)
 
+**After every migrate** the Token URL is checked for the site:
+
+- `"token_url"` in the site's `site_config.json`, when set, is always used. Pin the real token service there.
+- A simulator URL is rebuilt for the site it is on. On the live ERP that is `http://192.168.85.183/api/method/digitz_erp.api.token_simulator.feed` (or the site's `host_name`), so a database copied from another site keeps working.
+- On a site where the simulator is off, a simulator URL is replaced by the URL saved before the simulator took over. With none saved, it is cleared and token sync is turned off.
+
 > On a bench with several sites, `127.0.0.1` reaches only the **default site**. For another site the URL uses the site's own name, which must resolve on the server. Add it to `/etc/hosts` if it does not.
 
 ## Make tokens
