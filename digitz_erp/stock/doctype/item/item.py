@@ -7,10 +7,25 @@ from frappe.model.document import Document
 from digitz_erp.api.settings_api import get_default_currency
 from digitz_erp.api.item_price_api import update_item_price
 from frappe import _
+from frappe.model.naming import getseries
+from frappe.utils import flt
 
 class Item(Document):
+
+	def before_naming(self):
+		# Item is named from item_code, so the code has to be in place before naming runs.
+		# The generated code replaces anything carried in (e.g. from Duplicate); only
+		# Data Import rows keep the code they bring. Existing items are never renumbered.
+		if not self.is_new() or not item_code_from_item_group_enabled():
+			return
+		if self.item_code and frappe.flags.in_import:
+			return
+		self.item_code = get_next_item_code(self.item_group)
     		
 	def validate(self):
+
+		if not self.item_name_arabic and frappe.db.get_single_value("Settings", "item_name_arabic_mandatory"):
+			frappe.throw("Item Name Arabic is mandatory for the item.")
      
 		if not self.is_new():
 			if self.base_unit != frappe.db.get_value("Item", self.item_code, "base_unit"):
@@ -82,43 +97,54 @@ class Item(Document):
 				self.default_expense_account  = company_default.default_expense_account
 
 	def update_standard_selling_price(self):
+		"""Keep the item's undated 'Standard Selling' Item Price in step with its charges.
 
-		# unique_id = str(uuid.uuid4())
-		# #print("unique_id crated")
-		# #print(unique_id)
+		Items are priced by Service Charge + Typing Charges + GOV, so those three are
+		what gets copied, and the Item Price works its rate out as their sum. The
+		hidden Standard Selling Price field follows the same sum. Item Price copies
+		changes back the other way (ItemPrice.on_update); `from_item` stops that
+		echoing straight back here.
+		"""
+		charges = {f: flt(self.get(f)) for f in ("service_charge", "typing_charges", "gov")}
+		total = sum(charges.values())
+
+		if flt(self.standard_selling_price) != total:
+			self.db_set("standard_selling_price", total, update_modified=False)
+
 		currency = get_default_currency()
 
-		if not frappe.db.exists("Item Price",{'item': self.item_code, 'price_list':'Standard Selling', 'currency':currency}):
+		# The undated price is the standing one; dated prices are temporary and left alone
+		item_price_name = frappe.db.get_value("Item Price", {
+			"item": self.item_code, "price_list": "Standard Selling",
+			"from_date": ["is", "not set"], "to_date": ["is", "not set"]}, "name")
 
-			if(self.standard_selling_price>0):
-				item_price = frappe.get_doc({
-							"doctype": "Item Price",
-							"item": self.item_code,
-							"item_name": self.item_name,
-							"price_list": "Standard Selling",
-							"currency": currency,
-							"is_selling":1,
-							"rate": self.standard_selling_price,
-							"unit": self.base_unit
-							})
+		if not item_price_name:
+			if not total:
+				return
 
-				# Set the flags to ignore permissions and links
-				item_price.flags.ignore_permissions = True
-				item_price.flags.ignore_links = True
+			item_price = frappe.get_doc({
+				"doctype": "Item Price",
+				"item": self.item_code,
+				"item_name": self.item_name,
+				"price_list": "Standard Selling",
+				"currency": currency,
+				"is_selling": 1,
+				"unit": self.base_unit,
+				"rate": total,
+				**charges,
+			})
+			item_price.flags.from_item = True
+			item_price.insert(ignore_permissions=True, ignore_links=True)
+			frappe.msgprint(f"Price list 'Standard Selling' added for the item {self.item_code}", alert=True)
+			return
 
-				# Save the document to the database without firing hooks
-				item_price.insert(ignore_permissions=True, ignore_links=True)
-
-				frappe.msgprint(f"Price list,'Standard Selling' added for the item, {self.item_code}", alert= True)
-		else:
-
-				item_price_name = frappe.get_value("Item Price",{'item': self.item_code, 'price_list': 'Standard Selling', 'currency':currency},['name'])
-				item_price_to_update = frappe.get_doc('Item Price', item_price_name)
-
-				if(item_price_to_update.rate != self.standard_selling_price):
-					item_price_to_update.rate = self.standard_selling_price
-					item_price_to_update.save()
-					frappe.msgprint(f"Price list,'Standard Selling' updated for the item, {self.item_code}", alert= True)
+		item_price = frappe.get_doc("Item Price", item_price_name)
+		if any(flt(item_price.get(f)) != v for f, v in charges.items()) or flt(item_price.rate) != total:
+			item_price.update(charges)
+			item_price.rate = total
+			item_price.flags.from_item = True
+			item_price.save(ignore_permissions=True)
+			frappe.msgprint(f"Price list 'Standard Selling' updated for the item {self.item_code}", alert=True)
 
 	def update_standard_buying_price(self):
 
@@ -172,3 +198,31 @@ class Item(Document):
 		# if self.do_not_update_price == False:
 		self.update_standard_buying_price()
 		self.update_standard_selling_price()
+
+def item_code_from_item_group_enabled():
+	return bool(frappe.db.get_single_value("Settings", "item_group_code_required")
+		and frappe.db.get_single_value("Settings", "create_item_code_from_item_group"))
+
+def get_next_item_code(item_group):
+
+	if not item_group:
+		frappe.throw("Select Item Group to generate the Item Code.")
+
+	item_group_code = frappe.db.get_value("Item Group", item_group, "item_group_code")
+	if not item_group_code:
+		frappe.throw(f"Item Group Code is not set for item group {item_group}.")
+
+	# Series locks its row, so concurrent saves never draw the same number.
+	# Skip numbers already taken by items created by hand or imported.
+	while True:
+		item_code = item_group_code + getseries(f"Item Code {item_group_code}", 4)
+		if not frappe.db.exists("Item", item_code):
+			return item_code
+
+@frappe.whitelist()
+def get_item_settings():
+	# Settings is readable only by System Manager, so the Item form reads the flags through here
+	return {
+		"item_code_from_item_group": item_code_from_item_group_enabled(),
+		"item_name_arabic_mandatory": bool(frappe.db.get_single_value("Settings", "item_name_arabic_mandatory")),
+	}

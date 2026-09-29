@@ -15,7 +15,8 @@
   "tax",
   "tax_amount",
   "net_amount",
-  "com",
+  "service_charge",
+  "typing_charges",
   "gov"
  ],
  "fields": [
@@ -33,7 +34,7 @@
    "label": "Item Name"
   },
   {
-   "description": "COM + GOV",
+   "description": "Service Charge + Typing Charges + GOV",
    "fieldname": "rate",
    "fieldtype": "Float",
    "in_list_view": 1,
@@ -73,9 +74,14 @@
    "label": "Net Amount"
   },
   {
-   "fieldname": "com",
+   "fieldname": "service_charge",
    "fieldtype": "Float",
-   "label": "COM"
+   "label": "Service Charge"
+  },
+  {
+   "fieldname": "typing_charges",
+   "fieldtype": "Float",
+   "label": "Typing Charges"
   },
   {
    "fieldname": "gov",
@@ -87,7 +93,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2025-08-13 18:04:44.061925",
+ "modified": "2026-09-28 12:19:50.477484",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Service Items",

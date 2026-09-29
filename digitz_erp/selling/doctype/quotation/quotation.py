@@ -240,6 +240,8 @@ def generate_sale_invoice(quotation):
 		sales_invoice_doc.append('items', delivery_note_item )
 		#  target_items.append(target_item)
 
+	# Not paid yet: the Received Amount of a cash sale is asked for when it is first saved
+	sales_invoice_doc.flags.received_amount_later = True
 	sales_invoice_doc.insert()
 	frappe.msgprint("Sales Invoice successfully created in draft mode.", indicator="green",alert
 				=True)
@@ -398,6 +400,8 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	terms_and_conditions = ""
 	lpo_no = ""
 	payment_terms = ""
+	receipt_number = ""
+	receipt_info = None
 	file_suffix = "document"
 
 	# Doctype-specific logic
@@ -425,6 +429,8 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		terms_and_conditions = doc.terms_and_conditions
 		payment_terms = doc.payment_terms or ""
 		trn_no = frappe.db.get_value("Company", doc.company, "tax_id")
+		receipt_info = get_sales_invoice_receipt_info(doc)
+		receipt_number = receipt_info.number if receipt_info else ""
 
 	elif doc.doctype == "Purchase Order":
 		supplier_name = doc.supplier
@@ -450,11 +456,13 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		"terms_and_conditions": (terms_and_conditions or "").strip(),
 		"lpo_no": lpo_no,
 		"payment_terms": payment_terms,
+		"receipt_number": receipt_number,
+		"receipt_info": receipt_info,
 		"party_trn_no": party_trn_no,
-		# Top padding the template reserves for the overlaid header image, so
-		# the content starts just below the letterhead instead of being pushed
-		# down by a fixed offset. Tune per company; 120px suits the default.
-		"total_pixels": company_doc.total_pixels if company_doc.total_pixels else 120
+		# The templates' own top padding. Header clearance now comes from the page
+		# margin below, which repeats on every page; padding only cleared page one,
+		# so the header covered the top of every page after it.
+		"total_pixels": 0,
 	}
 
 	# Template selection
@@ -476,11 +484,35 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 
 	html = render_template(template_path, context)
 
+	# Check if header/footer images are set and exist
+	site_path = frappe.get_site_path("public")
+
+	header_image_path = os.path.join(site_path, (company_doc.header_image or "").strip("/"))
+	footer_image_path = os.path.join(site_path, (company_doc.footer_image or "").strip("/"))
+
+	has_header = company_doc.header_image and os.path.exists(header_image_path)
+	has_footer = company_doc.footer_image and os.path.exists(footer_image_path)
+
+	# The header and footer images are stamped over the rendered pages, so the page
+	# margins keep that space clear on every page: the header's full height at the
+	# top, and at the bottom the footer plus the line "Page X of Y" sits on.
+	footer_height_pt = get_footer_size_pt(footer_image_path, A4_WIDTH_PT)[1] if has_footer else 0
+	page_number_bottom_pt = footer_height_pt + 8
+	margin_top_pt = (get_header_height_pt(header_image_path, A4_WIDTH_PT) if has_header else 0) + 12
+	margin_bottom_pt = max(page_number_bottom_pt + 22, 99)  # 99pt = the 35mm this used before
+
+	# frappe.utils.pdf.get_pdf forces margin-top/bottom to 15mm when the HTML has no
+	# #header-html / #footer-html block, overriding `options`. It does honour a
+	# `.print-format { margin-... }` rule in the page itself, applied after that, so
+	# the vertical margins are set there.
+	margin_css = (
+		f"<style>.print-format {{ margin-top: {margin_top_pt * PT_TO_MM:.1f}mm; "
+		f"margin-bottom: {margin_bottom_pt * PT_TO_MM:.1f}mm; }}</style>"
+	)
+	html = html.replace("</head>", margin_css + "</head>", 1) if "</head>" in html else margin_css + html
+
 	options = {
 		"page-size": "A4",
-		# No margin-top: the header clearance comes from the template's
-		# body padding (total_pixels), so a page margin here would add to it.
-		"margin-bottom": "35mm",
 		"margin-left": "5mm",
 		"margin-right": "5mm",
 	}
@@ -491,24 +523,11 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	original_pdf = PdfReader(pdf_buffer)
 	output_pdf = PdfWriter()
 
-	# Check if header/footer images are set and exist
-	site_path = frappe.get_site_path("public")
-
-	header_image_path = os.path.join(site_path, (company_doc.header_image or "").strip("/"))
-	footer_image_path = os.path.join(site_path, (company_doc.footer_image or "").strip("/"))
-
-	has_header = company_doc.header_image and os.path.exists(header_image_path)
-	has_footer = company_doc.footer_image and os.path.exists(footer_image_path)
+	# Page numbers go only on multi page documents, in the blank strip the bottom
+	# margin leaves, lifted clear of the footer image the last page carries.
+	total_pages = len(original_pdf.pages)
 
 	for i, page in enumerate(original_pdf.pages):
-		scale_transform = Transformation().scale(sx=0.98, sy=0.95)
-		# Positive ty lifts the content back up after the 0.95 vertical scale,
-		# which otherwise drops the top of the page. A negative value here was
-		# pushing the body far below the letterhead.
-		translate_transform = Transformation().translate(tx=10, ty=60)
-		page.add_transformation(scale_transform)
-		page.add_transformation(translate_transform)
-
 		overlay_pdf = None
 		if has_header and has_footer and i == len(original_pdf.pages) - 1:
 			overlay_pdf = create_header_footer_pdf(float(page.mediabox.width), float(page.mediabox.height), company_doc)
@@ -517,6 +536,11 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 
 		if overlay_pdf:
 			page.merge_page(overlay_pdf.pages[0])
+
+		if total_pages > 1:
+			page_number_pdf = create_page_number_pdf(float(page.mediabox.width), float(page.mediabox.height),
+				f"Page {i + 1} of {total_pages}", page_number_bottom_pt)
+			page.merge_page(page_number_pdf.pages[0])
 
 		output_pdf.add_page(page)
 
@@ -556,6 +580,56 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	frappe.msgprint(f"Print format attached to the document as <b>{file_name}</b>.", alert=True)
 
 
+def get_sales_invoice_receipt_info(doc):
+	"""What the invoice's RECEIPT INFO block and its receipt PDF show, or None.
+
+	A cash sale is settled at the counter, so the invoice is its own receipt,
+	numbered RCPT-<invoice no> (SI-00016-09-2026 -> RCPT-00016-09-2026; a hand
+	keyed number without the SI- prefix just gets RCPT- in front).
+
+	A credit sale is paid later by a Receipt Entry, often raised by someone else.
+	Once that receipt is submitted, ReceiptEntry.refresh_credit_invoice_prints
+	records its name in `allocated_receipt_entry` (a plain Data field, not a Link,
+	so the two documents do not link to each other), and the receipt's own
+	number, date, payment details and creator are shown, with the amount it
+	allocated to this invoice.
+	"""
+	from frappe.utils import formatdate, flt
+
+	def username(user):
+		return frappe.db.get_value("User", user, "username") or user
+
+	if not doc.credit_sale:
+		return frappe._dict(
+			number="RCPT-" + (doc.name[3:] if doc.name.startswith("SI-") else doc.name),
+			amount=flt(doc.paid_amount or doc.rounded_total),
+			date=formatdate(doc.posting_date, "dd-mm-yyyy"),
+			collected_by=username(doc.owner),
+			payment_mode=doc.payment_mode or "",
+			reference_no=doc.reference_no or "",
+		)
+
+	if not doc.get("allocated_receipt_entry"):
+		return None
+
+	receipt = frappe.db.get_value("Receipt Entry", doc.allocated_receipt_entry,
+		["name", "docstatus", "posting_date", "payment_mode", "reference_no", "owner"], as_dict=True)
+	if not receipt or receipt.docstatus != 1:
+		return None
+
+	amount = frappe.db.get_value("Receipt Allocation",
+		{"parent": receipt.name, "reference_type": "Sales Invoice", "reference_name": doc.name}, "sum(paying_amount)")
+
+	return frappe._dict(
+		number=receipt.name,
+		amount=flt(amount),
+		date=formatdate(receipt.posting_date, "dd-mm-yyyy"),
+		collected_by=username(receipt.owner),
+		payment_mode=receipt.payment_mode or "",
+		reference_no=receipt.reference_no or "",
+	)
+
+
 # --- Header and Footer PDF classes ---
 
 class HeaderPDF(FPDF):
@@ -574,21 +648,59 @@ class HeaderFooterPDF(FPDF):
 
 	def footer(self):
 		absolute_path = os.path.join(frappe.get_site_path("public"), self.footer_image.strip("/"))
-		img = Image.open(absolute_path)
-		dpi = img.info.get("dpi", (72, 72))[1]
-		original_height_pt = (img.height / dpi) * 72
+		width_pt, height_pt = get_footer_size_pt(absolute_path, self.w)
 
-		# Scale down to 65% of original height
-		height_pt = original_height_pt * 0.30
-		y_position = self.h - height_pt
-
-		self.image(absolute_path, x=0, y=y_position, w=self.w, h=height_pt)
+		# Centred at the bottom edge, in the image's own proportions
+		self.image(absolute_path, x=(self.w - width_pt) / 2, y=self.h - height_pt, w=width_pt, h=height_pt)
 
 	def get_company_details(self, company_doc):	
 		self.header_image = company_doc.header_image or ""
 		self.footer_image = company_doc.footer_image or ""
 
 # --- PDF Generator Utilities ---
+
+A4_WIDTH_PT = 595.28
+PT_TO_MM = 25.4 / 72
+
+# Share of the footer image's natural height it is drawn at
+FOOTER_SCALE = 0.45
+
+
+def get_header_height_pt(header_image_path, page_width_pt):
+	"""Height the header image is drawn at: it spans the page width in its own proportions."""
+	img = Image.open(header_image_path)
+	return page_width_pt * img.height / img.width
+
+
+def get_footer_size_pt(footer_image_path, page_width_pt):
+	"""(width, height) the footer image is drawn at, in points.
+
+	FOOTER_SCALE of its natural height, keeping its proportions so it is not
+	stretched across the page, and never wider than the page.
+	"""
+	img = Image.open(footer_image_path)
+	dpi = img.info.get("dpi", (72, 72))[1] or 72
+	height_pt = (img.height / dpi) * 72 * FOOTER_SCALE
+	width_pt = height_pt * img.width / img.height
+
+	if width_pt > page_width_pt:
+		width_pt = page_width_pt
+		height_pt = width_pt * img.height / img.width
+
+	return width_pt, height_pt
+
+def create_page_number_pdf(width, height, text, bottom_pt):
+	"""A blank page carrying `text` centred `bottom_pt` above the bottom edge."""
+	pdf = FPDF(unit="pt", format=(width, height))
+	pdf.set_auto_page_break(False)
+	pdf.add_page()
+	pdf.set_font("Helvetica", size=9)
+	pdf.set_text_color(80, 80, 80)
+	pdf.set_xy(0, height - bottom_pt - 12)
+	pdf.cell(width, 12, text, align="C")
+	buffer = io.BytesIO(pdf.output(dest='S').encode('latin1'))
+	buffer.seek(0)
+	return PdfReader(buffer)
 
 def create_header_pdf(width, height, company_doc):
 	pdf = HeaderPDF(unit="pt", format=(width, height))

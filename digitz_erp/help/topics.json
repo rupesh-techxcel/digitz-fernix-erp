@@ -1,0 +1,110 @@
+[
+	{
+		"group": "Counters & Cash",
+		"topics": [
+			{
+				"name": "counter-video",
+				"title": "Video: Using the counter",
+				"summary": "A three-minute narrated walkthrough of a day at the counter.",
+				"keywords": "video tutorial walkthrough watch counter day open close handover"
+			},
+			{
+				"name": "counters-overview",
+				"title": "How counters and days work",
+				"summary": "Counters, counter PCs and the cashier's day, in one page.",
+				"keywords": "counter device session day open close till float badge"
+			},
+			{
+				"name": "day-open",
+				"title": "Opening your day",
+				"summary": "Count the float and open the day before billing.",
+				"keywords": "day open float opening count start shift"
+			},
+			{
+				"name": "day-close",
+				"title": "Closing your day",
+				"summary": "Count the till, close the day, and print the slip.",
+				"keywords": "day close expected cash count difference short over slip print"
+			},
+			{
+				"name": "shift-handover",
+				"title": "Handing over a counter",
+				"summary": "Changing cashiers on the same counter during the day.",
+				"keywords": "handover hand over shift change switch user next cashier take over"
+			},
+			{
+				"name": "supervisor-tasks",
+				"title": "Supervisor tasks",
+				"summary": "Approve differences, close a day for a cashier, register PCs.",
+				"keywords": "supervisor approve approval difference close for cashier register device open days"
+			},
+			{
+				"name": "counter-setup",
+				"title": "Setting up counters",
+				"summary": "Counters, PCs, cashier roles and cash payment modes.",
+				"keywords": "setup counter register device cashier role supervisor payment mode cash single session"
+			},
+			{
+				"name": "counter-reports",
+				"title": "Reports and the dashboard",
+				"summary": "Counter Session Summary, the Day Close Slip and the live dashboard.",
+				"keywords": "report summary dashboard slip print counter session"
+			},
+			{
+				"name": "counter-troubleshooting",
+				"title": "Problems and messages",
+				"summary": "What each message means and what to do about it.",
+				"keywords": "error unregistered device day not opened in use unfinished logged out another session cookie amend cancel"
+			}
+		]
+	},
+	{
+		"group": "Token Sync",
+		"topics": [
+			{
+				"name": "token-simulator",
+				"title": "Testing with simulated tokens",
+				"summary": "Feed the token sync from test tokens, without the real service.",
+				"keywords": "token simulator test sync mock fake url settings invoice developer"
+			}
+		]
+	},
+	{
+		"group": "Customers & Invoicing",
+		"topics": [
+			{
+				"name": "walk-in-customer",
+				"collapsible": true,
+				"title": "Walk-in and corporate customers",
+				"summary": "The walk-in customer, corporate customers, and the applicant name, company and TRN on invoices.",
+				"keywords": "walk-in walk in walkin customer default settings corporate company applicant name display name trn tax id individual token printout receipt"
+			},
+			{
+				"name": "price-lists",
+				"collapsible": true,
+				"title": "Price lists",
+				"summary": "Standard Selling, customer price lists, temporary prices and the Price List Manager.",
+				"keywords": "price list pricing item price rate service charge typing charges gov standard selling discount customer default price list manager dated offer from date to date typing center"
+			},
+			{
+				"name": "invoice-receipts",
+				"collapsible": true,
+				"title": "Invoice and receipt printouts",
+				"summary": "Invoice and receipt PDFs, automatic receipts for cash sales, and receipts added later for credit sales.",
+				"keywords": "receipt invoice pdf printout attachment attach print credit sale receipt entry allocation allocated receipt info rcpt cash card authorization cancel"
+			}
+		]
+	},
+	{
+		"group": "Reports",
+		"topics": [
+			{
+				"name": "medical-center-reports",
+				"collapsible": true,
+				"title": "Medical Center reports",
+				"summary": "The seven reports in the workspace: what each shows, its filters, and who can open it.",
+				"keywords": "report reports sales summary counter based sales details service wise itemwise item category wise session summary filter export cashier own user payment mode credit"
+			}
+		]
+	}
+]

@@ -76,35 +76,35 @@ class Customer(Document):
         if not self.company_customer:
             return
 
-        if self.customer_type == "Company":
-            frappe.throw("A Company customer cannot itself belong to another company.")
+        if self.customer_type == "Corporate":
+            frappe.throw("A Corporate customer cannot itself belong to another corporate.")
 
         if self.company_customer == self.name:
-            frappe.throw("A customer cannot be its own company.")
+            frappe.throw("A customer cannot be its own corporate.")
 
-        if frappe.db.get_value("Customer", self.company_customer, "customer_type") != "Company":
+        if frappe.db.get_value("Customer", self.company_customer, "customer_type") != "Corporate":
             frappe.throw(
-                f"'{self.company_customer}' is not a Company customer, so it cannot be set as Company."
+                f"'{self.company_customer}' is not a Corporate customer, so it cannot be set as Corporate."
             )
 
     def validate_pro_customer(self):
-        """`pro_customer` points a customer at the PRO acting for them.
+        """`pro_customer` points a customer at the Typing Center acting for them.
 
-        Same shape as `company_customer`: one level deep, pointing only at PRO
-        customers, and never at itself.
+        Same shape as `company_customer`: one level deep, pointing only at Typing
+        Center customers, and never at itself.
         """
         if not self.pro_customer:
             return
 
-        if self.customer_type == "PRO":
-            frappe.throw("A PRO customer cannot itself be assigned to another PRO.")
+        if self.customer_type == "Typing Center":
+            frappe.throw("A Typing Center customer cannot itself be assigned to another Typing Center.")
 
         if self.pro_customer == self.name:
-            frappe.throw("A customer cannot be its own PRO.")
+            frappe.throw("A customer cannot be its own Typing Center.")
 
-        if frappe.db.get_value("Customer", self.pro_customer, "customer_type") != "PRO":
+        if frappe.db.get_value("Customer", self.pro_customer, "customer_type") != "Typing Center":
             frappe.throw(
-                f"'{self.pro_customer}' is not a PRO customer, so it cannot be set as PRO."
+                f"'{self.pro_customer}' is not a Typing Center customer, so it cannot be set as Typing Center."
             )
 
 
@@ -115,8 +115,8 @@ class Customer(Document):
         on_update hook for the Customer doctype.
         Calls the method to update enquiries when a customer is created from a prospect.
         """
-        if self.customer_type == "Company" and not  self.company_id:
-            self.company_id = frappe.db.count("Customer",{"customer_type":"Company"}) + 1
+        if self.customer_type == "Corporate" and not  self.company_id:
+            self.company_id = frappe.db.count("Customer",{"customer_type":"Corporate"}) + 1
             add_customer_url = get_customer_company_url("add_customer_url")
             if not add_customer_url:
                 # The push integration is not configured on this site. company_id
@@ -135,7 +135,7 @@ class Customer(Document):
                 frappe.msgprint(response)
                 frappe.log_error(response)
                 return
-        elif self.customer_type == "Company" and self.company_id:
+        elif self.customer_type == "Corporate" and self.company_id:
             doc = self.get_doc_before_save()
             if doc and doc.customer_name != self.customer_name:
                 update_customer_url = get_customer_company_url("update_customer_url")
@@ -157,7 +157,7 @@ class Customer(Document):
                     return
 
     def on_trash(self):
-        if self.customer_type == "Company" and self.company_id:
+        if self.customer_type == "Corporate" and self.company_id:
             delete_customer_url = get_customer_company_url("delete_customer_url")
             if not delete_customer_url:
                 return

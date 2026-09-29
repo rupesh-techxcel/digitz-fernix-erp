@@ -45,10 +45,10 @@ def get_data_grouped_with_headers(filters):
 
 	conditions.append("si.posting_date BETWEEN %(from_date)s AND %(to_date)s")
 
-	# --- User privilege restriction: Cashier limited to own records; Administrator is privileged ---
+	# --- User privilege restriction: Cashier limited to own records; Administrator and System Manager are not ---
 	current_user = frappe.session.user
 	roles = set(frappe.get_roles(current_user))
-	is_privileged = (current_user == "Administrator")
+	is_privileged = current_user == "Administrator" or "System Manager" in roles
 
 	if "Cashier" in roles and not is_privileged:
 		params["user"] = current_user
@@ -57,22 +57,29 @@ def get_data_grouped_with_headers(filters):
 		# Honor explicit user filter if provided
 		conditions.append("si.owner = %(user)s")
 
+	conditions.append("si.docstatus = 1")
+
 	where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
 	# --- Fetch sums per (date, item_group) ---
 	# NOTE: Keeping your schema: `sii.item` and `sii.gross_amount`
+	# Submitted Sales Returns take their lines back off, on the day of the return
 	query = f"""
-		SELECT
-			DATE(si.posting_date) AS posting_date,
-			item.item_group AS category,
-			COALESCE(SUM(sii.gross_amount), 0) AS total_amount
-		FROM `tabSales Invoice` si
-		INNER JOIN `tabSales Invoice Item` sii
-			ON sii.parent = si.name
+		SELECT doc_lines.posting_date, item.item_group AS category, COALESCE(SUM(doc_lines.amount), 0) AS total_amount
+		FROM (
+			SELECT DATE(si.posting_date) AS posting_date, sii.item AS item, sii.gross_amount AS amount
+			FROM `tabSales Invoice` si
+			INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
+			{where_clause}
+			UNION ALL
+			SELECT DATE(si.posting_date), sii.item, -sii.gross_amount
+			FROM `tabSales Return` si
+			INNER JOIN `tabSales Return Item` sii ON sii.parent = si.name
+			{where_clause}
+		) doc_lines
 		INNER JOIN `tabItem` item
-			ON sii.item = item.name
-		{where_clause}
-		GROUP BY DATE(si.posting_date), item.item_group
+			ON doc_lines.item = item.name
+		GROUP BY doc_lines.posting_date, item.item_group
 		ORDER BY posting_date ASC, total_amount DESC
 	"""
 	rows = frappe.db.sql(query, params, as_dict=True)

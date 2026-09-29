@@ -1,7 +1,7 @@
 {
  "actions": [],
  "autoname": "format:{customer_name}, {area_name}",
- "creation": "2022-12-21 17:08:13.855018",
+ "creation": "2026-09-26 10:00:55.056051",
  "default_view": "List",
  "doctype": "DocType",
  "editable_grid": 1,
@@ -21,12 +21,17 @@
   "salesman",
   "salesman_name",
   "default_price_list",
+  "default_payment_mode",
   "exclude_from_showing_in_soa",
   "column_break_10",
+  "allow_credit",
   "credit_days",
-  "credit_amount",
+  "credit_limit",
+  "utilized_credit",
+  "credit_limit_warning_level",
   "last_transaction_date",
   "default_currency",
+  "trade_license_no",
   "section_break_20",
   "address",
   "address_line_1",
@@ -64,6 +69,7 @@
    "fieldname": "customer_code",
    "fieldtype": "Data",
    "hidden": 1,
+   "in_filter": 1,
    "in_standard_filter": 1,
    "label": "Customer Code",
    "search_index": 1
@@ -85,16 +91,10 @@
    "label": "Tax Id"
   },
   {
+   "depends_on": "eval:doc.allow_credit",
    "fieldname": "credit_days",
    "fieldtype": "Int",
-   "hidden": 1,
    "label": "Credit Days"
-  },
-  {
-   "fieldname": "credit_amount",
-   "fieldtype": "Float",
-   "hidden": 1,
-   "label": "Credit Amount"
   },
   {
    "fieldname": "default_terms",
@@ -106,9 +106,15 @@
    "default": "Standard Selling",
    "fieldname": "default_price_list",
    "fieldtype": "Link",
-   "hidden": 1,
    "label": "Default Price List",
    "options": "Price List"
+  },
+  {
+   "description": "Payment mode new invoices for this customer start with. Empty uses the company default.",
+   "fieldname": "default_payment_mode",
+   "fieldtype": "Link",
+   "label": "Default Payment Mode",
+   "options": "Payment Mode"
   },
   {
    "fieldname": "column_break_10",
@@ -139,6 +145,7 @@
   {
    "fieldname": "delivery_locations",
    "fieldtype": "Table",
+   "hidden": 1,
    "label": "Delivery Locations",
    "options": "Customer Delivery Location"
   },
@@ -176,7 +183,7 @@
   {
    "fieldname": "salesman",
    "fieldtype": "Link",
-   "hidden": 1,
+   "in_list_view": 1,
    "label": "Salesman",
    "options": "Employee"
   },
@@ -282,7 +289,6 @@
   {
    "fieldname": "bank_details",
    "fieldtype": "Small Text",
-   "hidden": 1,
    "label": "Bank Details"
   },
   {
@@ -295,41 +301,72 @@
    "fieldname": "customer_type",
    "fieldtype": "Select",
    "label": "Customer Type",
-   "options": "Individual\nCompany\nPRO"
+   "options": "Individual\nCorporate\nTyping Center"
   },
   {
-   "depends_on": "eval: doc.customer_type == \"Company\"",
+   "depends_on": "eval: doc.customer_type == \"Corporate\"",
    "fieldname": "discount",
    "fieldtype": "Percent",
    "label": "Discount"
   },
   {
-   "depends_on": "eval: doc.customer_type === 'Company';",
+   "depends_on": "eval: doc.customer_type === 'Corporate';",
    "fieldname": "company_id",
    "fieldtype": "Int",
    "label": "Company ID",
    "read_only": 1
   },
   {
-   "depends_on": "eval: doc.customer_type != \"Company\"",
+   "depends_on": "eval: doc.customer_type != \"Corporate\"",
    "fieldname": "company_customer",
    "fieldtype": "Link",
-   "label": "Company",
-   "link_filters": "[[\"Customer\",\"customer_type\",\"=\",\"Company\"]]",
+   "label": "Corporate",
+   "link_filters": "[[\"Customer\",\"customer_type\",\"=\",\"Corporate\"]]",
    "options": "Customer"
   },
   {
-   "depends_on": "eval: doc.customer_type != \"PRO\"",
+   "depends_on": "eval: doc.customer_type != \"Typing Center\"",
    "fieldname": "pro_customer",
    "fieldtype": "Link",
-   "label": "PRO",
-   "link_filters": "[[\"Customer\",\"customer_type\",\"=\",\"PRO\"]]",
+   "label": "Typing Center",
+   "link_filters": "[[\"Customer\",\"customer_type\",\"=\",\"Typing Center\"]]",
    "options": "Customer"
+  },
+  {
+   "fieldname": "trade_license_no",
+   "fieldtype": "Data",
+   "label": "Trade License No"
+  },
+  {
+   "depends_on": "eval:doc.allow_credit",
+   "fieldname": "credit_limit_warning_level",
+   "fieldtype": "Percent",
+   "label": "Credit Limit Warning Level"
+  },
+  {
+   "depends_on": "eval:doc.allow_credit",
+   "description": "Outstanding on submitted credit invoices. Updated by the system when a Sales Invoice is saved, submitted or cancelled.",
+   "fieldname": "utilized_credit",
+   "fieldtype": "Float",
+   "label": "Utilized Credit",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.allow_credit",
+   "fieldname": "credit_limit",
+   "fieldtype": "Float",
+   "label": "Credit Limit"
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_credit",
+   "fieldtype": "Check",
+   "label": "Allow Credit"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-25 07:15:12.594785",
+ "modified": "2026-09-29 19:00:00.000000",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Customer",

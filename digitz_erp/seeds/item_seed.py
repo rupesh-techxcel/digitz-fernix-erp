@@ -16,7 +16,7 @@ The rows are held in ITEMS below rather than read from a spreadsheet, so this
 runs on a server that has no copy of the master data file. They were taken from
 "ERP Master Data - 26.08.2026.xlsx", one tuple per sheet row:
 
-	(item_code, item_name, item_group, com, gov)
+	(item_code, item_name, item_group, service_charge, gov)
 
 item_code is also the record name -- Item is autonamed `field:item_code`.
 Everything else is left to the doctype defaults: `item_type` Service,
@@ -33,7 +33,7 @@ Item by a user holding the Cashier role, and Administrator holds every role.
 import frappe
 from frappe.utils import cint, flt
 
-# (item_code, item_name, item_group, com, gov)
+# (item_code, item_name, item_group, service_charge, gov)
 ITEMS = (
 	('VISA25', 'AOE  Sponsor File Opening  AOE', 'OTHER SERVICES', 0.0, 355.0),
 	('20376727', 'AOE  Visa  EID  Transaction Charge  AOE', 'OTHER SERVICE CHARGES', 0.17, 0.0),
@@ -167,7 +167,7 @@ def run(dry_run=0):
 	created, existing, problems = [], [], []
 	seen = set()
 
-	for position, (item_code, item_name, item_group, com, gov) in enumerate(ITEMS, start=1):
+	for position, (item_code, item_name, item_group, service_charge, gov) in enumerate(ITEMS, start=1):
 		key = str(item_code).lower()
 
 		if key in seen:
@@ -195,7 +195,7 @@ def run(dry_run=0):
 					"item_code": item_code,
 					"item_name": item_name,
 					"item_group": item_group,
-					"com": flt(com),
+					"service_charge": flt(service_charge),
 					"gov": flt(gov),
 				}
 			).insert(ignore_permissions=True)

@@ -248,6 +248,8 @@ def generate_sales_invoice(sales_order_name):
 
 		sales_invoice_doc.append('items', sales_invoice_item)
 
+	# Not paid yet: the Received Amount of a cash sale is asked for when it is first saved
+	sales_invoice_doc.flags.received_amount_later = True
 	sales_invoice_doc.insert()
 	frappe.msgprint("Sales Invoice generated successfully, in draft mode.", alert=True)
 	return sales_invoice_doc.name

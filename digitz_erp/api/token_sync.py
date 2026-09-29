@@ -37,6 +37,7 @@ from frappe.utils.scheduler import is_scheduler_inactive
 from frappe.utils.synchronization import filelock
 
 from digitz_erp.api.medical_services import get_medical_service_items
+from digitz_erp.api.item_price_api import get_item_charges
 
 REALTIME_EVENT = "digitz_token_invoice_created"
 SYNC_JOB_ID = "digitz_erp::medical_token_sync"
@@ -45,6 +46,8 @@ REQUEST_TIMEOUT = 30
 RETRY_LOOKBACK_DAYS = 2
 MAX_ATTEMPTS = 5
 DEFAULT_TAX_RATE = 5
+# Payment mode of a token invoice when neither the customer nor the company has a default
+DEFAULT_TOKEN_PAYMENT_MODE = "Card"
 
 # ---------------------------------------------------------------------------
 # TEMPORARY BACKFILL SWITCH
@@ -777,7 +780,8 @@ def resolve_customer(item):
 
 	A token carrying a CompanyId is billed to the company Customer for that id,
 	creating it when the id is not mapped yet, and picks up that company's
-	discount; one without falls back to a per person Customer keyed on the
+	discount. One without goes to the Default Walk-in Customer from Settings when
+	that is set, and otherwise falls back to a per person Customer keyed on the
 	token's Name.
 
 	Raises TokenSkipped when the token deliberately produces no invoice, which
@@ -799,6 +803,13 @@ def resolve_customer(item):
 		# person the token belongs to is kept on the log's `customer_name`, and
 		# the invoice is told apart by its `customer_token` and `medical_service`.
 		return company, flt(frappe.db.get_value("Customer", company, "discount"))
+
+	# A walk-in patient is billed to the default walk-in customer when one is set
+	# in Settings; the patient's own name and email go on the invoice instead
+	# (create_invoice_for_log). Without it, a Customer per person, as before.
+	walk_in = frappe.db.get_single_value("Settings", "default_walk_in_customer")
+	if walk_in:
+		return walk_in, flt(frappe.db.get_value("Customer", walk_in, "discount"))
 
 	customer_name = (item.get("Name") or "").strip()
 	if not customer_name:
@@ -843,7 +854,7 @@ def get_or_create_company_customer(company_id):
 		{
 			"doctype": "Customer",
 			"customer_name": f"Company {company_id}",
-			"customer_type": "Company",
+			"customer_type": "Corporate",
 			"company_id": company_id,
 			"customer_group": "Default Customer Group",
 		}
@@ -877,7 +888,7 @@ def ensure_person_customer(item, company):
 	record that cannot be written -- most likely because the Company has one of
 	the customer_*_required flags set -- must not cost the site its invoice.
 
-	`customer_type` stays Individual on purpose: marking a patient as a Company
+	`customer_type` stays Individual on purpose: marking a patient as Corporate
 	would make Customer.before_save allocate them a company_id and push them to
 	the external token service.
 	"""
@@ -947,7 +958,7 @@ def item_tax(item_code, taxable_amount):
 
 	Read from the Item master, not from the Medical Service's child row. Those
 	rows are a snapshot: `get_medical_service_items` only refreshes their tax
-	fields when com or gov happens to differ, so a service set up with tax off
+	fields when service_charge, typing_charges or gov happens to differ, so a service set up with tax off
 	keeps reporting no tax even after the Item is marked taxable. The Item is
 	the authority, which is what the invoice import path also uses
 	(SalesInvoice.populate_item_details_during_import).
@@ -963,13 +974,19 @@ def item_tax(item_code, taxable_amount):
 
 	rate = cint(frappe.db.get_value("Tax", item.tax, "tax_rate"))
 
-	# Charged on the service charge only. `rate`/`gross_amount` on the line are
-	# the com, so the government fee stays outside the taxable amount.
+	# Charged on the service and typing charges only; the caller passes just those,
+	# so the government fee stays outside the taxable amount.
 	return item.tax, rate, flt(taxable_amount) * rate / 100.0
 
 
-def build_invoice_items(service_name):
-	"""Price the service off the Item master and return (rows, gross, tax)."""
+def build_invoice_items(service_name, price_list=None):
+	"""Price the service and return (rows, totals).
+
+	Each item's Service Charge, Typing Charges and GOV come from `price_list` (the
+	customer's assigned price list) when it has a price for the item, otherwise from
+	the Item master -- the same rule the Sales Invoice form applies when an item is
+	picked (item_price_api.get_item_charges).
+	"""
 	title = resolve_medical_service(service_name)
 
 	if not title:
@@ -985,28 +1002,33 @@ def build_invoice_items(service_name):
 	rows = []
 	totals = {"gross": 0, "taxable": 0, "tax": 0, "net": 0}
 
+	charges = get_item_charges([s.item for s in service_doc.services], price_list, today())
+
 	for service_item in service_doc.services:
 		qty = cint(service_item.qty) or 1
-		com = flt(service_item.com)
-		gov = flt(service_item.gov)
+		item_charges = charges.get(service_item.item) or {}
+		service_charge = flt(item_charges.get("service_charge"))
+		typing_charges = flt(item_charges.get("typing_charges"))
+		gov = flt(item_charges.get("gov"))
 
-		com_amount = qty * com
+		# Service and typing charges are taxable; the government fee is not
+		taxable_base = qty * (service_charge + typing_charges)
 		gov_amount = qty * gov
 
-		tax_name, tax_rate, _ = item_tax(service_item.item, com_amount)
+		tax_name, tax_rate, _ = item_tax(service_item.item, taxable_base)
 
 		# Mirrors the amounts the desk computes in sales_invoice.js, so an
 		# invoice raised from a token and one keyed in by hand agree. Only the
-		# service charge is taxable; the government fee is passed through
-		# untaxed but still billed.
+		# service and typing charges are taxable; the government fee is passed
+		# through untaxed but still billed.
 		if tax_rate:
-			taxable_amount = com_amount
+			taxable_amount = taxable_base
 			tax_amount = taxable_amount * tax_rate / 100.0
 		else:
 			taxable_amount = 0
 			tax_amount = 0
 
-		gross_amount = com_amount + gov_amount
+		gross_amount = taxable_base + gov_amount
 		net_amount = gross_amount + tax_amount
 
 		totals["gross"] += gross_amount
@@ -1020,8 +1042,8 @@ def build_invoice_items(service_name):
 				"item_name": service_item.item_name,
 				"display_name": service_item.item_name,
 				"qty": qty,
-				# rate is the whole line, service charge plus government fee.
-				"rate": com + gov,
+				# rate is the whole line: service charge, typing charges and government fee.
+				"rate": service_charge + typing_charges + gov,
 				"gross_amount": gross_amount,
 				"taxable_amount": taxable_amount,
 				# `tax` is a Link to Tax; the old JS coerced an empty value to 0,
@@ -1030,7 +1052,8 @@ def build_invoice_items(service_name):
 				"tax_rate": tax_rate,
 				"tax_amount": tax_amount,
 				"net_amount": net_amount,
-				"com": com,
+				"service_charge": service_charge,
+				"typing_charges": typing_charges,
 				"gov": gov,
 			}
 		)
@@ -1048,21 +1071,59 @@ def token_for_invoice(item, log):
 	return token_text(item) or (str(log.token_number).strip() or None if log.token_number else None)
 
 
+def token_mobile(item):
+	"""The mobile number for a token's invoice.
+
+	The token's Mobile, else its WhatsApp. With neither, and Settings making the
+	number mandatory, the placeholder 0000: the draft is still raised, and the
+	cashier has to enter the real number before it can be submitted.
+	"""
+	from digitz_erp.selling.doctype.sales_invoice.sales_invoice import MOBILE_PLACEHOLDER
+
+	number = (str(item.get("Mobile") or "").strip() or str(item.get("WhatsApp") or "").strip())
+	if number:
+		return number
+	if cint(frappe.db.get_single_value("Settings", "customer_mobile_number_mandatory_in_sales_invoice")):
+		return MOBILE_PLACEHOLDER
+	return None
+
+
+def token_payment_mode(customer):
+	"""The payment mode of a token invoice: the same default as the Sales Invoice
+	form (get_sales_payment_defaults) -- the customer's, else the company's -- and
+	Card when neither is set. A token invoice is never a credit sale.
+	"""
+	from digitz_erp.selling.doctype.sales_invoice.sales_invoice import get_sales_payment_defaults
+
+	return get_sales_payment_defaults(customer)["payment_mode"] or DEFAULT_TOKEN_PAYMENT_MODE
+
+
 def create_invoice_for_log(log, item):
 	"""Create the Sales Invoice for a log and mark it Completed."""
 	customer, discount = resolve_customer(item)
 
-	rows, totals = build_invoice_items(log.service)
+	# Priced from the customer's assigned price list, as the desk does when a
+	# customer is picked on an invoice
+	price_list = frappe.db.get_value("Customer", customer, "default_price_list")
+
+	rows, totals = build_invoice_items(log.service, price_list)
 	calculated_discount = (totals["gross"] * flt(discount)) / 100
+
+	payment_mode = token_payment_mode(customer)
 
 	invoice = frappe.get_doc(
 		{
 			"doctype": "Sales Invoice",
 			"customer": customer,
+			# Who the token is for, as the token API gives it. The desk never
+			# overwrites these on a token invoice, even if the Customer is changed.
+			"customer_display_name": (item.get("Name") or "").strip() or None,
 			"customer_email": item.get("Email"),
-			"payment_mode": "Card",
+			"customer_mobile_number": token_mobile(item),
+			"payment_mode": payment_mode,
 			"customer_token": token_for_invoice(item, log),
 			"medical_service": log.service,
+			"price_list": price_list,
 			"items": rows,
 			"gross_total": totals["gross"] - calculated_discount,
 			# Sum of the lines' taxable amounts: the service charges only, since
@@ -1083,6 +1144,12 @@ def create_invoice_for_log(log, item):
 	# token belongs to would otherwise not appear on it at all.
 	if item.get("CompanyId") not in (None, "", 0) and log.customer_name:
 		invoice.remarks = log.customer_name
+
+	# A cash token invoice is raised before the customer pays, so the Received
+	# Amount is asked for when the cashier saves or submits it
+	# (SalesInvoice.validate_received_amount).
+	if frappe.db.get_value("Payment Mode", payment_mode, "mode") == "Cash":
+		invoice.flags.received_amount_later = True
 
 	invoice.insert(ignore_permissions=True)
 

@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "autoname": "DEV-.####",
+ "creation": "2026-09-28 20:00:00.000000",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "counter",
+  "enabled",
+  "column_break_reg",
+  "registered_by",
+  "registered_on",
+  "last_seen",
+  "user_agent",
+  "secret_hash"
+ ],
+ "fields": [
+  {
+   "fieldname": "counter",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Counter",
+   "options": "Counter",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "description": "Untick to revoke this device. Its browser then counts as unregistered.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_reg",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "registered_by",
+   "fieldtype": "Link",
+   "label": "Registered By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "registered_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Registered On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_seen",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Last Seen",
+   "read_only": 1
+  },
+  {
+   "fieldname": "user_agent",
+   "fieldtype": "Small Text",
+   "label": "Browser",
+   "read_only": 1
+  },
+  {
+   "fieldname": "secret_hash",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Secret Hash",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-28 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "Counter Device",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Management",
+   "select": 1
+  }
+ ],
+ "search_fields": "counter",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,7 +1,8 @@
 // Medical Center Dashboard
 //
-// Live operations view: what each counter is doing right now, who is on, what
-// is still in the queue, and whether the token pull is healthy. All of it comes
+// Live operations view: which counters have a day open and what is in each
+// till, what each cashier is doing, what is still in the queue, and whether the
+// token pull is healthy. All of it comes
 // from one whitelisted call (digitz_erp.api.dashboard.get_live_dashboard) so a
 // refresh is a single round trip.
 //
@@ -9,8 +10,11 @@
 // safety net, and tears both down when you navigate away.
 //
 // Colour rules worth preserving if you edit this:
-//   * counter colour comes from the server and follows the COUNTER, not its
+//   * cashier colour comes from the server and follows the CASHIER, not their
 //     rank, so the list is ordered by user id rather than by takings;
+//   * counter cards are toned by day state (open / closing / closed / idle),
+//     not by the categorical palette, so the two never clash, and every state
+//     is also spelled out in text;
 //   * every bar is directly labelled. The palette clears the dataviz validator
 //     at --pairs all in both themes, but with two WARNs (violet/blue CVD, and
 //     dark-mode contrast) whose required relief is exactly those labels.
@@ -78,6 +82,18 @@ digitz_erp.MedicalCenterDashboard = class MedicalCenterDashboard {
 		this.$wrapper.on("click", "[data-open-board]", () => {
 			frappe.set_route("Sales Invoice Board");
 		});
+
+		this.$wrapper.on("click", "[data-session]", (event) => {
+			frappe.set_route("Form", "Counter Session", $(event.currentTarget).attr("data-session"));
+		});
+
+		this.$wrapper.on("click", "[data-counter]", (event) => {
+			frappe.set_route("Form", "Counter", $(event.currentTarget).attr("data-counter"));
+		});
+
+		this.$wrapper.on("click", "[data-approvals]", () => {
+			frappe.set_route("day-close");
+		});
 	}
 
 	start() {
@@ -144,6 +160,7 @@ digitz_erp.MedicalCenterDashboard = class MedicalCenterDashboard {
 		this.$root.html(`
 			${this.render_hero(d)}
 			${this.render_kpis(d)}
+			${this.render_counter_board(d)}
 			${this.render_counters(d)}
 			${this.render_activity(d)}
 			${this.render_queue(d)}
@@ -158,6 +175,7 @@ digitz_erp.MedicalCenterDashboard = class MedicalCenterDashboard {
 			critical: __("Tokens failed"),
 			off: __("Token sync is off"),
 		}[sync.state];
+		const pending = d.counter_board.pending_approvals;
 
 		return `
 			<div class="mcd-hero">
@@ -170,6 +188,11 @@ digitz_erp.MedicalCenterDashboard = class MedicalCenterDashboard {
 				</div>
 				<div class="mcd-hero-side">
 					<span class="mcd-pulse"><i></i>${__("Live")}</span>
+					${pending
+						? `<button class="mcd-health mcd-h-warning mcd-approvals" data-approvals>
+							${pending} ${pending === 1 ? __("close awaiting approval") : __("closes awaiting approval")}
+						</button>`
+						: ""}
 					<span class="mcd-health mcd-h-${esc_attr(sync.state)}">
 						${state_label}
 						${sync.failed ? " &middot; " + sync.failed + " " + __("failed") : ""}
@@ -184,9 +207,9 @@ digitz_erp.MedicalCenterDashboard = class MedicalCenterDashboard {
 
 		const tiles = [
 			{
-				label: __("Active Counters"),
-				value: `${t.active_counters}<span class="mcd-of">/${t.total_counters}</span>`,
-				sub: __("desks signed in"),
+				label: __("Open Counters"),
+				value: `${t.open_counters}<span class="mcd-of">/${t.total_counters}</span>`,
+				sub: `${t.online_cashiers}/${t.total_cashiers} ${__("cashiers signed in")}`,
 				tone: ["#3b82f6", "#2563eb"],
 				icon: '<path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/>',
 			},
@@ -235,12 +258,105 @@ digitz_erp.MedicalCenterDashboard = class MedicalCenterDashboard {
 			.join("")}</div>`;
 	}
 
+	render_counter_board(d) {
+		const board = d.counter_board.counters;
+
+		if (!board.length) {
+			return this.panel(
+				__("Counters"),
+				__("Today"),
+				`<p class="mcd-empty">${__("No counter has a day open today.")}</p>`
+			);
+		}
+
+		const state_label = {
+			open: __("Day open"),
+			closing: __("Awaiting approval"),
+			closed: __("Closed"),
+			idle: __("Not opened"),
+		};
+
+		const cards = board
+			.map((c) => {
+				const s = c.session;
+				const route = s
+					? `data-session="${esc_attr(s.name)}"`
+					: `data-counter="${esc_attr(c.counter)}"`;
+
+				let who = `<div class="mcd-b-who mcd-b-muted">${__("No cashier")}</div>`;
+				let till = "";
+
+				if (s) {
+					const when =
+						c.state === "closed"
+							? `${__("closed")} ${this.time_of(s.closed_on).slice(0, 5)}`
+							: `${__("since")} ${this.time_of(s.opened_on).slice(0, 5)}`;
+
+					who = `
+						<div class="mcd-b-who">
+							<span class="mcd-b-avatar">${frappe.utils.escape_html(s.initials)}</span>
+							<div>
+								<div class="mcd-b-cashier">${frappe.utils.escape_html(s.cashier_name)}</div>
+								<div class="mcd-b-meta">${when}</div>
+							</div>
+						</div>`;
+
+					if (c.state === "open") {
+						till = `
+							<div class="mcd-b-till">
+								<span>${__("Cash in till")}</span>
+								<b>${format_currency(s.expected_cash)}</b>
+								<small>${__("float")} ${format_currency(s.opening_float)}</small>
+							</div>`;
+					} else {
+						const diff = s.difference;
+						const diff_text = Math.abs(diff) < 0.005
+							? __("balanced")
+							: `${diff > 0 ? __("over") : __("short")} ${format_currency(Math.abs(diff))}`;
+						till = `
+							<div class="mcd-b-till">
+								<span>${__("Counted")}</span>
+								<b>${format_currency(s.counted_cash)}</b>
+								<small class="${Math.abs(diff) < 0.005 ? "" : "mcd-b-diff"}">${diff_text}</small>
+							</div>`;
+					}
+				}
+
+				const pc = c.devices
+					? `${c.devices} ${c.devices === 1 ? __("PC") : __("PCs")}${
+							c.last_seen ? " &middot; " + __("seen") + " " + comment_when(c.last_seen) : ""
+					  }`
+					: __("No PC registered");
+
+				return `
+				<div class="mcd-b-card mcd-b-${esc_attr(c.state)}" ${route}>
+					<div class="mcd-b-head">
+						<span class="mcd-b-name">${frappe.utils.escape_html(c.counter)}</span>
+						<span class="mcd-b-state">${state_label[c.state]}</span>
+					</div>
+					${who}
+					${till}
+					<div class="mcd-b-foot">
+						<span>${c.invoices} ${__("invoices")} &middot; <b>${format_currency(c.amount)}</b></span>
+						<span>${pc}</span>
+					</div>
+				</div>`;
+			})
+			.join("");
+
+		return this.panel(
+			__("Counters"),
+			`<span class="mcd-note">${__("Submitted today, by the counter PC it was billed on")}</span>`,
+			`<div class="mcd-board">${cards}</div>`
+		);
+	}
+
 	render_counters(d) {
 		if (!d.counters.length) {
 			return this.panel(
-				__("Counter Split"),
+				__("Cashier Split"),
 				__("Today"),
-				`<p class="mcd-empty">${__("No counter has raised an invoice today.")}</p>`
+				`<p class="mcd-empty">${__("No cashier has raised an invoice today.")}</p>`
 			);
 		}
 
@@ -297,7 +413,7 @@ digitz_erp.MedicalCenterDashboard = class MedicalCenterDashboard {
 			})
 			.join("");
 
-		return this.panel(__("Counter Split"), legend, `<div class="mcd-counters">${rows}</div>`);
+		return this.panel(__("Cashier Split"), legend, `<div class="mcd-counters">${rows}</div>`);
 	}
 
 	render_activity(d) {
@@ -361,7 +477,7 @@ digitz_erp.MedicalCenterDashboard = class MedicalCenterDashboard {
 			`<button class="mcd-link" data-open-board>${__("Open board")}</button>`,
 			`<table class="mcd-table">
 				<thead><tr>
-					<th>${__("Counter")}</th><th>${__("Customer")}</th><th>${__("Service")}</th>
+					<th>${__("Cashier")}</th><th>${__("Customer")}</th><th>${__("Service")}</th>
 					<th>${__("Token")}</th><th class="mcd-num">${__("Amount")}</th><th>${__("Raised")}</th>
 				</tr></thead>
 				<tbody>${rows}</tbody>
@@ -495,7 +611,47 @@ digitz_erp.MedicalCenterDashboard.CSS = `
 .mcd-sw-soft { background: #64748b; opacity: .45; }
 .mcd-sw-now { background: linear-gradient(180deg,#a855f7,#7c3aed); }
 
-/* counter split */
+.mcd-approvals { border: none; cursor: pointer; }
+
+/* counter board: tone is day state, and the state is always written out */
+.mcd-board { display: grid; grid-template-columns: repeat(auto-fill,minmax(230px,1fr)); gap: 12px; }
+.mcd-b-card {
+  --tone: #94a3b8;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 13px; cursor: pointer;
+  border: 1px solid var(--border-color); border-top: 3px solid var(--tone);
+  border-radius: var(--border-radius-md, 8px); background: var(--card-bg, var(--fg-color));
+}
+.mcd-b-card:hover { background: var(--control-bg); }
+.mcd-b-open { --tone: #10b981; }
+.mcd-b-closing { --tone: #f59e0b; }
+.mcd-b-closed { --tone: #64748b; }
+.mcd-b-idle { --tone: #cbd5e1; }
+.mcd-b-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mcd-b-name { font-size: 13.5px; font-weight: 700; color: var(--heading-color); }
+.mcd-b-state {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; color: #fff; background: var(--tone); white-space: nowrap;
+}
+.mcd-b-idle .mcd-b-state { color: var(--text-muted); background: var(--control-bg); }
+.mcd-b-who { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.mcd-b-muted { color: var(--text-muted); }
+.mcd-b-avatar {
+  width: 26px; height: 26px; border-radius: 7px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 700; color: #fff; background: var(--tone);
+}
+.mcd-b-cashier { font-weight: 650; color: var(--heading-color); }
+.mcd-b-meta { font-size: 11px; color: var(--text-muted); }
+.mcd-b-till { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 11.5px; color: var(--text-muted); }
+.mcd-b-till b { font-size: 15px; font-weight: 750; color: var(--heading-color); font-variant-numeric: tabular-nums; }
+.mcd-b-diff { color: #e11d48; font-weight: 650; }
+.mcd-b-foot {
+  display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  padding-top: 8px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted);
+}
+.mcd-b-foot b { color: var(--text-color); }
+
+/* cashier split */
 .mcd-counters { display: flex; flex-direction: column; gap: 12px; }
 .mcd-counter { display: grid; grid-template-columns: minmax(150px,1.1fr) minmax(90px,2fr) minmax(110px,auto); gap: 14px; align-items: center; }
 .mcd-c-id { display: flex; align-items: center; gap: 9px; min-width: 0; }

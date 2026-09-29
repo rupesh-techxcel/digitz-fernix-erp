@@ -51,10 +51,10 @@ def get_data_grouped_with_headers(filters):
 	if params.get("item"):
 		conditions.append("sii.item = %(item)s")
 
-	# --- User privilege restriction (Cashier limited to own; Administrator privileged) ---
+	# --- User privilege restriction (Cashier limited to own; Administrator and System Manager not) ---
 	current_user = frappe.session.user
 	roles = set(frappe.get_roles(current_user))
-	is_privileged = (current_user == "Administrator")
+	is_privileged = current_user == "Administrator" or "System Manager" in roles
 
 	if "Cashier" in roles and not is_privileged:
 		params["user"] = current_user
@@ -67,16 +67,21 @@ def get_data_grouped_with_headers(filters):
 	where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
 	# --- Query: sum gross_amount grouped by date + item ---
+	# Submitted Sales Returns take their lines back off, on the day of the return
 	query = f"""
-		SELECT
-			DATE(si.posting_date) AS posting_date,
-			sii.item AS item,
-			COALESCE(SUM(sii.gross_amount), 0) AS total_amount
-		FROM `tabSales Invoice` si
-		INNER JOIN `tabSales Invoice Item` sii
-			ON sii.parent = si.name
-		{where_clause}
-		GROUP BY DATE(si.posting_date), sii.item
+		SELECT posting_date, item, COALESCE(SUM(amount), 0) AS total_amount
+		FROM (
+			SELECT DATE(si.posting_date) AS posting_date, sii.item AS item, sii.gross_amount AS amount
+			FROM `tabSales Invoice` si
+			INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
+			{where_clause}
+			UNION ALL
+			SELECT DATE(si.posting_date), sii.item, -sii.gross_amount
+			FROM `tabSales Return` si
+			INNER JOIN `tabSales Return Item` sii ON sii.parent = si.name
+			{where_clause}
+		) doc_lines
+		GROUP BY posting_date, item
 		ORDER BY posting_date ASC, total_amount DESC
 	"""
 	rows = frappe.db.sql(query, params, as_dict=True)

@@ -12,19 +12,61 @@ from frappe.model.mapper import *
 from digitz_erp.api.item_price_api import update_item_price,update_customer_item_price
 from digitz_erp.api.settings_api import get_default_currency, get_gl_narration
 from datetime import datetime,timedelta
-from digitz_erp.api.document_posting_status_api import init_document_posting_status, update_posting_status
 from digitz_erp.api.gl_posting_api import update_accounts_for_doc_type, delete_gl_postings_for_cancel_doc_type
 from digitz_erp.api.bank_reconciliation_api import create_bank_reconciliation, cancel_bank_reconciliation
 from frappe.utils import money_in_words
 from digitz_erp.api.sales_order_api import check_and_update_sales_order_status,update_sales_order_quantities_on_update
 from digitz_erp.api.settings_api import add_seconds_to_time
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import flt, fmt_money
+from digitz_erp.api.counter_session_api import stamp_counter_session
 from digitz_erp.accounts.doctype.gl_posting.gl_posting import get_party_balance
 from digitz_erp.api.settings_api import get_customer_terms
 from digitz_erp.api.items_api import get_item_uoms 
 from digitz_erp.selling.doctype.quotation.quotation import generate_custom_invoice_pdf   
 from frappe.utils import today, getdate
+
+# Put on an invoice that needs a mobile number but has none yet -- a token that
+# came without one -- so the draft can be saved. It must be replaced with the
+# customer's real number before the invoice is submitted.
+MOBILE_PLACEHOLDER = "0000"
+
+
+def is_placeholder_mobile(number):
+    """True for 0000 and any other number made only of zeros."""
+    digits = "".join(ch for ch in str(number or "") if ch.isdigit())
+    return bool(digits) and set(digits) == {"0"}
+
+
+def get_utilized_credit(customer, exclude=None):
+    """What the customer still owes on submitted credit invoices, other than `exclude`."""
+    return flt(frappe.db.sql("""
+        SELECT SUM(rounded_total - paid_amount)
+        FROM `tabSales Invoice`
+        WHERE customer = %s AND credit_sale = 1 AND docstatus = 1
+          AND rounded_total > paid_amount AND name != %s
+    """, (customer, exclude or ""))[0][0])
+
+
+@frappe.whitelist()
+def get_sales_payment_defaults(customer=None, company=None):
+    """How a new invoice for `customer` is paid by default: {payment_mode}.
+
+    The one rule for the Sales Invoice form, the token sync and data import:
+    the customer's Default Payment Mode, else the Company's Default Payment Mode
+    for Sales. Nothing defaults to a credit sale -- in a medical centre a sale
+    is on credit only when the user ticks it -- so Company.default_credit_sale
+    is deliberately not read.
+    """
+    company = company or frappe.db.get_single_value("Global Settings", "default_company") \
+        or frappe.get_last_doc("Company").name
+    customer_mode = frappe.db.get_value("Customer", customer, "default_payment_mode") if customer else None
+
+    return {
+        "payment_mode": customer_mode
+        or frappe.db.get_value("Company", company, "default_payment_mode_for_sales"),
+    }
+
 
 class SalesInvoice(Document):
     
@@ -42,19 +84,32 @@ class SalesInvoice(Document):
             self.do_import()
     def before_save(self):
         if self.items:
-            generate_custom_invoice_pdf(self)
+            self.attach_print_pdfs()
 
-            # A credit sale is billed now and paid later, so there is nothing to
-            # receipt yet. Everything else is settled at the counter and gets a
-            # RECEIPT alongside the invoice, attached to the same record.
-            if not self.credit_sale:
-                generate_custom_invoice_pdf(
-                    self,
-                    template_override="digitz_erp/templates/receipt_template.html",
-                    file_suffix_override="receipt",
-                )
+    def attach_print_pdfs(self):
+        generate_custom_invoice_pdf(self)
+
+        # A cash sale is settled at the counter and gets a RECEIPT alongside the
+        # invoice. A credit sale is billed now and paid later: it gets one only
+        # once a submitted Receipt Entry has paid it (allocated_receipt_entry, set
+        # by ReceiptEntry.refresh_credit_invoice_prints); until then, or after that
+        # receipt is cancelled, any receipt attached earlier is removed.
+        if not self.credit_sale or self.allocated_receipt_entry:
+            generate_custom_invoice_pdf(
+                self,
+                template_override="digitz_erp/templates/receipt_template.html",
+                file_suffix_override="receipt",
+            )
+        else:
+            for name in frappe.get_all("File", pluck="name", filters={
+                    "attached_to_doctype": self.doctype, "attached_to_name": self.name,
+                    "file_name": ["like", f"{self.name}-receipt%"]}):
+                frappe.get_doc("File", name).delete(ignore_permissions=True)
     def before_validate(self):
         self.company = frappe.get_last_doc("Company").name
+        self.set_customer_company_and_trn()
+        self.set_cash_balance()
+        self.set_counter()
         # Optional: Enforce required fields
         if not self.credit_sale and not self.payment_mode:
             frappe.throw("Payment mode is required when not a credit sale.")
@@ -179,6 +234,10 @@ class SalesInvoice(Document):
 
     def validate(self):
         
+        self.validate_customer_mobile_number()
+        self.validate_received_amount()
+        self.validate_line_amounts()
+        self.validate_and_update_customer_credit()
         self.validate_item()
         self.validate_for_sales_order()
         self.validate_for_advance_for_progress_entries()
@@ -186,6 +245,161 @@ class SalesInvoice(Document):
         self.validate_project_advance()
         # self.validate_item_valuation_rates()
 
+
+    def set_counter(self):
+        """Record the counter PC and the cashier's open day this invoice is saved in,
+        and stop a cashier who has neither. See counter_session_api.stamp_counter_session."""
+        stamp_counter_session(self)
+
+    def set_cash_balance(self):
+        """Received Amount is the cash tendered, and Balance the change to return.
+        Both apply only to a cash payment mode on a sale that is not on credit."""
+        self.payment_mode_type = frappe.db.get_value("Payment Mode", self.payment_mode, "mode") if self.payment_mode else None
+
+        if self.credit_sale or self.payment_mode_type != "Cash":
+            self.received_amount = 0
+            self.balance_amount = 0
+            return
+
+        self.balance_amount = flt(self.received_amount) - flt(self.rounded_total) if flt(self.received_amount) else 0
+
+    def validate_received_amount(self):
+        """A cash sale carries the cash tendered, and it covers the total -- on every save and on submit.
+
+        Not for a sale on credit or a non-cash mode (set_cash_balance clears the
+        amount there). A draft generated in code from a Sales Order or Quotation
+        sets flags.received_amount_later: nobody has paid when it is created, so
+        the amount is asked for when the cashier first saves or submits it.
+        """
+        if self.credit_sale or self.payment_mode_type != "Cash":
+            return
+        if self.docstatus == 0 and self.is_new() and self.flags.received_amount_later:
+            return
+
+        if not flt(self.received_amount):
+            frappe.throw(
+                "Enter the Received Amount: the cash the customer handed over. It is required for a cash sale.",
+                title="Received Amount Needed",
+            )
+
+        if flt(self.received_amount) < flt(self.rounded_total) - 0.005:
+            frappe.throw(
+                f"The Received Amount ({fmt_money(self.received_amount)}) is less than the "
+                f"invoice total ({fmt_money(self.rounded_total)}). Collect the full amount, "
+                "or make it a credit sale.",
+                title="Received Amount Too Low",
+            )
+
+    def set_customer_company_and_trn(self):
+        """Customer Company and Tax Id come from the customer, except on the walk-in
+        customer, where they are whatever the user typed for that applicant."""
+        if not self.customer or self.customer == get_walk_in_customer():
+            return
+
+        details = get_customer_company_and_trn(self.customer)
+        self.customer_company = details["customer_company"]
+        self.tax_id = details["tax_id"]
+
+    def validate_line_amounts(self):
+        """Refuse to save amounts that were worked out from an older Service Charge/Typing Charges/GOV.
+
+        The form derives rate = Service Charge + Typing Charges + GOV and every amount from it, and the server
+        stores those amounts as sent. If any of them change without a recalculation the
+        row, the totals, the paid amount and the printed invoice and receipt all
+        carry the stale figures. Advance rows set their own rate, and rows copied
+        from other documents may carry none of them, so both are left alone.
+        """
+        if self.for_advance_payment:
+            return
+
+        for row in self.items:
+            charges = flt(row.service_charge) + flt(row.typing_charges) + flt(row.gov)
+            if charges and abs(flt(row.rate) - charges) > 0.005:
+                frappe.throw(
+                    f"Row {row.idx} ({row.item}): the amounts were calculated for a rate of "
+                    f"{flt(row.rate):.2f}, but Service Charge + Typing Charges + GOV is {charges:.2f}. Change the quantity "
+                    "or select the item again to recalculate, then save."
+                )
+
+    def validate_and_update_customer_credit(self):
+        """Check a credit sale against the customer's credit and refresh Utilized Credit.
+
+        Utilized Credit is what the customer still owes on submitted credit invoices
+        (rounded total less what has been received against them). A draft is not a
+        debt yet, so it is checked but not counted; the check runs again on submit,
+        when every earlier submitted credit invoice is already included.
+
+        Runs on every save and submit (from validate) and on cancel.
+        """
+        if not self.customer:
+            return
+
+        customer = frappe.db.get_value("Customer", self.customer,
+            ["allow_credit", "credit_limit", "credit_limit_warning_level"], as_dict=True)
+        if not customer:
+            return
+
+        # Outstanding on the customer's other submitted credit invoices
+        utilized_by_others = get_utilized_credit(self.customer, exclude=self.name)
+
+        this_invoice = flt(self.rounded_total) - flt(self.paid_amount) if self.credit_sale else 0
+
+        if self.credit_sale and self.docstatus < 2:
+
+            if not customer.allow_credit:
+                frappe.throw(
+                    f"Customer <b>{self.customer}</b> is not allowed to buy on credit. "
+                    "Uncheck <b>Credit Sale</b>, or enable <b>Allow Credit</b> on the customer.",
+                    title="Credit Not Allowed")
+
+            credit_limit = flt(customer.credit_limit)
+            if credit_limit <= 0:
+                frappe.throw(
+                    f"No Credit Limit is set for customer <b>{self.customer}</b>. "
+                    "Set a Credit Limit on the customer before making a credit sale.",
+                    title="Credit Limit Not Set")
+
+            total_after = utilized_by_others + this_invoice
+            available = credit_limit - utilized_by_others
+            currency = get_default_currency()
+
+            if total_after > credit_limit:
+                frappe.throw(
+                    f"This invoice exceeds the credit limit of customer <b>{self.customer}</b>.<br><br>"
+                    f"Credit Limit: <b>{fmt_money(credit_limit, currency=currency)}</b><br>"
+                    f"Already Utilized: <b>{fmt_money(utilized_by_others, currency=currency)}</b><br>"
+                    f"Available Credit: <b>{fmt_money(max(available, 0), currency=currency)}</b><br>"
+                    f"This Invoice: <b>{fmt_money(this_invoice, currency=currency)}</b><br>"
+                    f"Exceeds By: <b>{fmt_money(total_after - credit_limit, currency=currency)}</b>",
+                    title="Credit Limit Exceeded")
+
+            warning_level = flt(customer.credit_limit_warning_level)
+            if warning_level and total_after >= credit_limit * warning_level / 100:
+                frappe.msgprint(
+                    f"Customer <b>{self.customer}</b> will have used "
+                    f"{total_after * 100 / credit_limit:.0f}% of the credit limit after this invoice "
+                    f"(warning level {warning_level:.0f}%). "
+                    f"Credit left after this invoice: <b>{fmt_money(credit_limit - total_after, currency=currency)}</b>",
+                    title="Credit Limit Warning", indicator="orange")
+
+        # Only a submitted invoice is a debt; a draft or a cancelled one adds nothing
+        utilized = utilized_by_others + (this_invoice if self.docstatus == 1 else 0)
+        frappe.db.set_value("Customer", self.customer, "utilized_credit", utilized, update_modified=False)
+
+    def validate_customer_mobile_number(self):
+
+        if not frappe.db.get_single_value("Settings", "customer_mobile_number_mandatory_in_sales_invoice"):
+            return
+
+        if not self.customer_mobile_number:
+            frappe.throw("Customer Mobile Number is mandatory for the Sales Invoice.")
+
+        # A draft may carry the placeholder; the submitted invoice needs the real number
+        if self.docstatus == 1 and is_placeholder_mobile(self.customer_mobile_number):
+            frappe.throw(
+                f"{self.customer_mobile_number} is a placeholder. Enter the customer's real mobile number before submitting.",
+                title="Mobile Number Needed",
+            )
 
     def before_submit(self):
         if not self.invoice_fullfilled:
@@ -282,11 +496,13 @@ class SalesInvoice(Document):
             frappe.msgprint("Advance amount and percentage updated in the project", alert=True)
 
     def on_submit(self):
+        
+        print("Sales Invoice on_submit called.")
 
-        init_document_posting_status(self.doctype, self.name)
         self.do_postings_on_submit()
         self.update_project_billed_amounts()
         self.update_project_advance_amount()
+        self.send_submission_email()
 
     def do_postings_on_submit(self):
 
@@ -298,7 +514,6 @@ class SalesInvoice(Document):
         update_accounts_for_doc_type('Sales Invoice',self.name)
         self.update_customer_prices()
 
-        update_posting_status(self.doctype, self.name, 'posting_status','Completed')
         self.update_customer_last_transaction_date()
         
 
@@ -437,6 +652,8 @@ class SalesInvoice(Document):
 
 
     def on_cancel(self):
+        # The cancelled invoice no longer counts against the customer's credit
+        self.validate_and_update_customer_credit()
         cancel_bank_reconciliation("Sales Invoice", self.name)
         # frappe.enqueue(self.cancel_sales_invoice, queue="long")
 
@@ -570,14 +787,12 @@ class SalesInvoice(Document):
         # posting_status_doc.stock_posted_on_cancel_time = datetime.now()
         # posting_status_doc.save()
 
-        update_posting_status(self.doctype, self.name, 'stock_posted_on_cancel_time', None)
 
         if(more_records>0):
             # posting_status_doc = frappe.get_doc("Document Posting Status",{'document_type':'Purchase Invoice','document_name':self.name})
             # posting_status_doc.stock_recalc_required_on_cancel = True
             # posting_status_doc.save()
 
-            update_posting_status(self.doctype, self.name, 'stock_recalc_required_on_cancel', True)
 
             stock_recalc_voucher.insert()
             recalculate_stock_ledgers(stock_recalc_voucher, self.posting_date, self.posting_time)
@@ -585,14 +800,12 @@ class SalesInvoice(Document):
             # posting_status_doc = frappe.get_doc("Document Posting Status",{'document_type':'Purchase Invoice','document_name':self.name})
             # posting_status_doc.stock_recalc_on_cancel_time = datetime.now()
             # posting_status_doc.save()
-            update_posting_status(self.doctype, self.name, 'stock_recalc_on_cancel_time', None)
 
         frappe.db.delete("Stock Ledger",
                 {"voucher": "Sales Invoice",
                     "voucher_no":self.name
                 })
 
-        update_posting_status(self.doctype, self.name, 'posting_status', 'Completed')
         
     def get_narration(self):
         
@@ -622,7 +835,11 @@ class SalesInvoice(Document):
         return narration    
 
     def insert_gl_records(self):
-        
+        # GL Postings are the system's bookkeeping for the invoice, not records the
+        # user edits, so every posting in this file is inserted with
+        # ignore_permissions: a Cashier can submit an invoice without holding any
+        # permission on GL Posting (as with the Bank Reconciliation made alongside).
+
         if self.for_retention_recovery:
             self.insert_gl_records_for_retention_recovery() 
             return
@@ -659,7 +876,7 @@ class SalesInvoice(Document):
         gl_doc.remarks = remarks
         gl_doc.project = self.project
         gl_doc.cost_center = self.cost_center
-        gl_doc.insert()
+        gl_doc.insert(ignore_permissions=True)
         idx +=1
 
         # Income account - Credit
@@ -675,7 +892,7 @@ class SalesInvoice(Document):
         gl_doc.remarks = remarks
         gl_doc.project = self.project
         gl_doc.cost_center = self.cost_center
-        gl_doc.insert()
+        gl_doc.insert(ignore_permissions=True)
         idx +=1
 
         if self.tax_total >0:
@@ -694,7 +911,7 @@ class SalesInvoice(Document):
             gl_doc.remarks = remarks
             gl_doc.project = self.project
             gl_doc.cost_center = self.cost_center
-            gl_doc.insert()
+            gl_doc.insert(ignore_permissions=True)
             idx +=1
 
         # Round Off
@@ -716,7 +933,7 @@ class SalesInvoice(Document):
             gl_doc.remarks = remarks
             gl_doc.project = self.project
             gl_doc.cost_center = self.cost_center
-            gl_doc.insert()
+            gl_doc.insert(ignore_permissions=True)
             idx +=1
 
         if self.tab_sales or self.update_stock:
@@ -744,7 +961,7 @@ class SalesInvoice(Document):
                 gl_doc.remarks = remarks
                 gl_doc.project = self.project
                 gl_doc.cost_center = self.cost_center
-                gl_doc.insert()
+                gl_doc.insert(ignore_permissions=True)
                 idx +=1
 
                 # Inventory account Eg: Stock In Hand
@@ -761,10 +978,9 @@ class SalesInvoice(Document):
                 gl_doc.remarks = remarks
                 gl_doc.project = self.project
                 gl_doc.cost_center = self.cost_center
-                gl_doc.insert()
+                gl_doc.insert(ignore_permissions=True)
                 idx +=1
 
-        update_posting_status(self.doctype,self.name, 'gl_posted_time',None)
         
     def insert_gl_records_for_retention_recovery(self):
         
@@ -797,7 +1013,7 @@ class SalesInvoice(Document):
         gl_doc.remarks = remarks
         gl_doc.project = self.project
         gl_doc.cost_center = self.cost_center
-        gl_doc.insert()
+        gl_doc.insert(ignore_permissions=True)
         idx +=1
 
         # Retention Receivable Account - Credit
@@ -813,7 +1029,7 @@ class SalesInvoice(Document):
         gl_doc.remarks = remarks
         gl_doc.project = self.project
         gl_doc.cost_center = self.cost_center
-        gl_doc.insert()
+        gl_doc.insert(ignore_permissions=True)
         idx +=1
 
         if self.tax_total >0:
@@ -832,7 +1048,7 @@ class SalesInvoice(Document):
             gl_doc.remarks = remarks
             gl_doc.project = self.project
             gl_doc.cost_center = self.cost_center
-            gl_doc.insert()
+            gl_doc.insert(ignore_permissions=True)
             idx +=1
 
         # Round Off
@@ -854,10 +1070,9 @@ class SalesInvoice(Document):
             gl_doc.remarks = remarks
             gl_doc.project = self.project
             gl_doc.cost_center = self.cost_center
-            gl_doc.insert()
+            gl_doc.insert(ignore_permissions=True)
             idx +=1
 
-        update_posting_status(self.doctype,self.name, 'gl_posted_time',None)
     
     def insert_gl_records_for_advance(self):
         
@@ -891,7 +1106,7 @@ class SalesInvoice(Document):
         gl_doc.remarks = remarks
         gl_doc.project = self.project
         gl_doc.cost_center = self.cost_center
-        gl_doc.insert()
+        gl_doc.insert(ignore_permissions=True)
         idx +=1
 
         # Retention Receivable Account - Credit
@@ -907,7 +1122,7 @@ class SalesInvoice(Document):
         gl_doc.remarks = remarks
         gl_doc.project = self.project
         gl_doc.cost_center = self.cost_center
-        gl_doc.insert()
+        gl_doc.insert(ignore_permissions=True)
         idx +=1
 
         if self.tax_total >0:
@@ -926,7 +1141,7 @@ class SalesInvoice(Document):
             gl_doc.remarks = remarks
             gl_doc.project = self.project
             gl_doc.cost_center = self.cost_center
-            gl_doc.insert()
+            gl_doc.insert(ignore_permissions=True)
             idx +=1
 
         # Round Off
@@ -948,10 +1163,9 @@ class SalesInvoice(Document):
             gl_doc.remarks = remarks
             gl_doc.project = self.project
             gl_doc.cost_center = self.cost_center
-            gl_doc.insert()
+            gl_doc.insert(ignore_permissions=True)
             idx +=1
 
-        update_posting_status(self.doctype,self.name, 'gl_posted_time',None)
 
     def insert_payment_postings(self):
         
@@ -985,7 +1199,7 @@ class SalesInvoice(Document):
             gl_doc.party = self.customer
             gl_doc.against_account = payment_mode.account
             gl_doc.remarks = remarks
-            gl_doc.insert()
+            gl_doc.insert(ignore_permissions=True)
 
             idx = idx + 1
 
@@ -999,9 +1213,8 @@ class SalesInvoice(Document):
             gl_doc.debit_amount = self.rounded_total
             gl_doc.against_account = default_accounts.default_receivable_account if not self.for_retention_recovery else default_accounts.retention_receivable_account
             gl_doc.remarks = remarks
-            gl_doc.insert()
+            gl_doc.insert(ignore_permissions=True)
 
-            update_posting_status(self.doctype,self.name, 'payment_posted_time',None)
 
     @frappe.whitelist()
     def submit_delivery_note(self):
@@ -1229,8 +1442,13 @@ class SalesInvoice(Document):
 
             # frappe.msgprint("Delivery Note cancelled")
 
-    def on_submit(self):
-        """Send email with Sales Invoice attachment(s) when submitted"""
+    def send_submission_email(self):
+        """Send email with Sales Invoice attachment(s) when submitted.
+
+        Called at the end of on_submit. It used to be a second `on_submit` method,
+        which replaced the real one, so submitting only sent this email and never
+        posted stock, GL, payments or bank reconciliation.
+        """
         try:
             # Get all attached files for this Sales Invoice
             if not self.customer_email:
@@ -1412,12 +1630,9 @@ class SalesInvoice(Document):
                                                                     'warehouse': docitem.warehouse,
                                                                     'base_stock_ledger': new_stock_ledger.name
                                                                     })
-            update_posting_status(self.doctype,self.name,'stock_posted')
             if(more_records>0):
-                update_posting_status(self.doctype,self.name,'stock_recalc_required', True)
                 stock_recalc_voucher.insert()
                 recalculate_stock_ledgers(stock_recalc_voucher, self.posting_date, self.posting_time)
-                update_posting_status(self.doctype,self.name,'stock_recalc_time')
 
 
     def get_cost_of_goods_sold(self):
@@ -1553,7 +1768,7 @@ class SalesInvoice(Document):
                 self.company,
                 ['default_warehouse', 'rate_includes_tax', 'delivery_note_integrated_with_sales_invoice',
                  'update_price_list_price_with_sales_invoice', 'use_customer_last_price', 'customer_terms',
-                 'update_stock_in_sales_invoice', 'default_credit_sale'],
+                 'update_stock_in_sales_invoice'],
                 as_dict=True
             )
 
@@ -1566,8 +1781,7 @@ class SalesInvoice(Document):
                 if not company.use_customer_last_price:
                     self.update_rates_in_price_list = company.update_price_list_price_with_sales_invoice
 
-                if company.default_credit_sale:
-                    self.credit_sale = 1
+                # Never a credit sale by default (get_sales_payment_defaults)
 
                 if company.customer_terms:
                     self.terms = company.customer_terms
@@ -1636,11 +1850,8 @@ class SalesInvoice(Document):
 
     def set_default_payment_mode(self):
         if not self.credit_sale:
-            default_payment_mode = frappe.get_value(
-                "Company",
-                self.company,
-                "default_payment_mode_for_sales"
-            )
+            # The customer's Default Payment Mode, else the company's
+            default_payment_mode = get_sales_payment_defaults(self.customer, self.company)["payment_mode"]
             if default_payment_mode:
                 self.payment_mode = default_payment_mode
             else:
@@ -1830,7 +2041,9 @@ class SalesInvoice(Document):
                 'unit_conversion_details': item.unit_conversion_details
             })
 
-        # Insert the Sales Invoice document (with items already appended)
+        # Insert the Sales Invoice document (with items already appended). Not
+        # paid yet, so the Received Amount is asked for when it is first saved.
+        sales_invoice.flags.received_amount_later = True
         sales_invoice.insert(ignore_permissions=True)
 
         # Notify the user
@@ -1898,8 +2111,44 @@ def print_sales_invoice_pdf(docname):
     if not doc.items:
         frappe.throw("Items are required before printing.")
 
-    generate_custom_invoice_pdf(doc)
+    doc.attach_print_pdfs()
 
     return {
         "message": "PDF generated successfully"
     }
+
+@frappe.whitelist()
+def get_customer_mobile_number_mandatory():
+    # Settings is readable only by System Manager, so the Sales Invoice form reads the flag through here
+    return frappe.db.get_single_value("Settings", "customer_mobile_number_mandatory_in_sales_invoice")
+
+def get_walk_in_customer():
+    return frappe.db.get_single_value("Settings", "default_walk_in_customer")
+
+def get_customer_company_and_trn(customer):
+    """The company an invoice to `customer` is for, and its TRN.
+
+    A Corporate customer is its own company. An individual linked to a company
+    customer belongs to that company, and without a TRN of its own carries the
+    company's.
+    """
+    c = frappe.db.get_value("Customer", customer,
+        ["customer_type", "customer_name", "company_customer", "tax_id"], as_dict=True) or frappe._dict()
+
+    if c.customer_type == "Corporate":
+        return {"customer_company": c.customer_name, "tax_id": c.tax_id or ""}
+
+    if c.company_customer:
+        company = frappe.db.get_value("Customer", c.company_customer, ["customer_name", "tax_id"], as_dict=True) or frappe._dict()
+        return {"customer_company": company.customer_name or "", "tax_id": c.tax_id or company.tax_id or ""}
+
+    return {"customer_company": "", "tax_id": c.tax_id or ""}
+
+@frappe.whitelist()
+def get_customer_billing_details(customer):
+    """For the form: whether `customer` is the walk-in customer (whose company and
+    TRN the user types) and, if not, the company and TRN it carries."""
+    is_walk_in = bool(customer) and customer == get_walk_in_customer()
+    details = {"customer_company": "", "tax_id": ""} if is_walk_in or not customer else get_customer_company_and_trn(customer)
+    details["is_walk_in"] = is_walk_in
+    return details

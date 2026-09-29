@@ -192,7 +192,8 @@ frappe.ui.form.on('Sales Return', {
 												return_item.unit = newRow.unit
 												return_item.base_unit = newRow.base_unit
 												return_item.rate = newRow.rate
-												return_item.com = newRow.com
+												return_item.service_charge = newRow.service_charge
+												return_item.typing_charges = newRow.typing_charges
 												return_item.gov = newRow.gov
 												return_item.rate_in_base_unit = newRow.rate_in_base_unit
 												return_item.tax = newRow.tax
@@ -345,49 +346,53 @@ credit_days(frm)
 			entry.discount_amount = discount_amount;
 			entry.discount_percentage = flt(entry.discount_percentage);
 
-			// Rate is driven by its two components, the same way sales_invoice.js does it.
-			const com_rate = flt(entry.com);
+			// Rate is driven by its three components, the same way sales_invoice.js does it.
+			const service_charge_rate = flt(entry.service_charge);
+			const typing_charges_rate = flt(entry.typing_charges);
 			const gov_rate = flt(entry.gov);
-			entry.rate = com_rate + gov_rate;
+			// The taxable part of the rate
+			const taxable_rate = service_charge_rate + typing_charges_rate;
+			entry.rate = taxable_rate + gov_rate;
 
 			const tax_rate = flt(entry.tax_rate);
 			const tax_excluded = cint(entry.tax_excluded) ? 1 : 0;
 
-			// TAX APPLIES TO COM ONLY. GOV is a government fee - a disbursement outside
-			// VAT scope - and is added to the line untaxed. This return used to tax the
-			// whole of (COM + GOV), which refunded VAT that the invoice never charged.
-			// Identical to make_taxes_and_totals in sales_invoice.js.
-			let com_amount = (qty * com_rate) - discount_amount;
-			if (com_amount < 0) {
-				com_amount = 0;
+			// TAX APPLIES TO Service Charge + Typing Charges ONLY. GOV is a government fee - a
+			// disbursement outside VAT scope - and is added to the line untaxed. This return used
+			// to tax the whole rate including GOV, which refunded VAT that the invoice never charged.
+			// Identical to make_taxes_and_totals in sales_invoice.js, including the rounding.
+			let taxable_base = (qty * taxable_rate) - discount_amount;
+			if (taxable_base < 0) {
+				taxable_base = 0;
 			}
 			const gov_amount = qty * gov_rate;
 
 			if (!tax_excluded && tax_rate > 0) {
 
 				if (rate_includes_tax) {
-					// Rate already carries the tax: strip it back out.
-					entry.taxable_amount = com_amount / (1 + (tax_rate / 100));
-					entry.tax_amount = com_amount - flt(entry.taxable_amount);
-					entry.net_amount = com_amount + gov_amount;
+					// Rate already carries the tax: strip it back out. Tax is the
+					// remainder, so taxable + tax always equals the taxable base exactly.
+					entry.taxable_amount = flt(taxable_base / (1 + (tax_rate / 100)), precision("taxable_amount", entry));
+					entry.tax_amount = flt(taxable_base - entry.taxable_amount, precision("tax_amount", entry));
+					entry.net_amount = taxable_base + gov_amount;
 				} else {
 					// Rate is net of tax: add it on top.
-					entry.taxable_amount = com_amount;
-					entry.tax_amount = flt(entry.taxable_amount) * (tax_rate / 100);
-					entry.net_amount = com_amount + gov_amount + flt(entry.tax_amount);
+					entry.taxable_amount = taxable_base;
+					entry.tax_amount = flt(entry.taxable_amount * (tax_rate / 100), precision("tax_amount", entry));
+					entry.net_amount = taxable_base + gov_amount + flt(entry.tax_amount);
 				}
 			}
 			else {
 				entry.taxable_amount = 0;
 				entry.tax_amount = 0;
-				entry.net_amount = com_amount + gov_amount;
+				entry.net_amount = taxable_base + gov_amount;
 			}
 
 			entry.rate_excluded_tax = flt(entry.taxable_amount) && qty
 				? flt(entry.taxable_amount) / qty
 				: entry.rate;
 
-			entry.gross_amount = qty * (com_rate + gov_rate);
+			entry.gross_amount = qty * (taxable_rate + gov_rate);
 
 			gross_total = gross_total + flt(entry.gross_amount);
 			tax_total = tax_total + flt(entry.tax_amount);
@@ -717,7 +722,7 @@ frappe.ui.form.on('Sales Return Item', {
 				args: {
 					'doctype': 'Item',
 					'filters': { 'item_code': row.item },
-					'fieldname': ['item_name','description','base_unit', 'tax', 'tax_excluded', 'com', 'gov']
+					'fieldname': ['item_name','description','base_unit', 'tax', 'tax_excluded', 'service_charge', 'typing_charges', 'gov']
 				},
 				callback: (r) => {
 
@@ -736,9 +741,10 @@ frappe.ui.form.on('Sales Return Item', {
 					row.base_unit = r.message.base_unit;
 					row.unit = r.message.base_unit;
 					row.conversion_factor = 1;
-					row.com = flt(r.message.com);
+					row.service_charge = flt(r.message.service_charge);
+					row.typing_charges = flt(r.message.typing_charges);
 					row.gov = flt(r.message.gov);
-					row.rate = flt(r.message.com) + flt(r.message.gov);
+					row.rate = flt(r.message.service_charge) + flt(r.message.typing_charges) + flt(r.message.gov);
 					row.display_name = row.item_name
 					frm.item = row.item
 					frm.warehouse = row.warehouse
@@ -769,7 +775,7 @@ frappe.ui.form.on('Sales Return Item', {
 					console.log("Price List");
 					console.log(frm.doc.price_list);
 
-					// Rate comes from the item's COM and GOV above, so the price list
+					// Rate comes from the item's Service Charge, Typing Charges and GOV above, so the price list
 					// is no longer consulted here - same as sales_invoice.js.
 					// rate_in_base_unit is derived from the rate in make_taxes_and_totals.
 
@@ -816,8 +822,12 @@ frappe.ui.form.on('Sales Return Item', {
 	rate(frm, cdt, cdn) {
 		frm.trigger("make_taxes_and_totals");
 	},
-	com(frm, cdt, cdn) {
-		// make_taxes_and_totals recomputes rate as com + gov
+	service_charge(frm, cdt, cdn) {
+		// make_taxes_and_totals recomputes rate as service_charge + typing_charges + gov
+		frm.trigger("make_taxes_and_totals");
+		frm.refresh_field("items");
+	},
+	typing_charges(frm, cdt, cdn) {
 		frm.trigger("make_taxes_and_totals");
 		frm.refresh_field("items");
 	},

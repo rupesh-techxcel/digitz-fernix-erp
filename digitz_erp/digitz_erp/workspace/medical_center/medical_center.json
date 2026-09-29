@@ -1,16 +1,7 @@
 {
- "charts": [
-  {
-   "chart_name": "Account Summary",
-   "label": "Account Summary"
-  },
-  {
-   "chart_name": "Count Summary",
-   "label": "Count Summary"
-  }
- ],
- "content": "[{\"id\": \"mcNavBlock01\", \"type\": \"custom_block\", \"data\": {\"custom_block_name\": \"Medical Center Navigator\", \"col\": 12}}, {\"id\": \"mcNavSpacer1\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"XwuKUhHy85\", \"type\": \"chart\", \"data\": {\"chart_name\": \"Account Summary\", \"col\": 12}}, {\"id\": \"nhyNVLhvrX\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"UEcb5samf2\", \"type\": \"chart\", \"data\": {\"chart_name\": \"Count Summary\", \"col\": 12}}]",
- "creation": "2026-08-23 17:25:00.399587",
+ "charts": [],
+ "content": "[{\"id\":\"mcNavBlock01\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Medical Center Navigator\",\"col\":12}},{\"id\":\"mcNavSpacer1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"nhyNVLhvrX\",\"type\":\"spacer\",\"data\":{\"col\":12}}]",
+ "creation": "2026-09-28 09:57:27.058744",
  "custom_blocks": [
   {
    "custom_block_name": "Medical Center Navigator",
@@ -27,7 +18,7 @@
  "is_hidden": 0,
  "label": "Medical Center",
  "links": [],
- "modified": "2026-09-01 13:41:28.852354",
+ "modified": "2026-09-29 05:48:55.363524",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Medical Center",
@@ -42,86 +33,6 @@
   }
  ],
  "sequence_id": 0.0,
- "shortcuts": [
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Counter based Sales report",
-   "link_to": "Counter based Sales report",
-   "report_ref_doctype": "Sales Invoice",
-   "type": "Report"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Sales Invoice Board",
-   "link_to": "Sales Invoice Board",
-   "type": "Page"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Service Wise Sales Report",
-   "link_to": "Service wise Sales Report",
-   "report_ref_doctype": "Sales Invoice",
-   "type": "Report"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Sales Invoice",
-   "link_to": "Sales Invoice",
-   "stats_filter": "[]",
-   "type": "DocType"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Itemwise Sales Report",
-   "link_to": "Itemwise Sales Report",
-   "report_ref_doctype": "Sales Invoice",
-   "type": "Report"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Item Category Wise Sales",
-   "link_to": "Item Category Wise Sales",
-   "report_ref_doctype": "Sales Invoice",
-   "type": "Report"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Medical Services",
-   "link_to": "Medical Services",
-   "stats_filter": "[]",
-   "type": "DocType"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Item",
-   "link_to": "Item",
-   "stats_filter": "[]",
-   "type": "DocType"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Sales Details Report",
-   "link_to": "Sales Details Report",
-   "report_ref_doctype": "Sales Invoice",
-   "type": "Report"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "List",
-   "label": "Medical Service Logs",
-   "link_to": "Medical Service Logs",
-   "stats_filter": "[]",
-   "type": "DocType"
-  }
- ],
+ "shortcuts": [],
  "title": "Medical Center"
 }

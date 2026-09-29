@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from digitz_erp.api.counter_session_api import stamp_counter_session
 from frappe.model.document import Document
 from datetime import datetime, timedelta
 from digitz_erp.api.document_posting_status_api import init_document_posting_status, update_posting_status
@@ -71,6 +72,7 @@ class ExpenseEntry(Document):
 
 
 	def before_validate(self):
+		stamp_counter_session(self)
 
 		if(self.Voucher_In_The_Same_Time()):
 

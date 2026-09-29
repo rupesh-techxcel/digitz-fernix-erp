@@ -29,6 +29,7 @@
   "accounts_section",
   "credit_expense",
   "payment_mode",
+  "counter_session",
   "payment_account",
   "mode",
   "column_break_hugq",
@@ -284,12 +285,21 @@
   {
    "fieldname": "column_break_kbba",
    "fieldtype": "Column Break"
+  },
+  {
+   "description": "The cashier's open day this was saved in; its cash counts towards that day's till.",
+   "fieldname": "counter_session",
+   "fieldtype": "Link",
+   "label": "Counter Session",
+   "no_copy": 1,
+   "options": "Counter Session",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2024-12-15 13:58:15.999913",
+ "modified": "2026-09-28 21:58:48.695259",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Expense Entry",

@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from digitz_erp.api.counter_session_api import stamp_counter_session
 from frappe.utils import get_datetime
 from frappe.utils import now
 from frappe.model.document import Document
@@ -16,6 +17,7 @@ from digitz_erp.api.settings_api import get_gl_narration
 class SalesReturn(Document):
 
     def before_validate(self):
+        stamp_counter_session(self)
         self.in_words = money_in_words(self.rounded_total,"AED")
         self.update_sales_invoice_references()
 

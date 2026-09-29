@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "creation": "2025-08-18 17:43:15.728626",
+ "creation": "2026-09-25 05:46:08.335355",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -12,8 +12,15 @@
   "delete_customer_url",
   "section_break_token_sync",
   "token_sync_enabled",
+  "default_walk_in_customer",
+  "item_section",
+  "item_group_code_required",
+  "create_item_code_from_item_group",
+  "item_name_arabic_mandatory",
   "section_break_customer",
-  "customer_code_required"
+  "customer_code_required",
+  "section_break_sales_invoice",
+  "customer_mobile_number_mandatory_in_sales_invoice"
  ],
  "fields": [
   {
@@ -63,14 +70,58 @@
    "fieldname": "customer_code_required",
    "fieldtype": "Check",
    "label": "Customer Code Required"
+  },
+  {
+   "fieldname": "item_section",
+   "fieldtype": "Section Break",
+   "label": "Item"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.item_group_code_required",
+   "fieldname": "create_item_code_from_item_group",
+   "fieldtype": "Check",
+   "label": "Create Item Code From Item Group"
+  },
+  {
+   "default": "0",
+   "fieldname": "item_group_code_required",
+   "fieldtype": "Check",
+   "label": "Item Group Code Required"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, Item Name Arabic must be filled on the Item form.",
+   "fieldname": "item_name_arabic_mandatory",
+   "fieldtype": "Check",
+   "label": "Item Name Arabic Mandatory"
+  },
+  {
+   "fieldname": "section_break_sales_invoice",
+   "fieldtype": "Section Break",
+   "label": "Sales Invoice"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, Customer Mobile Number must be filled on the Sales Invoice.",
+   "fieldname": "customer_mobile_number_mandatory_in_sales_invoice",
+   "fieldtype": "Check",
+   "label": "Customer Mobile Number Mandatory in the Sales Invoice"
+  },
+  {
+   "description": "Customer that token-sync invoices for walk-in patients are raised against. The patient's name and email from the token are kept on the invoice as Customer Display Name and Customer Email. Tokens with a CompanyId are still billed to that company.",
+   "fieldname": "default_walk_in_customer",
+   "fieldtype": "Link",
+   "label": "Default Walk-in Customer",
+   "options": "Customer"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-09-25 07:15:12.594785",
- "modified_by": "sameer.rather@techxceltech.com",
+ "modified": "2026-09-28 14:21:36.758308",
+ "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Settings",
  "owner": "Administrator",

@@ -3,7 +3,7 @@
  "allow_copy": 1,
  "allow_rename": 1,
  "autoname": "naming_series:",
- "creation": "2023-01-04 16:31:16.689825",
+ "creation": "2026-09-28 14:42:35.100737",
  "default_view": "List",
  "doctype": "DocType",
  "editable_grid": 1,
@@ -16,14 +16,22 @@
   "customer_balance",
   "column_break_6",
   "customer_name",
+  "customer_company",
   "warehouse",
   "customer_token",
   "medical_service",
+  "counter",
+  "counter_device",
+  "counter_session",
   "customer_email",
+  "customer_mobile_number",
+  "show_company_in_printout",
+  "show_trn_in_printout",
   "column_break_4",
   "posting_date",
   "posting_time",
   "edit_posting_date_and_time",
+  "price_list",
   "rate_includes_tax",
   "column_break_egud",
   "remarks",
@@ -42,10 +50,7 @@
   "update_stock",
   "salesman",
   "salesman_code",
-  "reference_no",
-  "reference_date",
   "column_break_wupz",
-  "price_list",
   "cost_center",
   "update_rates_in_price_list",
   "payment_status",
@@ -69,9 +74,14 @@
   "credit_days",
   "column_break_bfep",
   "payment_mode",
+  "reference_no",
+  "reference_date",
   "mode",
   "column_break_zjj2",
   "payment_account",
+  "payment_mode_type",
+  "received_amount",
+  "balance_amount",
   "payment_terms",
   "column_break_yacz",
   "section_break_19",
@@ -321,9 +331,11 @@
    "label": "LPO Date"
   },
   {
+   "depends_on": "eval:doc.mode==\"Bank\"",
    "fieldname": "reference_no",
    "fieldtype": "Data",
-   "label": "Reference No"
+   "label": "Reference No",
+   "mandatory_depends_on": "eval:doc.mode==\"Bank\""
   },
   {
    "fieldname": "column_break_4",
@@ -466,7 +478,7 @@
    "label": "Company Tax Id"
   },
   {
-   "fetch_from": "customer.tax_id",
+   "description": "Set from the customer. Editable only for the Default Walk-in Customer.",
    "fieldname": "tax_id",
    "fieldtype": "Data",
    "label": "Tax Id"
@@ -557,9 +569,11 @@
    "label": "Payment Status"
   },
   {
+   "depends_on": "eval:doc.mode==\"Bank\"",
    "fieldname": "reference_date",
    "fieldtype": "Date",
-   "label": "Reference Date"
+   "label": "Reference Date",
+   "mandatory_depends_on": "eval:doc.mode==\"Bank\""
   },
   {
    "fieldname": "in_words",
@@ -624,9 +638,11 @@
    "options": "Project"
   },
   {
+   "description": "The submitted Receipt Entry that paid this credit sale, set by the system. Shown in the RECEIPT INFO on the printout.",
    "fieldname": "allocated_receipt_entry",
    "fieldtype": "Data",
    "label": "Allocated Receipt Entry",
+   "no_copy": 1,
    "read_only": 1
   },
   {
@@ -787,6 +803,81 @@
    "fieldtype": "Currency",
    "label": "Taxable Total",
    "read_only": 1
+  },
+  {
+   "fieldname": "customer_mobile_number",
+   "fieldtype": "Data",
+   "label": "Customer Mobile Number"
+  },
+  {
+   "description": "Set from the customer. Editable only for the Default Walk-in Customer.",
+   "fieldname": "customer_company",
+   "fieldtype": "Data",
+   "label": "Customer Company"
+  },
+  {
+   "default": "0",
+   "fieldname": "show_company_in_printout",
+   "fieldtype": "Check",
+   "label": "Show Company In Printout"
+  },
+  {
+   "default": "0",
+   "fieldname": "show_trn_in_printout",
+   "fieldtype": "Check",
+   "label": "Show TRN In Printout"
+  },
+  {
+   "fetch_from": "payment_mode.mode",
+   "fieldname": "payment_mode_type",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Payment Mode Type",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.payment_mode_type == 'Cash' && !doc.credit_sale",
+   "description": "Cash tendered by the customer. Required for a cash sale, and must cover the Rounded Total.",
+   "fieldname": "received_amount",
+   "fieldtype": "Currency",
+   "label": "Received Amount",
+   "mandatory_depends_on": "eval:doc.payment_mode_type == 'Cash' && !doc.credit_sale",
+   "no_copy": 1
+  },
+  {
+   "depends_on": "eval:doc.payment_mode_type == 'Cash' && !doc.credit_sale",
+   "description": "Received Amount less the Rounded Total: the change to give back.",
+   "fieldname": "balance_amount",
+   "fieldtype": "Currency",
+   "label": "Balance",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "description": "The counter PC this invoice was last saved or submitted on.",
+   "fieldname": "counter",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Counter",
+   "no_copy": 1,
+   "options": "Counter",
+   "read_only": 1
+  },
+  {
+   "fieldname": "counter_device",
+   "fieldtype": "Data",
+   "label": "Counter Device",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "description": "The cashier's open day this was saved in; its cash counts towards that day's till.",
+   "fieldname": "counter_session",
+   "fieldtype": "Link",
+   "label": "Counter Session",
+   "no_copy": 1,
+   "options": "Counter Session",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
@@ -807,7 +898,7 @@
    "table_fieldname": "receipt_allocation"
   }
  ],
- "modified": "2026-09-02 09:44:21.564882",
+ "modified": "2026-09-29 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Sales Invoice",
@@ -830,5 +921,6 @@
  "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
- "states": []
+ "states": [],
+ "track_changes": 1
 }

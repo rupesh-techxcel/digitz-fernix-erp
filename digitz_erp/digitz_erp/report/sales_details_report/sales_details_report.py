@@ -10,10 +10,16 @@ def execute(filters=None):
 def get_columns(filters=None):
     columns = [
         {
+            "fieldname": "voucher_type",
+            "label": "Type",
+            "fieldtype": "Data",
+            "width": 110,
+        },
+        {
             "fieldname": "invoice_no",
-            "label": "Invoice No",
-            "fieldtype": "Link",
-            "options": "Sales Invoice",
+            "label": "Document No",
+            "fieldtype": "Dynamic Link",
+            "options": "voucher_type",
             "width": 160,
         },
         {
@@ -36,8 +42,14 @@ def get_columns(filters=None):
             "width": 260,
         },
         {
-            "fieldname": "com_fee",
-            "label": "Com Fee",
+            "fieldname": "service_charge",
+            "label": "Service Charge",
+            "fieldtype": "Currency",
+            "width": 120,
+        },
+        {
+            "fieldname": "typing_charges",
+            "label": "Typing Charges",
             "fieldtype": "Currency",
             "width": 120,
         },
@@ -93,18 +105,37 @@ def get_columns(filters=None):
     return columns
 
 
+AMOUNT_FIELDS = ("service_charge", "typing_charges", "gov_fee", "gross_amount", "tax_amount", "net_amount")
+
+
 def get_data(filters):
+    """One row per submitted Sales Invoice, and one per submitted Sales Return with
+    its amounts negative, so the columns add up to what was actually sold. The same
+    filters apply to both; the newest documents come first."""
     filters = filters or {}
 
-    query = """
+    rows = get_documents("Sales Invoice", "Sales Invoice Item", filters)
+    for row in get_documents("Sales Return", "Sales Return Item", filters):
+        for field in AMOUNT_FIELDS:
+            row[field] = -(row[field] or 0)
+        rows.append(row)
+
+    rows.sort(key=lambda r: (r.posting_date, r.net_amount if r.net_amount is not None else 0), reverse=True)
+    return rows
+
+
+def get_documents(doctype, item_doctype, filters):
+    query = f"""
         SELECT
+            '{doctype}' AS voucher_type,
             i.name AS invoice_no,
             i.posting_date AS posting_date,
             i.customer AS customer,
 
             GROUP_CONCAT(DISTINCT sii.item_name ORDER BY sii.idx SEPARATOR ', ') AS item_name,
 
-            SUM(IFNULL(sii.com, 0)) AS com_fee,
+            SUM(IFNULL(sii.service_charge, 0)) AS service_charge,
+            SUM(IFNULL(sii.typing_charges, 0)) AS typing_charges,
             SUM(IFNULL(sii.gov, 0)) AS gov_fee,
             SUM(IFNULL(sii.gross_amount, 0)) AS gross_amount,
             SUM(IFNULL(sii.tax_amount, 0))   AS tax_amount,
@@ -121,9 +152,9 @@ def get_data(filters):
     if filters.get("payment_mode") == "Credit Sale":
         query += ", i.credit_days AS credit_days"
 
-    query += """
-        FROM `tabSales Invoice` i
-        JOIN `tabSales Invoice Item` sii ON sii.parent = i.name
+    query += f"""
+        FROM `tab{doctype}` i
+        JOIN `tab{item_doctype}` sii ON sii.parent = i.name
     """
 
     conditions = []
@@ -136,7 +167,7 @@ def get_data(filters):
 
     current_user = frappe.session.user
     roles = set(frappe.get_roles(current_user))
-    is_privileged = (current_user == "Administrator")
+    is_privileged = current_user == "Administrator" or "System Manager" in roles
 
     if "Cashier" in roles and not is_privileged:
         filters["user"] = current_user
@@ -160,7 +191,6 @@ def get_data(filters):
 
     query += """
         GROUP BY i.name
-        ORDER BY i.posting_date DESC, net_amount DESC
     """
 
     return frappe.db.sql(query, filters, as_dict=1)

@@ -27,6 +27,14 @@ app_logo_url = "/assets/digitz_erp/images/weqayati-logo.png"
 app_include_js = [
 	"/assets/digitz_erp/js/digitz_common.js",
 	"/assets/digitz_erp/js/token_notifications.js",
+	# A bundle, so each build gets a new file name and browsers never keep a stale copy
+	"counter_device.bundle.js",
+]
+
+# The Help Center page (digitz_erp/help) in the navbar Help menu of new sites;
+# existing sites get it from patches/v1_0/add_help_center_to_navbar.py
+standard_help_items = [
+	{"item_label": "Help Center", "item_type": "Route", "route": "/app/digitz-help"},
 ]
 
 # include custom scss in every website theme (without file extension ".scss")
@@ -135,6 +143,13 @@ has_permission = {
 #		"on_trash": "method"
 #	}
 # }
+
+doc_events = {
+	"User": {
+		# Cashiers are held to one login at a time
+		"validate": "digitz_erp.api.session_policy.enforce_on_user",
+	},
+}
 
 # Scheduled Tasks
 # ---------------

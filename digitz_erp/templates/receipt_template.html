@@ -157,15 +157,15 @@
   <table class="rcpt-meta">
     <tr>
       <td class="label">Receipt No<span class="ar">رقم الإيصال</span></td>
-      <td class="value">{{ doc.name }}</td>
+      <td class="value">{{ receipt_info.number }}</td>
       <td class="label">Date<span class="ar">التاريخ</span></td>
-      <td class="value">{{ date }}</td>
+      <td class="value">{{ receipt_info.date }}</td>
     </tr>
     <tr>
-      <td class="label">Received From<span class="ar">استلمنا من</span></td>
-      <td class="value">{{ customer_name }}</td>
+      <td class="label">Applicant Name<span class="ar">اسم المتقدم</span></td>
+      <td class="value">{{ doc.customer_display_name or customer_name }}</td>
       <td class="label">Payment Mode<span class="ar">طريقة الدفع</span></td>
-      <td class="value">{{ doc.payment_mode or "" }}</td>
+      <td class="value">{{ receipt_info.payment_mode }}</td>
     </tr>
     {% if doc.customer_token or doc.medical_service %}
     <tr>
@@ -173,6 +173,14 @@
       <td class="value">{{ doc.customer_token or "" }}</td>
       <td class="label">Service<span class="ar">الخدمة</span></td>
       <td class="value">{{ doc.medical_service or "" }}</td>
+    </tr>
+    {% endif %}
+    {% if (doc.show_company_in_printout and doc.customer_company) or (doc.show_trn_in_printout and doc.tax_id) %}
+    <tr>
+      <td class="label">Company<span class="ar">الشركة</span></td>
+      <td class="value">{{ doc.customer_company if doc.show_company_in_printout else "" }}</td>
+      <td class="label">Customer TRN<span class="ar">الرقم الضريبي للعميل</span></td>
+      <td class="value">{{ doc.tax_id if doc.show_trn_in_printout else "" }}</td>
     </tr>
     {% endif %}
     {% if trn_no %}
@@ -190,7 +198,7 @@
           Amount Received
           <span class="ar" style="display:block; font-size:11px; font-weight:normal; direction:rtl;">المبلغ المستلم</span>
         </td>
-        <td class="figure">{{ "%.2f"|format(doc.paid_amount or doc.rounded_total or 0) }} &nbsp;د.إ</td>
+        <td class="figure">{{ "%.2f"|format(receipt_info.amount or 0) }} &nbsp;د.إ</td>
       </tr>
     </table>
     {% if doc.in_words %}
@@ -214,6 +222,14 @@
         <td style="text-align: right;">{{ "%.2f"|format(item.net_amount) }}</td>
       </tr>
       {% endfor %}
+      {% if doc.round_off %}
+      <tr>
+        <td colspan="2" style="text-align: right;">
+          Round Off<span class="ar" style="display:inline; margin-right:6px;">التقريب</span>
+        </td>
+        <td style="text-align: right;">{{ "%.2f"|format(doc.round_off) }}</td>
+      </tr>
+      {% endif %}
       <tr>
         <td colspan="2" style="text-align: right; font-weight: bold;">
           Total<span class="ar" style="display:inline; margin-right:6px;">الإجمالي</span>
@@ -227,13 +243,9 @@
 
   <table class="rcpt-sign">
     <tr>
-      <td style="width: 50%;">
+      <td>
         <div><b>Received By</b> <span style="direction:rtl;">المستلم</span></div>
-        <div class="rcpt-line">{{ doc.owner }}</div>
-      </td>
-      <td style="width: 50%; text-align: right;">
-        <div><b>Authorized Signature</b> <span style="direction:rtl;">التوقيع المعتمد</span></div>
-        <div class="rcpt-line" style="margin-left: auto;">&nbsp;</div>
+        <div class="rcpt-line">{{ receipt_info.collected_by }}</div>
       </td>
     </tr>
   </table>

@@ -19,6 +19,8 @@ frappe.ui.form.on('Item', {
 			});	
 		}
 
+		apply_item_settings(frm);
+
 		frappe.db.get_value('Company', frm.doc.company, 'allow_purchase_with_dimensions_2', function(r) {
 			console.log("allow_purchase_with_dimensions_2")
 			
@@ -264,3 +266,28 @@ frappe.ui.form.on("Item", "onload", function(frm) {
 	}
 );
 
+// Item Code is generated from the Item Group Code and Item Name Arabic can be made
+// mandatory in Settings. The flags are fetched once per form and reused on refresh.
+function apply_item_settings(frm) {
+
+	if (frm.item_settings === undefined) {
+		frappe.call({
+			method: "digitz_erp.stock.doctype.item.item.get_item_settings",
+			callback: function(r) {
+				frm.item_settings = r.message || {};
+				apply_item_settings(frm);
+			}
+		});
+		return;
+	}
+
+	const item_code_from_item_group = cint(frm.item_settings.item_code_from_item_group);
+	frm.set_df_property("item_code", "read_only", item_code_from_item_group);
+	frm.set_df_property("item_code", "description",
+		item_code_from_item_group && frm.is_new() ? __("Generated from the Item Group Code on save") : "");
+	frm.set_df_property("item_group", "reqd", item_code_from_item_group);
+
+	const item_name_arabic_mandatory = cint(frm.item_settings.item_name_arabic_mandatory);
+	frm.set_df_property("item_name_arabic", "hidden", !item_name_arabic_mandatory);
+	frm.set_df_property("item_name_arabic", "reqd", item_name_arabic_mandatory);
+}

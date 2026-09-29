@@ -41,9 +41,9 @@ def get_sales_line_items_for_return(sales_invoice):
     """The still-returnable lines of one invoice.
 
     Every conversion_factor term is gone. Units are not used in this app, and on rows
-    where the factor is 0 the old expressions produced garbage: `rate * 0`, `com * 0`
-    and `gov * 0` all collapsed to 0, and dividing by it made the outstanding qty NULL.
-    Rate, COM and GOV are returned as stored, and the outstanding qty is simply
+    where the factor is 0 the old expressions produced garbage: `rate * 0`, `service_charge * 0`,
+    `typing_charges * 0` and `gov * 0` all collapsed to 0, and dividing by it made the outstanding qty NULL.
+    Rate, Service Charge, Typing Charges and GOV are returned as stored, and the outstanding qty is simply
     qty - qty_returned. conversion_factor is reported as 1 so the caller's row is
     consistent with what the Sales Return form now writes.
     """
@@ -52,22 +52,24 @@ def get_sales_line_items_for_return(sales_invoice):
                si.item, si.item_name, si.display_name,
                si.unit, si.base_unit,
                si.rate,
-               -- Sales Return derives its line rate as COM + GOV, so the components
-               -- handed back have to add up to what the invoice actually charged.
-               -- `rate` is the arbiter: on every line checked it agrees with
-               -- net_amount, whereas COM/GOV can disagree with both - some legacy
-               -- lines have no components at all, and others carry a split that was
-               -- back-filled from the Item master and does not match what was billed
-               -- (e.g. rate 32.45 against COM+GOV of 387.00, which would refund more
-               -- than ten times the amount charged).
+               -- Sales Return derives its line rate as Service Charge + Typing Charges + GOV,
+               -- so the components handed back have to add up to what the invoice actually
+               -- charged. `rate` is the arbiter: on every line checked it agrees with
+               -- net_amount, whereas the components can disagree with both - some legacy
+               -- lines have none at all, and others carry a split that was back-filled
+               -- from the Item master and does not match what was billed (e.g. rate 32.45
+               -- against components of 387.00, which would refund more than ten times the
+               -- amount charged).
                --
                -- So: keep the stored split when it reconciles with the rate, and
-               -- otherwise fall back to the whole rate as COM. Either way
-               -- COM + GOV = rate, and the return can never refund an amount the
-               -- invoice did not charge.
-               CASE WHEN ABS(si.rate - (IFNULL(si.com, 0) + IFNULL(si.gov, 0))) <= 0.005
-                    THEN IFNULL(si.com, 0) ELSE si.rate END AS com,
-               CASE WHEN ABS(si.rate - (IFNULL(si.com, 0) + IFNULL(si.gov, 0))) <= 0.005
+               -- otherwise fall back to the whole rate as Service Charge. Either way the
+               -- components add up to the rate, and the return can never refund an amount
+               -- the invoice did not charge.
+               CASE WHEN ABS(si.rate - (IFNULL(si.service_charge, 0) + IFNULL(si.typing_charges, 0) + IFNULL(si.gov, 0))) <= 0.005
+                    THEN IFNULL(si.service_charge, 0) ELSE si.rate END AS service_charge,
+               CASE WHEN ABS(si.rate - (IFNULL(si.service_charge, 0) + IFNULL(si.typing_charges, 0) + IFNULL(si.gov, 0))) <= 0.005
+                    THEN IFNULL(si.typing_charges, 0) ELSE 0 END AS typing_charges,
+               CASE WHEN ABS(si.rate - (IFNULL(si.service_charge, 0) + IFNULL(si.typing_charges, 0) + IFNULL(si.gov, 0))) <= 0.005
                     THEN IFNULL(si.gov, 0) ELSE 0 END AS gov,
                si.qty - IFNULL(si.qty_returned_in_base_unit, 0) AS qty,
                si.qty - IFNULL(si.qty_returned_in_base_unit, 0) AS qty_in_base_unit,

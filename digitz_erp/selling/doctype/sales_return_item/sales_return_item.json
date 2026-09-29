@@ -12,7 +12,8 @@
   "item_name",
   "display_name",
   "qty",
-  "com",
+  "service_charge",
+  "typing_charges",
   "gov",
   "unit",
   "rate",
@@ -81,10 +82,17 @@
   },
   {
    "columns": 1,
-   "fieldname": "com",
+   "fieldname": "service_charge",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "COM"
+   "label": "Service Charge"
+  },
+  {
+   "columns": 1,
+   "fieldname": "typing_charges",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Typing Charges"
   },
   {
    "columns": 1,
@@ -240,7 +248,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-09-04 20:26:15.372508",
+ "modified": "2026-09-28 12:19:50.477484",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Sales Return Item",

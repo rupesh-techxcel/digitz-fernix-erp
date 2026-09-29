@@ -2,7 +2,9 @@
 # For license information, please see license.txt
 
 import frappe
+from digitz_erp.api.counter_session_api import stamp_counter_session
 from frappe.model.document import Document
+from frappe.utils import flt
 from digitz_erp.api.receipt_entry_api import get_allocations_for_sales_invoice ,get_allocations_for_sales_return, get_allocations_for_credit_note,get_allocations_for_progressive_sales_invoice
 from datetime import datetime, timedelta
 from digitz_erp.api.document_posting_status_api import init_document_posting_status, update_posting_status
@@ -58,6 +60,7 @@ class ReceiptEntry(Document):
 						receipt_detail.reference_date = self.reference_date
 
 	def before_validate(self):
+		stamp_counter_session(self)
 
 		if(self.Voucher_In_The_Same_Time()):
 
@@ -392,6 +395,7 @@ class ReceiptEntry(Document):
 		# 	frappe.enqueue(self.do_postings_on_submit,queue="long")
 
 		self.do_postings_on_submit()
+		self.refresh_credit_invoice_prints()
   
 	def do_postings_on_submit(self):
 
@@ -819,11 +823,57 @@ class ReceiptEntry(Document):
 
 		delete_gl_postings_for_cancel_doc_type('Receipt Entry',self.name)
 		self.revert_for_advance_receipt()
+		self.refresh_credit_invoice_prints(cancel=True)
 
 		# frappe.db.delete("GL Posting",
 		# 		{"Voucher_type": "Receipt Entry",
 		# 		"voucher_no": self.name
 		# 		})
+
+	def refresh_credit_invoice_prints(self, cancel=False):
+		"""Show this receipt on the printouts of the credit sales it pays.
+
+		On submit each submitted credit Sales Invoice allocated here records this
+		receipt in `allocated_receipt_entry` -- a plain Data field, not a Link, so the
+		invoice and the receipt do not link to each other -- and its invoice PDF is
+		regenerated with this receipt's details, with a receipt PDF attached beside
+		it. On cancel the field is cleared again (if it still names this receipt)
+		and the PDFs regenerated without it. One receipt may pay several invoices;
+		each is refreshed. Partial allocation is not supported: one receipt per invoice.
+
+		A PDF failure is logged and reported but never blocks the receipt itself.
+		"""
+		invoices = []
+		for allocation in self.receipt_allocation or []:
+			if (allocation.reference_type == "Sales Invoice" and allocation.reference_name
+					and flt(allocation.paying_amount) > 0 and allocation.reference_name not in invoices):
+				invoices.append(allocation.reference_name)
+
+		failed = []
+		for invoice in invoices:
+			details = frappe.db.get_value("Sales Invoice", invoice,
+				["docstatus", "credit_sale", "allocated_receipt_entry"], as_dict=True)
+			if not details or details.docstatus != 1 or not details.credit_sale:
+				continue
+
+			if cancel:
+				if details.allocated_receipt_entry != self.name:
+					continue
+				frappe.db.set_value("Sales Invoice", invoice, "allocated_receipt_entry", None, update_modified=False)
+			else:
+				frappe.db.set_value("Sales Invoice", invoice, "allocated_receipt_entry", self.name, update_modified=False)
+
+			try:
+				frappe.get_doc("Sales Invoice", invoice).attach_print_pdfs()
+			except Exception:
+				frappe.log_error(title=f"Receipt {self.name}: could not refresh the printout of {invoice}")
+				failed.append(invoice)
+
+		if failed:
+			frappe.msgprint(
+				f"The printout of {', '.join(failed)} could not be refreshed with this receipt. "
+				"Use Print > Attach PDF on the invoice to try again; the error is in the Error Log.",
+				indicator="orange")
 
 	def GetAccountForTheHighestAmountInPayments(self):
 

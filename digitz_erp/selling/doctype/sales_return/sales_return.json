@@ -36,6 +36,7 @@
   "credit_sale",
   "credit_days",
   "payment_mode",
+  "counter_session",
   "mode",
   "payment_account",
   "column_break_25",
@@ -554,6 +555,15 @@
   {
    "fieldname": "column_break_qgtt",
    "fieldtype": "Column Break"
+  },
+  {
+   "description": "The cashier's open day this was saved in; its cash counts towards that day's till.",
+   "fieldname": "counter_session",
+   "fieldtype": "Link",
+   "label": "Counter Session",
+   "no_copy": 1,
+   "options": "Counter Session",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
@@ -567,7 +577,7 @@
    "table_fieldname": "receipt_allocation"
   }
  ],
- "modified": "2026-09-04 20:11:36.667360",
+ "modified": "2026-09-28 21:58:48.695259",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Sales Return",

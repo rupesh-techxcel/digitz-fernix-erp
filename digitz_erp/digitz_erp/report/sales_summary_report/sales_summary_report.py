@@ -38,7 +38,8 @@ def get_grouped_data(filters):
     """
     Return aggregate sums grouped by user and payment mode.
     - Applies date range.
-    - If logged-in user has 'Cashier' role → restrict to their own records.
+    - If logged-in user has 'Cashier' role (and is not Administrator or a System Manager)
+      → restrict to their own records.
     - Else: apply 'user' filter if provided; otherwise returns all users.
     - If credit_sale=1 → group as 'Credit Sale'
       else group by payment_mode.
@@ -51,8 +52,8 @@ def get_grouped_data(filters):
     current_user = frappe.session.user
     roles = set(frappe.get_roles(current_user))
 
-    # Treat these as 'administrator privilege'
-    is_privileged = (current_user == "Administrator")
+    # Administrator and System Manager see everyone's sales, even with the Cashier role
+    is_privileged = current_user == "Administrator" or "System Manager" in roles
 
     if "Cashier" in roles and not is_privileged:
         # Cashier but not privileged → restrict to own records
@@ -74,15 +75,21 @@ def get_grouped_data(filters):
         END
     """
 
+    # Submitted Sales Returns come off the same user's line for their payment mode
+    # (or Credit Sale), on the day of the return
     sql = f"""
-        SELECT
-            COALESCE(u.full_name, u.name) AS username,
-            {payment_mode_label}           AS payment_mode,
-            SUM(i.net_total)               AS total_amount
-        FROM `tabSales Invoice` i
-        LEFT JOIN `tabUser` u ON u.name = i.owner
-        WHERE {where_sql}
-        GROUP BY COALESCE(u.full_name, u.name), {payment_mode_label}
+        SELECT username, payment_mode, SUM(amount) AS total_amount
+        FROM (
+            SELECT i.owner AS owner, {payment_mode_label} AS payment_mode, i.net_total AS amount
+            FROM `tabSales Invoice` i
+            WHERE {where_sql}
+            UNION ALL
+            SELECT i.owner, {payment_mode_label}, -i.net_total
+            FROM `tabSales Return` i
+            WHERE {where_sql}
+        ) docs
+        LEFT JOIN (SELECT name, COALESCE(full_name, name) AS username FROM `tabUser`) u ON u.name = docs.owner
+        GROUP BY username, payment_mode
         ORDER BY username, payment_mode
     """
 

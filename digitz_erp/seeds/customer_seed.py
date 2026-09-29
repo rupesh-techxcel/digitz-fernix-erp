@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Rupesh P and contributors
 # For license information, please see license.txt
 
-"""Seed the Al Taj client list as Customer records.
+"""Seed the Al Taj client list as Customer records, with their salesmen as Employees.
 
 Run manually; this is deliberately not a patch, so `bench migrate` never
 triggers it.
@@ -17,8 +17,8 @@ a server with no copy of the spreadsheet.
 
 Two kinds of record, created in this order because the second links to the first:
 
-	PROS    -> customer_type "PRO", one per distinct P.R.O Name
-	CLIENTS -> customer_type "Company", linked to their PRO via pro_customer
+	PROS    -> an Employee, one per distinct P.R.O Name: the centre's salesmen
+	CLIENTS -> customer_type "Corporate", with that Employee as their Salesman
 
 The sheet's Ref ID column is ignored, as instructed; `Name` is the customer
 name, which is also the record name (Customer is autonamed from it).
@@ -28,7 +28,8 @@ deliberate: before_save only allocates an id when the field is empty, and doing
 so also POSTs the customer to the external add_customer_url. Assigning it up
 front keeps a bulk import from firing hundreds of calls at the token service.
 
-Re-running is safe: a customer whose name already exists is left untouched.
+Re-running is safe: a customer whose name already exists is left untouched, and
+a salesman is reused when an Employee of that name exists.
 """
 
 import re
@@ -804,7 +805,7 @@ CLIENTS = (
 
 
 def run(dry_run=0):
-	"""Create the PRO customers, then the client companies linked to them.
+	"""Create the salesman Employees, then the Corporate clients linked to them.
 
 	:param dry_run: report what would happen without writing.
 	"""
@@ -812,24 +813,26 @@ def run(dry_run=0):
 
 	pros_created, pros_existing, problems = [], [], []
 
+	# P.R.O name -> Employee id (None on a dry run, where nothing is created)
+	salesmen = {}
+
 	for pro in PROS:
-		if frappe.db.exists("Customer", pro):
+		existing = frappe.db.get_value("Employee", {"employee_name": pro}, "name")
+		if existing:
+			salesmen[pro] = existing
 			pros_existing.append(pro)
 			continue
 
 		if not dry_run:
 			try:
-				frappe.get_doc(
-					{
-						"doctype": "Customer",
-						"customer_name": pro,
-						"customer_type": "PRO",
-						"customer_group": CUSTOMER_GROUP,
-					}
-				).insert(ignore_permissions=True)
+				employee = frappe.get_doc({"doctype": "Employee", "employee_name": pro})
+				employee.insert(ignore_permissions=True)
+				salesmen[pro] = employee.name
 			except Exception as error:
-				problems.append(("PRO", pro, short(error)))
+				problems.append(("Salesman", pro, short(error)))
 				continue
+		else:
+			salesmen[pro] = None
 
 		pros_created.append(pro)
 
@@ -841,7 +844,7 @@ def run(dry_run=0):
 
 	clients_created, clients_existing, unlinked = [], [], []
 
-	# PRO records that exist, or would exist after a real run. Keyed lower so a
+	# Salesmen that exist, or would exist after a real run. Keyed lower so a
 	# difference in casing between the two columns still links.
 	available_pros = {p.lower(): p for p in list(pros_created) + list(pros_existing)}
 
@@ -870,12 +873,12 @@ def run(dry_run=0):
 				{
 					"doctype": "Customer",
 					"customer_name": name,
-					"customer_type": "Company",
+					"customer_type": "Corporate",
 					"customer_group": CUSTOMER_GROUP,
 					# Set explicitly so before_save neither renumbers it nor
 					# pushes the customer to the external service.
 					"company_id": next_company_id,
-					"pro_customer": link,
+					"salesman": salesmen.get(link),
 					"address_line_1": address,
 					"mobile_no": mobile,
 					"email_id": email,
@@ -883,7 +886,7 @@ def run(dry_run=0):
 				}
 			).insert(ignore_permissions=True)
 		except Exception as error:
-			problems.append(("Company", name, short(error)))
+			problems.append(("Corporate", name, short(error)))
 			continue
 
 		clients_created.append(name)
@@ -918,15 +921,10 @@ def resolve_pro(name, pro, available_pros):
 	if not pro:
 		return None, "no P.R.O Name in the sheet"
 
-	# A client who is their own PRO cannot link to itself: the record carries a
-	# single customer_type, and self reference is rejected by validation.
-	if pro.lower() == name.lower():
-		return None, "is their own PRO"
-
 	found = available_pros.get(pro.lower())
 
 	if not found:
-		return None, f"no PRO record for '{pro}'"
+		return None, f"no salesman for '{pro}'"
 
 	return found, None
 
@@ -944,9 +942,9 @@ def report(pros_created, pros_existing, clients_created, clients_existing, unlin
 	verb = "[dry run] would create" if dry_run else "created"
 
 	print("\nCustomer seed")
-	print(f"  PRO customers    : {len(PROS)} defined, {verb} {len(pros_created)}, present {len(pros_existing)}")
+	print(f"  Salesmen         : {len(PROS)} defined, {verb} {len(pros_created)}, present {len(pros_existing)}")
 	print(f"  Client companies : {len(CLIENTS)} defined, {verb} {len(clients_created)}, present {len(clients_existing)}")
-	print(f"  without a PRO    : {len(unlinked)}")
+	print(f"  without salesman : {len(unlinked)}")
 	print(f"  problems         : {len(problems)}")
 
 	for name, reason in unlinked[:20]:

@@ -2,7 +2,7 @@ import frappe
 from frappe.utils import get_datetime
 from digitz_erp.api.settings_api import get_default_currency
 from datetime import datetime
-from frappe.utils import getdate
+from frappe.utils import getdate, flt
 import json
 
 @frappe.whitelist()
@@ -245,3 +245,57 @@ def get_item_price_list(item_list):
         return item_details       
     else:
         return None 
+
+CHARGE_FIELDS = ("service_charge", "typing_charges", "gov")
+
+
+@frappe.whitelist()
+def get_item_charges(items, price_list=None, posting_date=None):
+    """Service Charge, Typing Charges and GOV to bill for each item.
+
+    Taken from the price list's Item Price when it has one for the item, otherwise
+    from the Item master. A dated Item Price covering `posting_date` wins over an
+    undated one. An Item Price with only a rate and no charges cannot be split into
+    the taxable and non-taxable parts, so it is skipped for the Item master and the
+    caller is told (`source` = "Item (price list has rate only)").
+
+    Returns {item: {"service_charge", "typing_charges", "gov", "source"}}.
+    """
+    if isinstance(items, str):
+        items = json.loads(items)
+
+    posting_date = getdate(posting_date) if posting_date else getdate()
+    charges = {}
+
+    for item in set(filter(None, items)):
+        master = frappe.db.get_value("Item", item, list(CHARGE_FIELDS), as_dict=True) or {}
+        result = {f: flt(master.get(f)) for f in CHARGE_FIELDS}
+        result["source"] = "Item"
+
+        price = get_price_list_charges(item, price_list, posting_date) if price_list else None
+        if price:
+            if any(flt(price.get(f)) for f in CHARGE_FIELDS):
+                result = {f: flt(price.get(f)) for f in CHARGE_FIELDS}
+                result["source"] = f"Price List: {price_list}"
+            else:
+                result["source"] = "Item (price list has rate only)"
+
+        charges[item] = result
+
+    return charges
+
+
+def get_price_list_charges(item, price_list, posting_date):
+    fields = list(CHARGE_FIELDS) + ["rate"]
+
+    dated = frappe.get_all("Item Price",
+        filters={"item": item, "price_list": price_list,
+                 "from_date": ["<=", posting_date], "to_date": [">=", posting_date]},
+        fields=fields, order_by="from_date desc", limit=1)
+    if dated:
+        return dated[0]
+
+    undated = frappe.get_all("Item Price",
+        filters={"item": item, "price_list": price_list, "from_date": ["is", "not set"], "to_date": ["is", "not set"]},
+        fields=fields, limit=1)
+    return undated[0] if undated else None

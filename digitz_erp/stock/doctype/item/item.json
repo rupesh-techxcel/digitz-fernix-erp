@@ -3,13 +3,14 @@
  "allow_rename": 1,
  "autoname": "field:item_code",
  "creation": "2022-12-09 06:24:45.198426",
- "default_view": "List",
+ "default_view": "Report",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
   "item_code",
   "item_name",
+  "item_name_arabic",
   "description",
   "base_unit",
   "item_type",
@@ -17,6 +18,7 @@
   "use_as_default_for_material_in_estimate",
   "column_break_4",
   "item_group",
+  "item_subgroup",
   "brand",
   "maintain_stock",
   "asset_category",
@@ -25,7 +27,8 @@
   "weight_per_meter",
   "rate_per_kg",
   "section_break_ohog",
-  "com",
+  "service_charge",
+  "typing_charges",
   "gov",
   "standard_buying_price",
   "margin_",
@@ -67,6 +70,13 @@
    "unique": 1
   },
   {
+   "fieldname": "item_name_arabic",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "in_global_search": 1,
+   "label": "Item Name Arabic"
+  },
+  {
    "default": "PCS",
    "fieldname": "base_unit",
    "fieldtype": "Link",
@@ -79,6 +89,7 @@
    "fieldname": "item_group",
    "fieldtype": "Link",
    "in_filter": 1,
+   "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Item Group",
    "options": "Item Group"
@@ -216,8 +227,6 @@
    "fieldname": "item_type",
    "fieldtype": "Select",
    "hidden": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1,
    "label": "Item Type",
    "options": "Product\nService\nLabour\nMaterial\nFixed Asset\nBOQ Product\nBOM Product"
   },
@@ -225,7 +234,6 @@
    "fieldname": "default_expense_account",
    "fieldtype": "Link",
    "hidden": 1,
-   "in_list_view": 1,
    "label": "Default Expense Account",
    "options": "Account"
   },
@@ -311,21 +319,39 @@
    "precision": "2"
   },
   {
-   "description": "Common Fee",
-   "fieldname": "com",
+   "description": "Taxable service charge. VAT applies to this and to Typing Charges.",
+   "fieldname": "service_charge",
    "fieldtype": "Float",
-   "label": "COM"
+   "in_list_view": 1,
+   "label": "Service Charge"
   },
   {
-   "description": "Government Fee",
+   "description": "Taxable typing charges. Added to the rate with Service Charge and GOV.",
+   "fieldname": "typing_charges",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Typing Charges"
+  },
+  {
+   "description": "Government fee, passed through without VAT.",
    "fieldname": "gov",
    "fieldtype": "Float",
+   "in_list_view": 1,
    "label": "GOV"
+  },
+  {
+   "fieldname": "item_subgroup",
+   "fieldtype": "Link",
+   "in_filter": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Item Subgroup",
+   "options": "Item Subgroup"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-29 17:13:02.584371",
+ "modified": "2026-09-28 12:19:50.477484",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Item",

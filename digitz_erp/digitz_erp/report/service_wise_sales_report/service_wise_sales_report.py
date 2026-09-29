@@ -24,8 +24,7 @@ def get_columns():
 		{
 			"fieldname": "service",
 			"label": "Service",
-			"fieldtype": "Link",
-			"options": "Medical Services",
+			"fieldtype": "Data",
 			"width": 300,
 		},
 		{
@@ -49,10 +48,10 @@ def get_data_grouped_with_headers(filters):
 
 	conditions.append("si.posting_date BETWEEN %(from_date)s AND %(to_date)s")
 
-	# Cashier restriction (Administrator is privileged)
+	# Cashier restriction (Administrator and System Manager are not limited)
 	current_user = frappe.session.user
 	roles = set(frappe.get_roles(current_user))
-	is_privileged = (current_user == "Administrator")
+	is_privileged = current_user == "Administrator" or "System Manager" in roles
 
 	if "Cashier" in roles and not is_privileged:
 		params["user"] = current_user
@@ -60,21 +59,35 @@ def get_data_grouped_with_headers(filters):
 	elif params.get("user"):
 		conditions.append("si.owner = %(user)s")
 
+	conditions.append("si.docstatus = 1")
+
 	where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
 	# --- Fetch sums per (date, service) ---
+	# A submitted Sales Return takes its lines back off on the day of the return,
+	# under the service of the invoice each line was returned from
 	query = f"""
-		SELECT
-			DATE(si.posting_date) AS posting_date,
-			si_items_service.parent AS service,
-			COALESCE(SUM(sii.net_amount), 0) AS total_amount
-		FROM `tabSales Invoice` si
-		INNER JOIN `tabSales Invoice Item` sii
-			ON sii.parent = si.name
-		INNER JOIN `tabService Items` si_items_service
-			ON sii.item = si_items_service.item
-		{where_clause}
-		GROUP BY DATE(si.posting_date), si_items_service.parent
+		SELECT posting_date, service, COALESCE(SUM(amount), 0) AS total_amount
+		FROM (
+			SELECT
+				DATE(si.posting_date) AS posting_date,
+				IFNULL(NULLIF(si.medical_service, ''), 'No service') AS service,
+				sii.net_amount AS amount
+			FROM `tabSales Invoice` si
+			INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
+			{where_clause}
+			UNION ALL
+			SELECT
+				DATE(si.posting_date),
+				IFNULL(NULLIF(original.medical_service, ''), 'No service'),
+				-sii.net_amount
+			FROM `tabSales Return` si
+			INNER JOIN `tabSales Return Item` sii ON sii.parent = si.name
+			LEFT JOIN `tabSales Invoice Item` original_item ON original_item.name = sii.si_item_reference
+			LEFT JOIN `tabSales Invoice` original ON original.name = original_item.parent
+			{where_clause}
+		) doc_lines
+		GROUP BY posting_date, service
 		ORDER BY posting_date ASC, total_amount DESC
 	"""
 	rows = frappe.db.sql(query, params, as_dict=True)

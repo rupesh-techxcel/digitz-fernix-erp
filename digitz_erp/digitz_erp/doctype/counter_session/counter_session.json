@@ -1,0 +1,284 @@
+{
+ "actions": [],
+ "autoname": "CS-.YYYY.-.#####",
+ "creation": "2026-09-29 10:00:00.000000",
+ "default_print_format": "Day Close Slip",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "counter",
+  "counter_device",
+  "cashier",
+  "column_break_head",
+  "status",
+  "opened_on",
+  "closed_on",
+  "opening_section",
+  "opening_float",
+  "previous_session",
+  "previous_closing_cash",
+  "opening_denominations",
+  "opening_remarks",
+  "movements_section",
+  "cash_sales",
+  "cash_receipts",
+  "column_break_mv",
+  "cash_refunds",
+  "cash_paid_out",
+  "expected_cash",
+  "closing_section",
+  "denominations",
+  "counted_cash",
+  "difference",
+  "column_break_close",
+  "close_remarks",
+  "closed_by",
+  "approved_by",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "counter",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Counter",
+   "options": "Counter",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "counter_device",
+   "fieldtype": "Data",
+   "label": "Counter Device",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cashier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Cashier",
+   "options": "User",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Open\nClosing\nClosed\nCancelled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "opened_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Opened On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On",
+   "read_only": 1,
+   "description": "When the till was counted. A close that waits for approval keeps this time."
+  },
+  {
+   "fieldname": "opening_section",
+   "fieldtype": "Section Break",
+   "label": "Day Open"
+  },
+  {
+   "description": "Cash in the till when the day was opened.",
+   "fieldname": "opening_float",
+   "fieldtype": "Currency",
+   "label": "Opening Float"
+  },
+  {
+   "description": "Submitted documents raised in this session with a cash payment mode. Recalculated when the day is closed.",
+   "fieldname": "movements_section",
+   "fieldtype": "Section Break",
+   "label": "Cash Movements"
+  },
+  {
+   "fieldname": "cash_sales",
+   "fieldtype": "Currency",
+   "label": "Cash Sales",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cash_receipts",
+   "fieldtype": "Currency",
+   "label": "Cash Receipts (Credit Collections)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_mv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cash_refunds",
+   "fieldtype": "Currency",
+   "label": "Cash Refunds",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cash_paid_out",
+   "fieldtype": "Currency",
+   "label": "Cash Paid Out",
+   "read_only": 1
+  },
+  {
+   "bold": 1,
+   "description": "Opening Float + Cash Sales + Cash Receipts - Cash Refunds - Cash Paid Out",
+   "fieldname": "expected_cash",
+   "fieldtype": "Currency",
+   "label": "Expected Cash",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closing_section",
+   "fieldtype": "Section Break",
+   "label": "Day Close"
+  },
+  {
+   "fieldname": "denominations",
+   "fieldtype": "Table",
+   "label": "Closing Cash Count",
+   "options": "Cash Denomination Count"
+  },
+  {
+   "bold": 1,
+   "description": "The cash in the till at close. Filled from the Cash Count when one is entered.",
+   "fieldname": "counted_cash",
+   "fieldtype": "Currency",
+   "label": "Counted Cash"
+  },
+  {
+   "bold": 1,
+   "description": "Counted Cash - Expected Cash. Negative is a shortage.",
+   "fieldname": "difference",
+   "fieldtype": "Currency",
+   "label": "Difference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_close",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "close_remarks",
+   "fieldtype": "Small Text",
+   "label": "Closing Remarks"
+  },
+  {
+   "description": "Who counted the till and closed the day: the cashier, or a supervisor closing it for them.",
+   "fieldname": "closed_by",
+   "fieldtype": "Link",
+   "label": "Closed By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Difference Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Counter Session",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "description": "The last closed day on this counter.",
+   "fieldname": "previous_session",
+   "fieldtype": "Link",
+   "label": "Previous Session",
+   "no_copy": 1,
+   "options": "Counter Session",
+   "read_only": 1
+  },
+  {
+   "description": "Cash counted when that day was closed; the opening float starts from it.",
+   "fieldname": "previous_closing_cash",
+   "fieldtype": "Currency",
+   "label": "Previous Closing Cash",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "opening_denominations",
+   "fieldtype": "Table",
+   "label": "Opening Cash Count",
+   "options": "Cash Denomination Count"
+  },
+  {
+   "fieldname": "opening_remarks",
+   "fieldtype": "Small Text",
+   "label": "Opening Remarks"
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-29 13:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "Counter Session",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Management"
+  },
+  {
+   "if_owner": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Cashier"
+  }
+ ],
+ "search_fields": "counter,cashier,status",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "counter",
+ "track_changes": 1
+}

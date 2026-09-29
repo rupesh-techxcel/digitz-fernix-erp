@@ -13,6 +13,9 @@
   "is_selling",
   "is_buying",
   "column_break_grfof",
+  "service_charge",
+  "typing_charges",
+  "gov",
   "rate",
   "unit",
   "currency",
@@ -61,10 +64,12 @@
    "label": "Is Buying"
   },
   {
+   "description": "Service Charge + Typing Charges + GOV when any of them is set; otherwise enter the rate directly.",
    "fieldname": "rate",
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Rate",
+   "read_only_depends_on": "eval:doc.service_charge || doc.typing_charges || doc.gov",
    "reqd": 1
   },
   {
@@ -99,6 +104,24 @@
    "fieldtype": "Column Break"
   },
   {
+   "description": "Taxable service charge.",
+   "fieldname": "service_charge",
+   "fieldtype": "Currency",
+   "label": "Service Charge"
+  },
+  {
+   "description": "Taxable typing charges.",
+   "fieldname": "typing_charges",
+   "fieldtype": "Currency",
+   "label": "Typing Charges"
+  },
+  {
+   "description": "Government fee, passed through without VAT.",
+   "fieldname": "gov",
+   "fieldtype": "Currency",
+   "label": "GOV"
+  },
+  {
    "default": "0",
    "fieldname": "do_not_update_price_in_item",
    "fieldtype": "Check",
@@ -108,7 +131,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2023-11-06 16:04:01.335104",
+ "modified": "2026-09-28 12:19:50.477484",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Item Price",

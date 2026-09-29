@@ -6,10 +6,15 @@
 One whitelisted call returns everything the page renders, so a refresh is a
 single round trip rather than a dozen. Everything is scoped to today.
 
-A note on what "counter" means: the Counter based Sales report groups by
-`Sales Invoice.owner`, so the owner *is* the counter. token_sync raises each
-invoice as the cashier whose token it was, which keeps that true now that the
-sync runs on the server rather than in the cashier's browser.
+Two views of "counter" live here side by side:
+
+* the real counters (Counter / Counter Device / Counter Session): which desks
+  have a day open, who is on them, the cash that should be in each till, and
+  what each has taken today by `Sales Invoice.counter` (get_counter_board);
+* the per-cashier split, grouped by `Sales Invoice.owner` like the Counter
+  based Sales report. token_sync raises each invoice as the cashier whose token
+  it was, and synced drafts carry no counter until a cashier saves them on a
+  PC, so the queue and the in-progress figures stay per cashier (get_counters).
 """
 
 import frappe
@@ -35,16 +40,18 @@ MAX_COUNTER_SLOTS = len(COUNTER_COLORS)
 @frappe.whitelist()
 def get_live_dashboard():
 	"""Everything the Medical Center dashboard shows, for today."""
-	frappe.only_for(("System Manager", CASHIER_ROLE))
+	frappe.only_for(("System Manager", "Management", CASHIER_ROLE))
 
 	online = get_online_users()
 	counters = get_counters(online)
+	board = get_counter_board()
 
 	return {
 		"generated_at": str(now_datetime()),
 		"date": str(today()),
 		"counters": counters,
-		"totals": get_totals(counters),
+		"counter_board": board,
+		"totals": get_totals(counters, board),
 		"online": online,
 		"queue": get_live_queue(counters),
 		"hourly": get_hourly_activity(),
@@ -232,8 +239,8 @@ def make_initials(full_name):
 	return (parts[0][0] + parts[-1][0]).upper()
 
 
-def get_totals(counters):
-	"""Day totals across every counter, plus site-wide draft count."""
+def get_totals(counters, board):
+	"""Day totals across every cashier, plus site-wide draft count."""
 	scope = get_owner_scope()
 	draft_filters = {"docstatus": 0}
 	if scope:
@@ -248,9 +255,173 @@ def get_totals(counters):
 		"submitted": sum(c["submitted"] for c in counters),
 		"tokens": sum(c["tokens"] for c in counters),
 		"drafts": drafts,
-		"active_counters": sum(1 for c in counters if c["online"]),
-		"total_counters": len(counters),
+		"online_cashiers": sum(1 for c in counters if c["online"]),
+		"total_cashiers": len(counters),
+		"open_counters": sum(1 for c in board["counters"] if c["state"] == "open"),
+		"total_counters": len(board["counters"]),
 	}
+
+
+# ---------------------------------------------------------------------------
+# counter board (Counter / Counter Device / Counter Session)
+# ---------------------------------------------------------------------------
+
+
+def get_counter_board():
+	"""Every enabled counter with its day, its PC and today's takings.
+
+	Per counter the session shown is the open day if there is one (Open, or
+	Closing while it waits for a supervisor), else the last day closed today.
+	`state` is one of open / closing / closed / idle.
+
+	A cashier sees only the counters they worked today, and only their own
+	sessions and takings on them, matching the owner scope of the rest of the
+	page.
+	"""
+	from digitz_erp.api.counter_api import is_supervisor
+
+	scope = get_owner_scope()
+	cashier_where, cashier_params = owner_clause(scope, column="cashier")
+
+	sessions = frappe.db.sql(
+		"""
+		SELECT name, counter, counter_device, cashier, status, docstatus,
+		       opened_on, closed_on, opening_float, expected_cash,
+		       counted_cash, difference
+		FROM `tabCounter Session`
+		WHERE (docstatus = 0 OR (docstatus = 1 AND DATE(closed_on) = %(today)s))
+		"""
+		+ cashier_where
+		# After a handover a counter can hold the next cashier's Open day and the
+		# last one's close awaiting approval; the Open day is what the card shows.
+		+ """ ORDER BY CASE WHEN docstatus = 0 AND status = 'Open' THEN 0
+		                   WHEN docstatus = 0 THEN 1 ELSE 2 END,
+		           closed_on DESC""",
+		{"today": today(), **cashier_params},
+		as_dict=True,
+	)
+
+	# Open day first, then a close awaiting approval, else the latest close today.
+	session_by_counter = {}
+	for row in sessions:
+		session_by_counter.setdefault(row.counter, row)
+
+	names = frappe.get_all("Counter", filters={"enabled": 1}, pluck="name", order_by="name")
+	if scope:
+		names = [n for n in names if n in session_by_counter]
+
+	if not names:
+		return {"counters": [], "pending_approvals": 0}
+
+	till = get_live_till_cash([s.name for s in session_by_counter.values() if s.docstatus == 0])
+
+	where, scope_params = owner_clause(scope)
+	takings = frappe.db.sql(
+		"""
+		SELECT counter, COUNT(*) AS invoices, SUM(net_total) AS amount
+		FROM `tabSales Invoice`
+		WHERE posting_date = %(today)s AND docstatus = 1
+		  AND IFNULL(counter, '') != ''
+		"""
+		+ where
+		+ " GROUP BY counter",
+		{"today": today(), **scope_params},
+		as_dict=True,
+	)
+	takings_by_counter = {r.counter: r for r in takings}
+
+	devices = frappe.db.sql(
+		"""
+		SELECT counter, COUNT(*) AS devices, MAX(last_seen) AS last_seen
+		FROM `tabCounter Device`
+		WHERE enabled = 1
+		GROUP BY counter
+		""",
+		as_dict=True,
+	)
+	devices_by_counter = {r.counter: r for r in devices}
+
+	board = []
+	for name in names:
+		session = session_by_counter.get(name)
+		taken = takings_by_counter.get(name) or {}
+		device = devices_by_counter.get(name) or {}
+
+		entry = {
+			"counter": name,
+			"state": "idle",
+			"invoices": cint(taken.get("invoices")),
+			"amount": flt(taken.get("amount")),
+			"devices": cint(device.get("devices")),
+			"last_seen": str(device["last_seen"]) if device.get("last_seen") else None,
+			"session": None,
+		}
+
+		if session:
+			if session.docstatus == 0:
+				entry["state"] = "closing" if session.status == "Closing" else "open"
+			else:
+				entry["state"] = "closed"
+
+			cashier_name = frappe.utils.get_fullname(session.cashier)
+			expected = (
+				flt(session.opening_float) + till.get(session.name, 0)
+				if session.docstatus == 0 and session.status == "Open"
+				else flt(session.expected_cash)
+			)
+			entry["session"] = {
+				"name": session.name,
+				"cashier": session.cashier,
+				"cashier_name": cashier_name,
+				"initials": make_initials(cashier_name),
+				"opened_on": str(session.opened_on) if session.opened_on else None,
+				"closed_on": str(session.closed_on) if session.closed_on else None,
+				"opening_float": flt(session.opening_float),
+				"expected_cash": expected,
+				"counted_cash": flt(session.counted_cash),
+				"difference": flt(session.difference),
+			}
+
+		board.append(entry)
+
+	pending = (
+		frappe.db.count("Counter Session", {"docstatus": 0, "status": "Closing"})
+		if is_supervisor() else 0
+	)
+
+	return {"counters": board, "pending_approvals": pending}
+
+
+def get_live_till_cash(sessions):
+	"""{session: net cash moved so far} for open sessions, without the float.
+
+	The same sums Counter Session.calculate_cash works out on save, done here
+	for every open session in one query per movement, so the till figure is
+	live rather than whatever the session held when it was last saved.
+	"""
+	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import CASH_MOVEMENTS
+
+	if not sessions:
+		return {}
+
+	net = {}
+	for _field, doctype, amount_field, sign, skip_credit in CASH_MOVEMENTS:
+		credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
+		rows = frappe.db.sql(
+			f"""
+			SELECT d.counter_session, SUM(d.`{amount_field}`)
+			FROM `tab{doctype}` d
+			INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
+			WHERE d.counter_session IN %(sessions)s AND d.docstatus = 1
+			  AND pm.mode = 'Cash' {credit}
+			GROUP BY d.counter_session
+			""",
+			{"sessions": tuple(sessions)},
+		)
+		for session, amount in rows:
+			net[session] = net.get(session, 0) + sign * flt(amount)
+
+	return net
 
 
 # ---------------------------------------------------------------------------

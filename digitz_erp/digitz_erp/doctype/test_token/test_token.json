@@ -1,0 +1,178 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "TT-.YYYY.-.#####",
+ "creation": "2026-09-29 16:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "description": "A token served by the token simulator (digitz_erp.api.token_simulator), for testing the token sync without the real service. Developer mode only.",
+ "field_order": [
+  "token_number",
+  "patient_name",
+  "service",
+  "cashier",
+  "column_break_main",
+  "created_date",
+  "visit_date",
+  "company",
+  "company_id",
+  "section_break_person",
+  "email",
+  "mobile",
+  "whatsapp",
+  "column_break_person",
+  "gender",
+  "nationality",
+  "dob",
+  "application_number",
+  "customer_id"
+ ],
+ "fields": [
+  {
+   "fieldname": "token_number",
+   "fieldtype": "Data",
+   "label": "Token Number",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Leave empty for the next number of the day."
+  },
+  {
+   "fieldname": "patient_name",
+   "fieldtype": "Data",
+   "label": "Patient Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Sent as Name."
+  },
+  {
+   "fieldname": "service",
+   "fieldtype": "Link",
+   "options": "Medical Services",
+   "label": "Service",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Sent as the service's Display Name, the way the real service identifies it."
+  },
+  {
+   "fieldname": "cashier",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Cashier",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "The desk the token is for, sent as the user's username. The invoice is raised as this user. Empty sends no UserName."
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "created_date",
+   "fieldtype": "Datetime",
+   "label": "Created Date",
+   "reqd": 1,
+   "default": "Now",
+   "in_list_view": 1,
+   "description": "When the token was issued. The sync asks for tokens after the last one it saw today, so only tokens dated today, after that, are served."
+  },
+  {
+   "fieldname": "visit_date",
+   "fieldtype": "Datetime",
+   "label": "Visit Date"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "options": "Customer",
+   "label": "Company",
+   "description": "A company customer: the token is billed to it. Empty for a walk-in."
+  },
+  {
+   "fieldname": "company_id",
+   "fieldtype": "Int",
+   "label": "Company ID",
+   "fetch_from": "company.company_id",
+   "fetch_if_empty": 1,
+   "description": "Sent as CompanyId. Filled from the company; type an unknown id to test automatic company creation."
+  },
+  {
+   "fieldname": "section_break_person",
+   "fieldtype": "Section Break",
+   "label": "Contact & Personal Details",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "options": "Email",
+   "label": "Email"
+  },
+  {
+   "fieldname": "mobile",
+   "fieldtype": "Data",
+   "label": "Mobile"
+  },
+  {
+   "fieldname": "whatsapp",
+   "fieldtype": "Data",
+   "label": "WhatsApp"
+  },
+  {
+   "fieldname": "column_break_person",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "gender",
+   "fieldtype": "Select",
+   "options": "\nMALE\nFEMALE",
+   "label": "Gender"
+  },
+  {
+   "fieldname": "nationality",
+   "fieldtype": "Data",
+   "label": "Nationality"
+  },
+  {
+   "fieldname": "dob",
+   "fieldtype": "Date",
+   "label": "Date of Birth"
+  },
+  {
+   "fieldname": "application_number",
+   "fieldtype": "Data",
+   "label": "Application Number"
+  },
+  {
+   "fieldname": "customer_id",
+   "fieldtype": "Data",
+   "label": "Customer ID"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-29 16:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "Test Token",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "created_date",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "patient_name",
+ "track_changes": 0
+}

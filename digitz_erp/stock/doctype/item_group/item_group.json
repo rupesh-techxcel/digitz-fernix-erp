@@ -9,6 +9,7 @@
  "engine": "InnoDB",
  "field_order": [
   "item_group_name",
+  "item_group_code",
   "description",
   "column_break_itzn",
   "image",
@@ -44,12 +45,18 @@
    "in_list_view": 1,
    "label": "Default Expense Account",
    "options": "Account"
+  },
+  {
+   "fieldname": "item_group_code",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Item Group Code"
   }
  ],
  "image_field": "image",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-11-12 12:36:39.291061",
+ "modified": "2026-09-26 08:24:27.042146",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Item Group",
@@ -69,6 +76,7 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": []
