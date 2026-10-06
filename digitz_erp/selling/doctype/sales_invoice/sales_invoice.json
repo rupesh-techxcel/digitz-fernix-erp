@@ -14,32 +14,52 @@
   "customer",
   "customer_display_name",
   "customer_balance",
+  "customer_company",
+  "medical_service",
+  "credit_days",
   "column_break_6",
   "customer_name",
-  "customer_company",
   "warehouse",
   "customer_token",
-  "medical_service",
-  "counter",
-  "counter_device",
-  "counter_session",
   "customer_email",
   "customer_mobile_number",
-  "show_company_in_printout",
-  "show_trn_in_printout",
   "column_break_4",
   "posting_date",
   "posting_time",
   "edit_posting_date_and_time",
   "price_list",
-  "rate_includes_tax",
   "column_break_egud",
-  "remarks",
   "invoice_fullfilled",
+  "credit_sale",
   "reason_for_unfilled_invoice",
+  "payment_mode",
+  "reference_no",
+  "reference_date",
+  "payment_mode_type",
+  "mode",
+  "payment_account",
+  "payment_terms",
   "column_break_bufh",
   "company",
   "company_tax_id",
+  "show_company_in_printout",
+  "rate_includes_tax",
+  "show_trn_in_printout",
+  "project_section",
+  "project",
+  "project_value",
+  "column_break_iyei",
+  "for_advance_payment",
+  "advance_percentage",
+  "column_break_hpkf",
+  "for_retention_recovery",
+  "column_break_leiv",
+  "remarks",
+  "section_break_dlre",
+  "counter",
+  "column_break_olkz",
+  "counter_session",
+  "counter_device",
   "more_details_section",
   "customer_address",
   "tax_id",
@@ -60,30 +80,6 @@
   "created_from_tab_sale",
   "advance_received_with_sales_order",
   "allocated_receipt_entry",
-  "project_section",
-  "project",
-  "project_value",
-  "column_break_iyei",
-  "for_advance_payment",
-  "advance_percentage",
-  "column_break_hpkf",
-  "for_retention_recovery",
-  "column_break_leiv",
-  "accounts_section",
-  "credit_sale",
-  "credit_days",
-  "column_break_bfep",
-  "payment_mode",
-  "reference_no",
-  "reference_date",
-  "mode",
-  "column_break_zjj2",
-  "payment_account",
-  "payment_mode_type",
-  "received_amount",
-  "balance_amount",
-  "payment_terms",
-  "column_break_yacz",
   "section_break_19",
   "items",
   "section_break_29",
@@ -109,6 +105,8 @@
   "round_off",
   "column_break_zvur",
   "total_big",
+  "received_amount",
+  "balance_amount",
   "terms_and_conditions_section",
   "terms",
   "terms_and_conditions",
@@ -203,11 +201,6 @@
    "read_only": 1
   },
   {
-   "fieldname": "accounts_section",
-   "fieldtype": "Section Break",
-   "label": "Accounts"
-  },
-  {
    "fieldname": "section_break_19",
    "fieldtype": "Section Break"
   },
@@ -243,8 +236,7 @@
   },
   {
    "fieldname": "section_break_25",
-   "fieldtype": "Section Break",
-   "label": "Totals"
+   "fieldtype": "Section Break"
   },
   {
    "fieldname": "gross_total",
@@ -432,6 +424,7 @@
   {
    "fieldname": "references_tab",
    "fieldtype": "Tab Break",
+   "hidden": 1,
    "label": "References"
   },
   {
@@ -487,6 +480,7 @@
    "allow_on_submit": 1,
    "fieldname": "delivery_notes_to_print",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "Delivery Notes To Print"
   },
   {
@@ -538,10 +532,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "column_break_zjj2",
-   "fieldtype": "Column Break"
-  },
-  {
    "fieldname": "receipt_schedule",
    "fieldtype": "Table",
    "label": "Receipt Schedule",
@@ -551,10 +541,6 @@
    "fieldname": "receipt_schedule_tab",
    "fieldtype": "Tab Break",
    "label": "Receipt Schedule"
-  },
-  {
-   "fieldname": "column_break_yacz",
-   "fieldtype": "Column Break"
   },
   {
    "fieldname": "column_break_uozz",
@@ -602,10 +588,6 @@
   },
   {
    "fieldname": "column_break_bufh",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "column_break_bfep",
    "fieldtype": "Column Break"
   },
   {
@@ -878,6 +860,16 @@
    "no_copy": 1,
    "options": "Counter Session",
    "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_break_dlre",
+   "fieldtype": "Section Break",
+   "label": "Counter"
+  },
+  {
+   "fieldname": "column_break_olkz",
+   "fieldtype": "Column Break"
   }
  ],
  "index_web_pages_for_search": 1,
@@ -898,7 +890,7 @@
    "table_fieldname": "receipt_allocation"
   }
  ],
- "modified": "2026-09-29 18:00:00.000000",
+ "modified": "2026-10-05 11:01:50.247046",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Sales Invoice",
