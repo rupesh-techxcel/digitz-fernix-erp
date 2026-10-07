@@ -26,7 +26,8 @@
   {
    "fieldname": "url",
    "fieldtype": "Data",
-   "label": "Token URL"
+   "label": "Token URL",
+   "description": "Production: <code>http://192.168.85.7:5000/erp/visits</code><br>Simulator: <code>http://127.0.0.1:8508/api/method/digitz_erp.api.token_simulator.feed</code>"
   },
   {
    "fieldname": "column_break_nonl",
@@ -120,7 +121,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-09-28 14:21:36.758308",
+ "modified": "2026-10-06 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Settings",
