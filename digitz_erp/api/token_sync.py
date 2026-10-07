@@ -979,7 +979,19 @@ def item_tax(item_code, taxable_amount):
 	return item.tax, rate, flt(taxable_amount) * rate / 100.0
 
 
-def build_invoice_items(service_name, price_list=None):
+def token_company():
+	"""(company, rate_includes_tax) for a token invoice.
+
+	The same Company SalesInvoice.before_validate stamps on every invoice, and its
+	Rate Includes Tax flag, which the desk form copies onto a new invoice
+	(get_default_company_and_warehouse). Without it a token invoice is saved
+	with the flag off and the desk recalculates it as tax exclusive.
+	"""
+	company = frappe.get_last_doc("Company").name
+	return company, cint(frappe.db.get_value("Company", company, "rate_includes_tax"))
+
+
+def build_invoice_items(service_name, price_list=None, rate_includes_tax=0):
 	"""Price the service and return (rows, totals).
 
 	Each item's Service Charge, Typing Charges and GOV come from `price_list` (the
@@ -1021,15 +1033,21 @@ def build_invoice_items(service_name, price_list=None):
 		# invoice raised from a token and one keyed in by hand agree. Only the
 		# service and typing charges are taxable; the government fee is passed
 		# through untaxed but still billed.
-		if tax_rate:
+		if tax_rate and rate_includes_tax:
+			# The charges already carry the tax: strip it back out
+			taxable_amount = flt(taxable_base / (1 + tax_rate / 100.0), 2)
+			tax_amount = flt(taxable_base - taxable_amount, 2)
+			net_amount = taxable_base + gov_amount
+		elif tax_rate:
 			taxable_amount = taxable_base
-			tax_amount = taxable_amount * tax_rate / 100.0
+			tax_amount = flt(taxable_amount * tax_rate / 100.0, 2)
+			net_amount = taxable_base + gov_amount + tax_amount
 		else:
 			taxable_amount = 0
 			tax_amount = 0
+			net_amount = taxable_base + gov_amount
 
 		gross_amount = taxable_base + gov_amount
-		net_amount = gross_amount + tax_amount
 
 		totals["gross"] += gross_amount
 		totals["taxable"] += taxable_amount
@@ -1044,6 +1062,7 @@ def build_invoice_items(service_name, price_list=None):
 				"qty": qty,
 				# rate is the whole line: service charge, typing charges and government fee.
 				"rate": service_charge + typing_charges + gov,
+				"rate_includes_tax": rate_includes_tax,
 				"gross_amount": gross_amount,
 				"taxable_amount": taxable_amount,
 				# `tax` is a Link to Tax; the old JS coerced an empty value to 0,
@@ -1106,7 +1125,9 @@ def create_invoice_for_log(log, item):
 	# customer is picked on an invoice
 	price_list = frappe.db.get_value("Customer", customer, "default_price_list")
 
-	rows, totals = build_invoice_items(log.service, price_list)
+	company, rate_includes_tax = token_company()
+
+	rows, totals = build_invoice_items(log.service, price_list, rate_includes_tax)
 	calculated_discount = (totals["gross"] * flt(discount)) / 100
 
 	payment_mode = token_payment_mode(customer)
@@ -1114,6 +1135,8 @@ def create_invoice_for_log(log, item):
 	invoice = frappe.get_doc(
 		{
 			"doctype": "Sales Invoice",
+			"company": company,
+			"rate_includes_tax": rate_includes_tax,
 			"customer": customer,
 			# Who the token is for, as the token API gives it. The desk never
 			# overwrites these on a token invoice, even if the Customer is changed.
