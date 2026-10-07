@@ -798,12 +798,14 @@
    "label": "Customer Company"
   },
   {
+   "allow_on_submit": 1,
    "default": "0",
    "fieldname": "show_company_in_printout",
    "fieldtype": "Check",
    "label": "Show Company In Printout"
   },
   {
+   "allow_on_submit": 1,
    "default": "0",
    "fieldname": "show_trn_in_printout",
    "fieldtype": "Check",
@@ -890,7 +892,7 @@
    "table_fieldname": "receipt_allocation"
   }
  ],
- "modified": "2026-10-05 11:01:50.247046",
+ "modified": "2026-10-07 09:50:14.510585",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Sales Invoice",
