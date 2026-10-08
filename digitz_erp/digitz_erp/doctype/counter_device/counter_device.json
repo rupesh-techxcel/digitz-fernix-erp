@@ -9,12 +9,23 @@
  "field_order": [
   "counter",
   "enabled",
+  "approval_status",
   "column_break_reg",
   "registered_by",
   "registered_on",
   "last_seen",
   "user_agent",
-  "secret_hash"
+  "secret_hash",
+  "approval_section",
+  "requested_by",
+  "column_break_approval",
+  "reviewed_by",
+  "reviewed_on",
+  "disabled_section",
+  "disabled_by",
+  "disabled_on",
+  "column_break_disabled",
+  "replaced_by"
  ],
  "fields": [
   {
@@ -28,11 +39,21 @@
   },
   {
    "default": "1",
-   "description": "Untick to revoke this device. Its browser then counts as unregistered.",
+   "description": "Untick to revoke this device. Its browser then counts as unregistered. A counter has one enabled device.",
    "fieldname": "enabled",
    "fieldtype": "Check",
    "in_list_view": 1,
    "label": "Enabled"
+  },
+  {
+   "default": "Approved",
+   "fieldname": "approval_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Approval Status",
+   "options": "Approved\nPending\nRejected",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_reg",
@@ -72,11 +93,75 @@
    "label": "Secret Hash",
    "no_copy": 1,
    "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Request"
+  },
+  {
+   "description": "The cashier who asked for this PC to be registered. Empty when a supervisor registered it.",
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The supervisor who approved or rejected the request. Empty when it was approved automatically.",
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Approved / Rejected By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Approved / Rejected On",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "depends_on": "eval:!doc.enabled && doc.disabled_on",
+   "fieldname": "disabled_section",
+   "fieldtype": "Section Break",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "disabled_by",
+   "fieldtype": "Link",
+   "label": "Disabled By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "disabled_on",
+   "fieldtype": "Datetime",
+   "label": "Disabled On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_disabled",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The device that took over this counter, when registering it disabled this one.",
+   "fieldname": "replaced_by",
+   "fieldtype": "Link",
+   "label": "Replaced By",
+   "options": "Counter Device",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-09-28 20:00:00.000000",
+ "modified": "2026-10-08 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Counter Device",

@@ -19,9 +19,9 @@ has gone is closed by a supervisor who counts the till (supervisor_close).
 import json
 
 import frappe
-from frappe.utils import flt, now_datetime
+from frappe.utils import add_days, cint, date_diff, flt, getdate, now_datetime, nowdate
 
-from digitz_erp.api.counter_api import get_request_device, is_supervisor
+from digitz_erp.api.counter_api import get_request_device, get_request_registration, is_supervisor
 from digitz_erp.digitz_erp.doctype.counter_session.counter_session import TOLERANCE
 
 # The note and coin values offered in the Close Day cash count (AED)
@@ -87,6 +87,30 @@ def stamp_counter_session(doc):
 	)
 
 
+def restrict_cashier_to_today(doc):
+	"""A cashier (not a supervisor) works on today's documents only.
+
+	Called from Sales Invoice validate, so on every save and submit: a cashier
+	may not save or submit an invoice dated another day -- neither one already
+	saved with another date (an old draft) nor one they date back or forward.
+	Such an invoice is for a supervisor. Nothing is required of background work
+	(the token sync), which has no request.
+	"""
+	if not getattr(frappe.local, "request", None) or not must_have_open_day():
+		return
+
+	today = getdate(nowdate())
+	saved_date = None if doc.is_new() else frappe.db.get_value(doc.doctype, doc.name, "posting_date")
+
+	for posting_date in (saved_date, doc.posting_date):
+		if posting_date and getdate(posting_date) != today:
+			frappe.throw(
+				f"{doc.name} is dated {frappe.utils.formatdate(posting_date)}. A cashier can save and submit "
+				"only today's invoices. Ask a supervisor to handle this one.",
+				title="Not Today's Invoice",
+			)
+
+
 def get_last_close(counter):
 	"""The last counted session on `counter`, or None.
 
@@ -143,15 +167,28 @@ def get_state():
 		"is_supervisor": supervisor,
 		"must_open_day": must_have_open_day(),
 		"pending_approvals": frappe.db.count("Counter Session", {"docstatus": 0, "status": "Closing"}) if supervisor else 0,
+		# PCs cashiers asked to register that would take over a counter
+		"device_requests": frappe.db.count("Counter Device", {"approval_status": "Pending"}) if supervisor else 0,
+		# This browser's own request, while it waits or after it was rejected
+		"registration_request": get_request_registration() if not device else None,
+		"is_cashier": "Cashier" in frappe.get_roles(),
 		"counters": frappe.get_all("Counter", filters={"enabled": 1}, pluck="name", order_by="name") if supervisor else [],
 		"denominations": DENOMINATIONS,
 		"user_full_name": frappe.utils.get_fullname(frappe.session.user),
 		"now": now_datetime(),
-		# Shown when opening a day: the cash the last day on this counter closed with
-		"last_close": get_last_close(device.counter) if device and not session else None,
+		# Shown when opening a day: the cash the last day on this counter closed with,
+		# unless Settings asks for a blind count (then it is not sent at all)
+		"show_last_close": show_last_close(),
+		"last_close": get_last_close(device.counter) if device and not session and show_last_close() else None,
 		# Another cashier's day still open on this counter, which stops a new one
 		"counter_taken": get_counter_taken(device.counter) if device and not session else None,
 	}
+
+
+def show_last_close():
+	"""Settings > Show Previous Day Close Balance in Day Open. Off (a blind count)
+	unless a System Manager ticks it."""
+	return cint(frappe.db.get_single_value("Settings", "show_previous_close_in_day_open"))
 
 
 def get_counter_taken(counter):
@@ -231,7 +268,7 @@ def get_close_preview():
 		f: session.get(f)
 		for f in ("name", "counter", "counter_device", "opened_on", "opening_float", "previous_session",
 				  "previous_closing_cash", "cash_sales", "cash_receipts", "cash_refunds", "cash_paid_out",
-				  "expected_cash", "status")
+				  "cash_expenditure", "expected_cash", "status")
 	}
 	preview["documents"] = get_session_documents(session.name)
 	return preview
@@ -245,7 +282,7 @@ def get_session_documents(session):
 	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import CASH_MOVEMENTS
 
 	documents = {}
-	for field, doctype, amount_field, _sign, skip_credit in CASH_MOVEMENTS:
+	for field, doctype, amount_expr, _sign, skip_credit in CASH_MOVEMENTS:
 		meta = frappe.get_meta(doctype)
 		# Who the document is for: the first of these the doctype has that is filled in
 		party_fields = [f for f in ("customer_display_name", "customer", "supplier", "remarks") if meta.has_field(f)]
@@ -255,7 +292,7 @@ def get_session_documents(session):
 		documents[field] = frappe.db.sql(
 			f"""
 			SELECT %(doctype)s AS doctype, d.name, d.posting_date, {time} AS posting_time,
-				{party or "NULL"} AS party, d.`{amount_field}` AS amount
+				{party or "NULL"} AS party, {amount_expr} AS amount
 			FROM `tab{doctype}` d
 			INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
 			WHERE d.counter_session = %(session)s AND d.docstatus = 1 AND pm.mode = 'Cash' {credit}
@@ -283,8 +320,9 @@ def get_pending_approvals():
 	return rows
 
 
-def count_and_close(session, counted_cash, denominations, remarks, closed_by):
-	"""Record the till count on `session` and close it.
+def count_and_close(session, counted_cash, denominations, remarks, closed_by, expenditure=None):
+	"""Record the till count (and the cash paid out of the till, `expenditure`)
+	on `session` and close it.
 
 	A clean count submits the session. Otherwise it stays in Closing for a
 	supervisor -- unless a supervisor is closing someone else's day, when their
@@ -295,7 +333,11 @@ def count_and_close(session, counted_cash, denominations, remarks, closed_by):
 	if not session.denominations and counted_cash in (None, ""):
 		frappe.throw("Enter the counted cash, or count the notes and coins.")
 
+	if flt(expenditure) < 0:
+		frappe.throw("Expenditure cannot be negative.")
+
 	session.counted_cash = flt(counted_cash)
+	session.cash_expenditure = flt(expenditure)
 	session.close_remarks = remarks
 	session.status = "Closing"
 	session.closed_on = now_datetime()
@@ -319,7 +361,7 @@ def count_and_close(session, counted_cash, denominations, remarks, closed_by):
 
 
 @frappe.whitelist()
-def close_day(counted_cash=None, denominations=None, remarks=None):
+def close_day(counted_cash=None, denominations=None, remarks=None, expenditure=None):
 	"""Close the user's open day with the counted cash.
 
 	A clean count closes (submits) the session. A count that differs from the
@@ -331,7 +373,7 @@ def close_day(counted_cash=None, denominations=None, remarks=None):
 	if session.status != "Open":
 		frappe.throw(f"{session.name} is already counted and waiting for approval.")
 
-	return count_and_close(session, counted_cash, denominations, remarks, frappe.session.user)
+	return count_and_close(session, counted_cash, denominations, remarks, frappe.session.user, expenditure)
 
 
 @frappe.whitelist()
@@ -365,7 +407,7 @@ def get_open_days():
 
 
 @frappe.whitelist()
-def supervisor_close(session, counted_cash=None, denominations=None, remarks=None):
+def supervisor_close(session, counted_cash=None, denominations=None, remarks=None, expenditure=None):
 	"""A supervisor counts the till and closes another cashier's open day.
 
 	For a cashier who left without closing, which would otherwise hold the counter.
@@ -382,7 +424,7 @@ def supervisor_close(session, counted_cash=None, denominations=None, remarks=Non
 	if doc.docstatus != 0 or doc.status != "Open":
 		frappe.throw(f"{session} is not an open day.")
 
-	return count_and_close(doc, counted_cash, denominations, remarks, frappe.session.user)
+	return count_and_close(doc, counted_cash, denominations, remarks, frappe.session.user, expenditure)
 
 
 @frappe.whitelist()
@@ -400,3 +442,53 @@ def approve_close(session):
 	doc.flags.ignore_permissions = True
 	doc.submit()
 	return {"session": doc.name, "status": doc.status, "difference": doc.difference}
+
+
+# The longest range Day History loads in one request
+HISTORY_MAX_DAYS = 366
+
+
+@frappe.whitelist()
+def get_session_history(from_date=None, to_date=None, counter=None, cashier=None, status=None):
+	"""Days for the Cashier Console's Day History: the user's own, or everyone's for a supervisor.
+
+	Reads through the Counter Session Summary report's query, which is raw SQL and
+	checks no permissions, so the cashier filter is forced here: a cashier sees
+	only their own days, as the doctype's Cashier permission (if_owner) allows.
+	"""
+	from digitz_erp.digitz_erp.report.counter_session_summary.counter_session_summary import get_data
+
+	to_date = getdate(to_date or nowdate())
+	from_date = getdate(from_date or add_days(to_date, -29))
+	if from_date > to_date:
+		from_date, to_date = to_date, from_date
+	if date_diff(to_date, from_date) > HISTORY_MAX_DAYS:
+		from_date = add_days(to_date, -HISTORY_MAX_DAYS)
+
+	supervisor = is_supervisor()
+	filters = {"from_date": from_date, "to_date": to_date}
+	if status in ("Open", "Closing", "Closed"):
+		filters["status"] = status
+	if supervisor:
+		if counter:
+			filters["counter"] = counter
+		if cashier:
+			filters["cashier"] = cashier
+	else:
+		filters["cashier"] = frappe.session.user
+
+	rows = get_data(filters)
+	return {
+		"rows": rows,
+		"is_supervisor": supervisor,
+		"from_date": from_date,
+		"to_date": to_date,
+		"totals": {
+			"days": len(rows),
+			"cash_sales": sum(flt(r.cash_sales) for r in rows),
+			"cash_receipts": sum(flt(r.cash_receipts) for r in rows),
+			"cash_expenditure": sum(flt(r.cash_expenditure) for r in rows),
+			"net_difference": sum(flt(r.difference) for r in rows if r.status != "Open"),
+			"pending": sum(1 for r in rows if r.status in ("Open", "Closing")),
+		},
+	}

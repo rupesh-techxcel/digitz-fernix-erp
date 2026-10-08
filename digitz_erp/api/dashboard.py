@@ -405,11 +405,11 @@ def get_live_till_cash(sessions):
 		return {}
 
 	net = {}
-	for _field, doctype, amount_field, sign, skip_credit in CASH_MOVEMENTS:
+	for _field, doctype, amount_expr, sign, skip_credit in CASH_MOVEMENTS:
 		credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
 		rows = frappe.db.sql(
 			f"""
-			SELECT d.counter_session, SUM(d.`{amount_field}`)
+			SELECT d.counter_session, SUM({amount_expr})
 			FROM `tab{doctype}` d
 			INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
 			WHERE d.counter_session IN %(sessions)s AND d.docstatus = 1

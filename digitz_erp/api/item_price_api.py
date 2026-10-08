@@ -118,9 +118,15 @@ def get_supplier_last_price_for_item(item, supplier):
 
     return supplier_item_price if supplier_item_price is not None else 0
 
-@frappe.whitelist()
 def update_customer_item_price(item_code, customer, price, price_date):
-    
+    """Record `price` as `customer`'s latest rate for the item (Item > Customer
+    Rates), when it is newer than the one there.
+
+    Called from Sales Invoice and Sales Order on submit, as the system's own
+    bookkeeping: whoever submits (a Cashier included) need not have write
+    access to Item, so it saves with ignore_permissions. Not whitelisted for
+    that reason, and it does not commit: the submit it is part of does.
+    """
     try:
         # Fetch the parent Item document
         item_doc = frappe.get_doc("Item", item_code)
@@ -156,10 +162,7 @@ def update_customer_item_price(item_code, customer, price, price_date):
             })
             
             # Save the changes to the Item document
-            item_doc.save()
-
-            # Commit the transaction to ensure changes are saved
-            frappe.db.commit()
+            item_doc.save(ignore_permissions=True)
 
             return {"status": "Success", "message": "Customer Item updated successfully"}
         else:
@@ -246,12 +249,12 @@ def get_item_price_list(item_list):
     else:
         return None 
 
-CHARGE_FIELDS = ("service_charge", "typing_charges", "gov")
+CHARGE_FIELDS = ("service_charge", "typing_charges", "transaction_charges", "gov")
 
 
 @frappe.whitelist()
 def get_item_charges(items, price_list=None, posting_date=None):
-    """Service Charge, Typing Charges and GOV to bill for each item.
+    """Service Charge, Typing Charges, Transaction Charges and GOV to bill for each item.
 
     Taken from the price list's Item Price when it has one for the item, otherwise
     from the Item master. A dated Item Price covering `posting_date` wins over an
@@ -259,7 +262,7 @@ def get_item_charges(items, price_list=None, posting_date=None):
     the taxable and non-taxable parts, so it is skipped for the Item master and the
     caller is told (`source` = "Item (price list has rate only)").
 
-    Returns {item: {"service_charge", "typing_charges", "gov", "source"}}.
+    Returns {item: {"service_charge", "typing_charges", "transaction_charges", "gov", "source"}}.
     """
     if isinstance(items, str):
         items = json.loads(items)

@@ -27,6 +27,7 @@
   "column_break_mv",
   "cash_refunds",
   "cash_paid_out",
+  "cash_expenditure",
   "expected_cash",
   "closing_section",
   "denominations",
@@ -140,6 +141,13 @@
    "read_only": 1
   },
   {
+   "description": "Cash paid out of the till, entered by the cashier at Day Close. Not posted to the accounts.",
+   "fieldname": "cash_expenditure",
+   "fieldtype": "Currency",
+   "label": "Expenditure",
+   "allow_on_submit": 0
+  },
+  {
    "bold": 1,
    "description": "Opening Float + Cash Sales + Cash Receipts - Cash Refunds - Cash Paid Out",
    "fieldname": "expected_cash",
@@ -239,7 +247,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-29 13:00:00.000000",
+ "modified": "2026-10-08 15:00:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Counter Session",

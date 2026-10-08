@@ -312,244 +312,20 @@ frappe.ui.form.on('Sales Invoice', {
 		frappe.confirm('Are you sure you want to change this setting which will change the tax calculation in the line items ?',
 			() => {
 				frm.trigger("make_taxes_and_totals");
+			},
+			() => {
+				// Not confirmed: put the setting back, so the amounts still match it
+				frm.doc.rate_includes_tax = cint(frm.doc.rate_includes_tax) ? 0 : 1;
+				frm.refresh_field("rate_includes_tax");
 			})
 	},
 	make_taxes_and_totals(frm) {
-		// NOTE: never call console.clear() here. This method runs on every qty/rate/
-		// discount change, and clearing wipes the very logs needed to debug a live site.
-		const DBG = (typeof window !== "undefined" && window.DIGITZ_TAX_DEBUG !== false);
-		const dbg = (...a) => { if (DBG) console.log("[digitz-tax]", ...a); };
-
-		const trace = {
-			rate_includes_tax_parent: frm.doc.rate_includes_tax,
-			additional_discount_raw: frm.doc.additional_discount,
-			item_count: (frm.doc.items || []).length,
-			rows: [],
-			warnings: []
-		};
-
-		frm.clear_table("taxes");
+		// The rules are in the shared Sales Invoice engine (public/js/sales_invoice_engine.js),
+		// which the Cashier Console's invoice editor uses too.
 		frm.refresh_field("taxes");
-
-		var gross_total = 0;
-		var taxable_total = 0;
-		var tax_total = 0;
-		var net_total = 0;
-		var discount_total = 0;
-		var gov_only_rows = 0;
-		var taxable_rows = 0;
-
-		// The parent flag is the single source of truth for inclusive/exclusive.
-		// It is a Check field, but can arrive as undefined/null/"0"/"1" depending on
-		// how the doc was created (new doc, amend, import, API), so normalise it once.
-		const rate_includes_tax = cint(frm.doc.rate_includes_tax) ? 1 : 0;
-		if (frm.doc.rate_includes_tax === undefined || frm.doc.rate_includes_tax === null) {
-			trace.warnings.push("frm.doc.rate_includes_tax was undefined/null - treated as EXCLUSIVE (0). Check Company.rate_includes_tax.");
-		}
-
-		// Avoid Possible NaN
-		frm.doc.gross_total = 0;
-		frm.doc.net_total = 0;
-		frm.doc.tax_total = 0;
-		frm.doc.total_discount_in_line_items = 0;
-		frm.doc.round_off = 0;
-		frm.doc.rounded_total = 0;
-		frm.doc.taxable_total = 0;
-
-		(frm.doc.items || []).forEach(function (entry, idx) {
-
-			// rate_includes_tax column in items table is readonly and it depends the form's rate_includes_tax column
-			entry.rate_includes_tax = rate_includes_tax;
-			entry.gross_amount = 0;
-			entry.taxable_amount = 0;
-			entry.tax_amount = 0;
-			entry.net_amount = 0;
-
-			const qty = flt(entry.qty);
-
-			// A blank discount column comes through as undefined/null/"" - never let it
-			// reach the arithmetic, and never let it exceed the line value.
-			let discount_amount = flt(entry.discount_amount);
-			if (!isFinite(discount_amount) || discount_amount < 0) {
-				discount_amount = 0;
-			}
-			entry.discount_amount = discount_amount;
-			entry.discount_percentage = flt(entry.discount_percentage);
-
-			// Service Charge and Typing Charges (both taxable) and GOV (non-taxable pass-through
-			// fee) come from the Item master and are the ONLY source of the rate - the rate
-			// column is derived, never entered. So all three at 0 is not a rate of zero to be
-			// worked around, it is missing Item master data, and it is the single most
-			// likely reason a live site shows no tax at all. Flag it loudly.
-			const service_charge_rate = flt(entry.service_charge);
-			const typing_charges_rate = flt(entry.typing_charges);
-			const gov_rate = flt(entry.gov);
-			// The taxable part of the rate
-			const taxable_rate = service_charge_rate + typing_charges_rate;
-
-			if (taxable_rate === 0 && gov_rate === 0) {
-				trace.warnings.push(
-					"Row " + (idx + 1) + " (" + (entry.item || "?") +
-					"): Service Charge, Typing Charges and GOV are all 0, so rate is 0 and no tax can be calculated. " +
-					"Fill them on the Item master, then re-pick the item on this row " +
-					"(the row copies them at selection time and does not re-read them later)."
-				);
-			}
-
-			entry.rate = taxable_rate + gov_rate;
-
-			const tax_rate = flt(entry.tax_rate);
-			const tax_excluded = cint(entry.tax_excluded) ? 1 : 0;
-
-			// qty * (Service Charge + Typing Charges), net of the line discount. This is the
-			// only part tax applies to.
-			let taxable_base = (qty * taxable_rate) - discount_amount;
-			if (taxable_base < 0) {
-				taxable_base = 0;
-			}
-			const gov_amount = qty * gov_rate;
-
-			if (!tax_excluded && tax_rate > 0) {
-
-				// Round each line to the field precision before it is totalled, so the
-				// totals are the sum of the amounts the rows actually show and store.
-				if (rate_includes_tax) {
-					// Rate already carries the tax: strip it back out. Tax is the
-					// remainder, so taxable + tax always equals the taxable base exactly.
-					entry.taxable_amount = flt(taxable_base / (1 + (tax_rate / 100)), precision("taxable_amount", entry));
-					entry.tax_amount = flt(taxable_base - entry.taxable_amount, precision("tax_amount", entry));
-					entry.net_amount = taxable_base + gov_amount;
-				} else {
-					// Rate is net of tax: add it on top.
-					entry.taxable_amount = taxable_base;
-					entry.tax_amount = flt(entry.taxable_amount * (tax_rate / 100), precision("tax_amount", entry));
-					entry.net_amount = taxable_base + gov_amount + flt(entry.tax_amount);
-				}
-			}
-			else {
-				entry.taxable_amount = 0;
-				entry.tax_amount = 0;
-				entry.net_amount = taxable_base + gov_amount;
-			}
-
-			entry.gross_amount = qty * (taxable_rate + gov_rate);
-
-			gross_total = gross_total + flt(entry.gross_amount);
-			tax_total = tax_total + flt(entry.tax_amount);
-			net_total = net_total + flt(entry.net_amount);
-			taxable_total = taxable_total + flt(entry.taxable_amount);
-			discount_total = discount_total + discount_amount;
-
-			// Units are not used in this document: there is no unit conversion, so the
-			// factor is pinned to 1. qty_in_base_unit / rate_in_base_unit still have to
-			// be populated - the stock ledger postings, the stock-balance check and the
-			// sales-return quantities all read them - they are simply qty and rate now.
-			// Pinning the factor to 1 also keeps the returns query, which divides by
-			// conversion_factor, away from a divide-by-zero.
-			entry.conversion_factor = 1;
-			entry.qty_in_base_unit = qty;
-			entry.rate_in_base_unit = flt(entry.rate);
-
-			// Per-row trace. `why_no_tax` is the field to read first when a live site
-			// reports "tax is not calculating".
-			let why_no_tax = "";
-			if (!tax_excluded && tax_rate > 0 && taxable_rate > 0) {
-				taxable_rows++;
-			}
-			if (tax_excluded) {
-				why_no_tax = "tax_excluded is checked on this row (comes from Company.tax_excluded or Item.tax_excluded, whose default is 1)";
-			} else if (tax_rate <= 0) {
-				why_no_tax = "tax_rate is " + tax_rate + " - the Item has no Tax link, or the linked Tax record has no rate. NOTE: tax_rate is an Int field, so a rate like 2.5 cannot be stored";
-			} else if (taxable_rate === 0 && gov_rate > 0) {
-				why_no_tax = "OK - GOV-only line. A government fee is a disbursement outside VAT scope, so no VAT applies. This is correct, not a fault";
-				gov_only_rows++;
-			} else if (taxable_rate === 0) {
-				why_no_tax = "Service Charge, Typing Charges and GOV are all 0, so the rate is 0 and there is nothing to tax. Set them on the Item master and re-pick the item on this row";
-			} else if (taxable_base === 0) {
-				why_no_tax = "taxable base is 0 - qty=" + qty + ", service_charge=" + service_charge_rate + ", typing_charges=" + typing_charges_rate + ", discount=" + discount_amount;
-			}
-
-			trace.rows.push({
-				"#": idx + 1,
-				item: entry.item,
-				qty: qty,
-				service_charge: service_charge_rate,
-				typing_charges: typing_charges_rate,
-				gov: gov_rate,
-				rate: entry.rate,
-				discount: discount_amount,
-				tax_excluded: tax_excluded,
-				tax: entry.tax,
-				tax_rate: tax_rate,
-				incl: rate_includes_tax,
-				taxable_amount: flt(entry.taxable_amount),
-				tax_amount: flt(entry.tax_amount),
-				net_amount: flt(entry.net_amount),
-				why_no_tax: why_no_tax
-			});
-		});
-
-		// Blank Currency fields arrive as undefined/null, and "" * 1 is NaN.
-		frm.doc.additional_discount = flt(frm.doc.additional_discount);
-
-		frm.doc.gross_total = flt(gross_total);
-		frm.doc.taxable_total = flt(taxable_total);
-		frm.doc.tax_total = flt(tax_total);
-		frm.doc.total_discount_in_line_items = flt(discount_total);
-		frm.doc.net_total = flt(net_total) - flt(frm.doc.additional_discount);
-
-		if (cint(frm.doc.is_round_off)) {
-			frm.doc.round_off = Math.round(frm.doc.net_total) - frm.doc.net_total;
-			frm.set_value("rounded_total", Math.round(frm.doc.net_total));
-		}
-		else {
-			frm.doc.round_off = 0;
-			frm.set_value("rounded_total", flt(frm.doc.net_total));
-		}
+		digitz_erp.si_engine.calculate(frm.doc, (fieldname, value) => frm.set_value(fieldname, value));
 		frm.refresh_field("round_off");
 		frm.refresh_field("rounded_total");
-
-		trace.totals = {
-			gross_total: frm.doc.gross_total,
-			taxable_total: frm.doc.taxable_total,
-			tax_total: frm.doc.tax_total,
-			discount_in_lines: frm.doc.total_discount_in_line_items,
-			additional_discount: frm.doc.additional_discount,
-			net_total: frm.doc.net_total,
-			round_off: frm.doc.round_off,
-			rounded_total: frm.doc.rounded_total
-		};
-
-		trace.gov_only_rows = gov_only_rows;
-		trace.taxable_rows = taxable_rows;
-
-		if (tax_total === 0 && trace.item_count > 0) {
-			if (taxable_rows > 0) {
-				trace.warnings.push("TAX TOTAL IS 0 even though " + taxable_rows +
-					" row(s) should have been taxed - read the `why_no_tax` column above.");
-			} else if (gov_only_rows === trace.item_count) {
-				// Expected: every line is a government fee, which is outside VAT scope.
-				trace.warnings.push("Tax total is 0 because every line is a GOV-only government fee (outside VAT scope). This is correct.");
-			}
-		}
-
-		// Kept on window so it can be inspected after the fact on a live site:
-		//   copy(JSON.stringify(window.digitz_last_tax_debug, null, 2))
-		if (typeof window !== "undefined") {
-			window.digitz_last_tax_debug = trace;
-		}
-
-		if (DBG) {
-			console.groupCollapsed(
-				"[digitz-tax] " + (rate_includes_tax ? "INCLUSIVE" : "EXCLUSIVE") +
-				" | rows=" + trace.item_count + " | tax=" + trace.totals.tax_total +
-				" | net=" + trace.totals.net_total
-			);
-			console.table(trace.rows);
-			console.log("totals", trace.totals);
-			trace.warnings.forEach(w => console.warn("[digitz-tax]", w));
-			console.groupEnd();
-		}
 
 		fill_receipt_schedule(frm);
 
@@ -582,35 +358,12 @@ frappe.ui.form.on('Sales Invoice', {
 		
 	},
 	is_round_off(frm) {
-		if (!frm.doc.is_round_off) {
-			frm.set_value("rounded_total", frm.doc.net_total)
-			frm.set_value("round_off", 0)
-		}else{
-			if (frm.doc.net_total != Math.round(frm.doc.net_total)) {
-				 frm.doc.round_off = Math.round(frm.doc.net_total) - frm.doc.net_total;
-				//  frm.doc.rounded_total = Math.round(frm.doc.net_total);
-				 frm.set_value("rounded_total", Math.round(frm.doc.net_total))	
-				 frm.refresh_field('round_off');
-				 frm.refresh_field('rounded_total');
-
-			 }
-			 else{
-
-				// frm.doc.rounded_total = frm.doc.net_total;
-				// frm.refresh_field("rounded_total");
-				frm.set_value("rounded_total", Math.round(frm.doc.net_total))	
-
-				console.log(frm.doc.net_total)
-				console.log(frm.doc.rounded_total)
-				
-			 }
-
-		}
+		digitz_erp.si_engine.apply_round_off(frm.doc, (fieldname, value) => frm.set_value(fieldname, value));
+		frm.refresh_field('round_off');
+		frm.refresh_field('rounded_total');
 		fill_receipt_schedule(frm);
-		console.log("rounded_total_calculated 2", frm.doc.rounded_total)
 
 		update_total_big_display(frm);
-		// });
 
 		frm.refresh_field("items");
 		frm.refresh_field("taxes");
@@ -652,107 +405,31 @@ frappe.ui.form.on('Sales Invoice', {
 		try {
 			frm.custom = frm.custom || {};
 
-			const r = await frappe.call({
-				method: "frappe.client.get_value",
-				args: {
-					doctype: "Global Settings",
-					fieldname: "default_company"
-				}
-			});
+			// Shared with the Cashier Console (public/js/sales_invoice_engine.js)
+			const settings = await digitz_erp.si_engine.company_defaults(frm.doc);
+			if (!settings) return;
 
-			const default_company = r.message?.default_company || "";
-			if (!default_company) return;
-
-			frm.doc.company = default_company;
 			frm.refresh_field("company");
 
-			const r2 = await frappe.call({
-				method: "frappe.client.get_value",
-				args: {
-					doctype: "Company",
-					filters: { company_name: default_company },
-					fieldname: [
-						"default_warehouse",
-						"rate_includes_tax",
-						"delivery_note_integrated_with_sales_invoice",
-						"update_price_list_price_with_sales_invoice",
-						"use_customer_last_price",
-						"customer_terms",
-						"update_stock_in_sales_invoice",
-						"allow_edit_sales_invoice_no",
-						"hidden_sales_invoice"
-					]
-				}
-			});
-
-			const company_data = r2.message || {};
-
-			frm.doc.warehouse = company_data.default_warehouse;
-			frm.doc.rate_includes_tax = company_data.rate_includes_tax;
-			frm.doc.update_stock = company_data.update_stock_in_sales_invoice;
-
-			frm.custom.allow_edit_sales_invoice_no = company_data.allow_edit_sales_invoice_no;
-
-			console.log("frm.custom.allow_edit_sales_invoice_no");
-			console.log(frm.custom.allow_edit_sales_invoice_no);
-
+			frm.custom.allow_edit_sales_invoice_no = settings.allow_edit_sales_invoice_no;
 			frm.set_df_property("sales_inv_no", "hidden", !frm.custom.allow_edit_sales_invoice_no);
-
-			// frm.doc.auto_save_delivery_note = company_data.delivery_note_integrated_with_sales_invoice;
-			frm.doc.auto_save_delivery_note = false;
-
-			if (company_data.use_customer_last_price == 0) {
-				frm.doc.update_rates_in_price_list = company_data.update_price_list_price_with_sales_invoice;
-			}
 
 			frm.refresh_field("warehouse");
 			frm.refresh_field("rate_includes_tax");
 			frm.refresh_field("update_rates_in_price_list");
 			frm.refresh_field("auto_save_delivery_note");
 			frm.refresh_field("update_stock");
+			frm.refresh_field("terms");
+			frm.refresh_field("terms_and_conditions");
 
-			//Have a button to create delivery note in case delivery note is not integrated with SI
-			// if (!frm.doc.__islocal && !company_data.delivery_note_integrated_with_sales_invoice) {
-			// 	frm.add_custom_button('Create/Update Delivery Note', () => {
-			// 		frm.call("auto_generate_delivery_note")
-			// 	},
-			// 	)
-			// }
-
-			if (company_data.customer_terms) {
-				frm.doc.terms = company_data.customer_terms;
-				frm.refresh_field("terms");
-
-				const terms_res = await frappe.call({
-					method: "digitz_erp.api.settings_api.get_terms_for_template",
-					args: {
-						template: company_data.customer_terms
+			if (frm.doc.company && settings.hidden_fields.length) {
+				settings.hidden_fields.forEach(fieldname => {
+					if (frm.fields_dict[fieldname]) {
+						frm.set_df_property(fieldname, "hidden", true);
 					}
 				});
 
-				frm.doc.terms_and_conditions = terms_res.message?.terms || "";
-				frm.refresh_field("terms_and_conditions");
-			}
-
-			if (frm.doc.company) {
-				console.log("Current Company: ", frm.doc.company);
-
-				if (company_data.hidden_sales_invoice) {
-					console.log("Hidden fields for Sales Invoice: ", company_data.hidden_sales_invoice);
-
-					const fieldsToHide = company_data.hidden_sales_invoice
-						.split(",")
-						.map(f => f.trim())
-						.filter(Boolean);
-
-					fieldsToHide.forEach(fieldname => {
-						if (frm.fields_dict[fieldname]) {
-							frm.set_df_property(fieldname, "hidden", true);
-						}
-					});
-
-					frm.refresh_fields();
-				}
+				frm.refresh_fields();
 			}
 		} catch (err) {
 			console.error("Error in get_default_company_and_warehouse:", err);
@@ -762,84 +439,13 @@ frappe.ui.form.on('Sales Invoice', {
 
 function fill_receipt_schedule(frm, refresh=false,refresh_credit_days=false)
 {
-
-	if(refresh)
-	{
-		frm.doc.receipt_schedule = [];
-		refresh_field("receipt_schedule");
-	}
-
-	console.log("fill_receipt_schedule")
-	console.log(frm.doc.credit_sale)
-
-	if (frm.doc.credit_sale) {
-
-		console.log("credit sale")
-		console.log(frm.doc.rounded_total)
-
-		var postingDate = frm.doc.posting_date;
-		var creditDays = frm.doc.credit_days;
-		
-		if (!frm.doc.receipt_schedule) {
-			frm.doc.receipt_schedule = [];
-		}
-
-		var receiptRow = null;
-
-		row_count = 0;
-		// Check if a Payment Schedule row already exists
-		frm.doc.receipt_schedule.forEach(function(row) {
-			if (row){
-				receiptRow = row;
-				if(refresh || refresh_credit_days)
-				{
-					receiptRow.date = creditDays ? frappe.datetime.add_days(postingDate, creditDays) : postingDate;
-				}
-
-				row_count++;
-
-			}
-		});
-
-		//If there is no row exits create one with the relevant values
-		if (!receiptRow) {
-			// Calculate receipt schedule and add a new row
-			receiptRow = frappe.model.add_child(frm.doc, "Receipt Schedule", "receipt_schedule");
-			receiptRow.date = creditDays ? frappe.datetime.add_days(postingDate, creditDays) : postingDate;
-			receiptRow.payment_mode = "Cash"
-			receiptRow.amount = frm.doc.rounded_total;
-			refresh_field("receipt_schedule");
-			console.log("here 1")
-		}
-		else if (row_count==1)
-		{
-			//If there is only one row update the amount. If there is more than one row that means there is manual
-			//entry and	user need to manage it by themself
-			receiptRow.payment_mode = "Cash"
-			receiptRow.amount = frm.doc.rounded_total;
-			refresh_field("receipt_schedule");
-			console.log("here 2")
-		}
-
-		//Update date based on credit_days if there is a credit days change or change in the credit_sales checkbox
-		if(refresh || refresh_credit_days)
-			receiptRow.date = creditDays ? frappe.datetime.add_days(postingDate, creditDays) : postingDate;
-			refresh_field("receipt_schedule");
-	}
-	else
-	{
-		frm.doc.receipt_schedule = [];
-		refresh_field("receipt_schedule");
-	}
+	digitz_erp.si_engine.fill_receipt_schedule(frm.doc, refresh, refresh_credit_days);
+	refresh_field("receipt_schedule");
 }
 
-// Base a line discount is calculated against: qty * (Service Charge + Typing Charges + GOV). Mirrors
-// make_taxes_and_totals so the two can never disagree.
+// Base a line discount is calculated against: qty * (Service Charge + Typing Charges + Transaction Charges + GOV).
 function line_discount_base(row) {
-	// Rate is always Service Charge + Typing Charges + GOV; the rate column is derived and never entered directly,
-	// so the discount base must be built from the same three fields.
-	let base = flt(row.qty) * (flt(row.service_charge) + flt(row.typing_charges) + flt(row.gov));
-	return isFinite(base) && base > 0 ? base : 0;
+	return digitz_erp.si_engine.line_discount_base(row);
 }
 
 function update_total_big_display(frm) {
@@ -896,25 +502,25 @@ window.digitz_tax_doctor = function () {
 
 	(frm.doc.items || []).forEach((row, i) => {
 		if (!row.item) { return; }
-		frappe.db.get_value('Item', row.item, ['service_charge', 'typing_charges', 'gov', 'tax', 'tax_excluded'], (it) => {
+		frappe.db.get_value('Item', row.item, ['service_charge', 'typing_charges', 'transaction_charges', 'gov', 'tax', 'tax_excluded'], (it) => {
 			console.log("row " + (i + 1) + " " + row.item + " | Item master:", it,
 				"| row:", {
-					service_charge: row.service_charge, typing_charges: row.typing_charges, gov: row.gov, rate: row.rate, qty: row.qty,
+					service_charge: row.service_charge, typing_charges: row.typing_charges, transaction_charges: row.transaction_charges, gov: row.gov, rate: row.rate, qty: row.qty,
 					tax: row.tax, tax_rate: row.tax_rate, tax_excluded: row.tax_excluded,
 					discount_amount: row.discount_amount
 				});
 			if (it && cint(it.tax_excluded)) {
 				console.warn("[digitz-tax] Item " + row.item + " has 'Tax Not Applicable' checked (the Item field defaults to 1). No tax will be applied to it.");
 			}
-			if (it && !it.tax && (flt(it.service_charge) + flt(it.typing_charges)) > 0) {
-				console.warn("[digitz-tax] Item " + row.item + " has Service Charge/Typing Charges but no Tax link, so tax_rate stays 0.");
+			if (it && !it.tax && (flt(it.service_charge) + flt(it.typing_charges) + flt(it.transaction_charges)) > 0) {
+				console.warn("[digitz-tax] Item " + row.item + " has Service Charge/Typing Charges/Transaction Charges but no Tax link, so tax_rate stays 0.");
 			}
-			if (it && !flt(it.service_charge) && !flt(it.typing_charges) && !flt(it.gov)) {
-				console.error("[digitz-tax] Item " + row.item + " has Service Charge, Typing Charges and GOV all 0 on the Item master. The rate is derived from their sum, so this line can only ever come out as 0 with no tax. THIS IS THE FIX: set Service Charge, Typing Charges and GOV as applicable on the Item.");
+			if (it && !flt(it.service_charge) && !flt(it.typing_charges) && !flt(it.transaction_charges) && !flt(it.gov)) {
+				console.error("[digitz-tax] Item " + row.item + " has Service Charge, Typing Charges, Transaction Charges and GOV all 0 on the Item master. The rate is derived from their sum, so this line can only ever come out as 0 with no tax. THIS IS THE FIX: set Service Charge, Typing Charges, Transaction Charges and GOV as applicable on the Item.");
 			}
-			if (it && (flt(it.service_charge) !== flt(row.service_charge) || flt(it.typing_charges) !== flt(row.typing_charges) || flt(it.gov) !== flt(row.gov))) {
-				console.warn("[digitz-tax] Item " + row.item + ": row Service Charge/Typing Charges/GOV (" + flt(row.service_charge) + "/" + flt(row.typing_charges) + "/" + flt(row.gov) +
-					") differ from the Item master (" + flt(it.service_charge) + "/" + flt(it.typing_charges) + "/" + flt(it.gov) +
+			if (it && (flt(it.service_charge) !== flt(row.service_charge) || flt(it.typing_charges) !== flt(row.typing_charges) || flt(it.transaction_charges) !== flt(row.transaction_charges) || flt(it.gov) !== flt(row.gov))) {
+				console.warn("[digitz-tax] Item " + row.item + ": row Service Charge/Typing Charges/Transaction Charges/GOV (" + flt(row.service_charge) + "/" + flt(row.typing_charges) + "/" + flt(row.transaction_charges) + "/" + flt(row.gov) +
+					") differ from the Item master (" + flt(it.service_charge) + "/" + flt(it.typing_charges) + "/" + flt(it.transaction_charges) + "/" + flt(it.gov) +
 					"). The row copies them when the item is picked; re-pick the item to refresh them.");
 			}
 		});
@@ -1023,7 +629,7 @@ function show_delivery_notes_dialog(frm) {
 }
 
 function process_delivery_note_items(frm, items) {
-    // `Delivery Note Item` has no Service Charge/Typing Charges/GOV columns, so items pulled from a
+    // `Delivery Note Item` has no Service Charge/Typing Charges/Transaction Charges/GOV columns, so items pulled from a
     // delivery note arrive with a rate but with all three at 0. Since the rate is always derived from
     // their sum, those rows would otherwise collapse to rate 0 and produce no tax at all.
     // Read them from the Item master first, then build the rows.
@@ -1036,18 +642,18 @@ function process_delivery_note_items(frm, items) {
 
     frappe.db.get_list('Item', {
         filters: { item_code: ['in', item_codes] },
-        fields: ['item_code', 'service_charge', 'typing_charges', 'gov'],
+        fields: ['item_code', 'service_charge', 'typing_charges', 'transaction_charges', 'gov'],
         limit_page_length: 0
     }).then(rows => {
         const charges = {};
         (rows || []).forEach(r => { charges[r.item_code] = r; });
 
-        const missing = item_codes.filter(c => !charges[c] || (!flt(charges[c].service_charge) && !flt(charges[c].typing_charges) && !flt(charges[c].gov)));
+        const missing = item_codes.filter(c => !charges[c] || (!flt(charges[c].service_charge) && !flt(charges[c].typing_charges) && !flt(charges[c].transaction_charges) && !flt(charges[c].gov)));
         if (missing.length) {
             frappe.msgprint({
-                title: __("Service Charge / Typing Charges / GOV not set"),
+                title: __("Service Charge / Typing Charges / Transaction Charges / GOV not set"),
                 indicator: "red",
-                message: __("These items have no Service Charge, Typing Charges or GOV on the Item master, so their rate and tax will be 0: {0}", [missing.join(", ")])
+                message: __("These items have no Service Charge, Typing Charges, Transaction Charges or GOV on the Item master, so their rate and tax will be 0: {0}", [missing.join(", ")])
             });
         }
 
@@ -1072,13 +678,14 @@ function add_delivery_note_rows(frm, items, charges) {
                 unit: item.unit,
                 service_charge: flt((charges[item.item] || {}).service_charge),
                 typing_charges: flt((charges[item.item] || {}).typing_charges),
+                transaction_charges: flt((charges[item.item] || {}).transaction_charges),
                 gov: flt((charges[item.item] || {}).gov),
-                rate: flt((charges[item.item] || {}).service_charge) + flt((charges[item.item] || {}).typing_charges) + flt((charges[item.item] || {}).gov),
+                rate: flt((charges[item.item] || {}).service_charge) + flt((charges[item.item] || {}).typing_charges) + flt((charges[item.item] || {}).transaction_charges) + flt((charges[item.item] || {}).gov),
                 base_unit: item.base_unit,
                 // Units are ignored: no conversion, so base-unit qty/rate are just
                 // qty/rate. make_taxes_and_totals recomputes these anyway.
                 qty_in_base_unit: flt(item.qty),
-                rate_in_base_unit: flt((charges[item.item] || {}).service_charge) + flt((charges[item.item] || {}).typing_charges) + flt((charges[item.item] || {}).gov),
+                rate_in_base_unit: flt((charges[item.item] || {}).service_charge) + flt((charges[item.item] || {}).typing_charges) + flt((charges[item.item] || {}).transaction_charges) + flt((charges[item.item] || {}).gov),
                 conversion_factor: 1,
                 rate_includes_tax: item.rate_includes_tax,
                 gross_amount: item.gross_amount,
@@ -1148,24 +755,10 @@ frappe.ui.form.on("Sales Invoice", "before_submit", function (frm) {
 // the total check and puts the cursor in the field. The server enforces the same
 // (validate_received_amount).
 frappe.ui.form.on("Sales Invoice", "validate", function (frm) {
-	const d = frm.doc;
-	if (cint(d.credit_sale) || d.payment_mode_type !== "Cash") {
-		return;
-	}
-	if (!flt(d.received_amount)) {
+	const error = digitz_erp.si_engine.cash_received_error(frm.doc);
+	if (error) {
 		frm.scroll_to_field("received_amount");
-		frappe.throw({
-			title: __("Received Amount Needed"),
-			message: __("Enter the Received Amount: the cash the customer handed over. It is required for a cash sale."),
-		});
-	}
-	if (flt(d.received_amount) < flt(d.rounded_total) - 0.005) {
-		frm.scroll_to_field("received_amount");
-		frappe.throw({
-			title: __("Received Amount Too Low"),
-			message: __("The Received Amount ({0}) is less than the invoice total ({1}). Collect the full amount, or make it a credit sale.",
-				[format_currency(d.received_amount), format_currency(d.rounded_total)]),
-		});
+		frappe.throw(error);
 	}
 });
 
@@ -1177,8 +770,7 @@ frappe.ui.form.on("Sales Invoice", "customer_mobile_number", function (frm) {
 
 // Same rule as is_placeholder_mobile in sales_invoice.py: 0000, or any all-zero number
 function is_placeholder_mobile(number) {
-	const digits = String(number || "").replace(/\D/g, "");
-	return digits.length > 0 && /^0+$/.test(digits);
+	return digitz_erp.si_engine.is_placeholder_mobile(number);
 }
 
 frappe.ui.form.on('Sales Invoice Item', {
@@ -1192,126 +784,27 @@ frappe.ui.form.on('Sales Invoice Item', {
 			return;
 		}
 
-		// keeping structure close to your original code
-		row.warehouse = frm.doc.warehouse;
-
 		frm.item = row.item;
 
-		let tax_excluded_for_company = false;
-
-		frappe.call({
-			method: 'digitz_erp.api.settings_api.get_company_settings',
-			async: false,
-			callback(r) {
-				console.log("digitz_erp.api.settings_api.get_company_settings");
-				console.log(r);
-
-				if (r.message && r.message.length) {
-					tax_excluded_for_company = r.message[0].tax_excluded;
-				}
+		// Name, unit, tax and Service Charge / Typing Charges / Transaction Charges / GOV from the Item master
+		digitz_erp.si_engine.load_item(frm.doc, row).then((r) => {
+			if (!r.found) {
+				return;
 			}
-		});
 
-		console.log("tax_excluded_for_company");
-		console.log(tax_excluded_for_company);
+			frm.item = row.item;
+			frm.warehouse = row.warehouse;
 
-		frappe.call({
-			method: 'frappe.client.get_value',
-			args: {
-				doctype: 'Item',
-				filters: { item_code: row.item },
-				fieldname: ['item_name', 'description', 'base_unit', 'tax', 'tax_excluded', 'service_charge', 'typing_charges', 'gov']
-			},
-			callback: (r) => {
-				console.log("item");
-				console.log(r);
-
-				if (!r.message) {
-					return;
-				}
-
-				row.item_name = r.message.item_name;
-				row.display_name = r.message.description;
-
-				if (tax_excluded_for_company) {
-					row.tax_excluded = true;
-					console.log("tax excluded assinged in");
-				} else {
-					row.tax_excluded = r.message.tax_excluded;
-				}
-
-				row.base_unit = r.message.base_unit;
-				row.unit = r.message.base_unit;
-				row.conversion_factor = 1;
-				row.rate = flt(r.message.service_charge) + flt(r.message.typing_charges) + flt(r.message.gov);
-				row.service_charge = flt(r.message.service_charge);
-				row.typing_charges = flt(r.message.typing_charges);
-				row.gov = flt(r.message.gov);
-				row.qty = 1;
-
-				frm.item = row.item;
-				frm.warehouse = row.warehouse;
-
-				let advance_filled = false;
-				if (frm.doc.project && frm.doc.for_advance_payment && frm.doc.project_value > 0 && frm.doc.advance_percentage > 0) {
-
-					let advance_value = (frm.doc.project_value * frm.doc.advance_percentage / 100);
-					row.rate = advance_value;
-					advance_filled = true;
-
-					var message = frm.doc.advance_percentage + "% advance = " + advance_value + " allocated in the line item.";
-					frm.events.show_a_message(frm, message);
-				}
-
-				frm.trigger("get_item_stock_balance");
-
-				// IMPORTANT: finalize only after tax call is completed
-				const finalize_row = () => {
-					var currency = "";
-					console.log("before call digitz_erp.api.settings_api.get_default_currency");
-					frappe.call({
-						method: 'digitz_erp.api.settings_api.get_default_currency',
-						async: false,
-						callback(r3) {
-							console.log(r3);
-							currency = r3.message;
-							console.log("currency");
-							console.log(currency);
-						}
-					});
-
-					// Charges come from the price list when it has a price for the item,
-					// otherwise from the Item master (already on the row). This also
-					// recalculates the totals.
-					apply_item_charges(frm, [row]);
-				};
-
-				if (!row.tax_excluded) {
-					frappe.call({
-						method: 'frappe.client.get_value',
-						args: {
-							doctype: 'Tax',
-							filters: { tax_name: r.message.tax },
-							fieldname: ['tax_name', 'tax_rate']
-						},
-						callback: (r2) => {
-							if (r2.message) {
-								row.tax = r2.message.tax_name;
-								row.tax_rate = flt(r2.message.tax_rate);
-							} else {
-								row.tax = "";
-								row.tax_rate = 0;
-							}
-
-							finalize_row();
-						}
-					});
-				} else {
-					row.tax = "";
-					row.tax_rate = 0;
-					finalize_row();
-				}
+			if (r.advance_message) {
+				frm.events.show_a_message(frm, r.advance_message);
 			}
+
+			frm.trigger("get_item_stock_balance");
+
+			// Charges come from the price list when it has a price for the item,
+			// otherwise from the Item master (already on the row). This also
+			// recalculates the totals.
+			apply_item_charges(frm, [row]);
 		});
 	},
 	tax_excluded(frm, cdt, cdn) {
@@ -1329,20 +822,10 @@ frappe.ui.form.on('Sales Invoice Item', {
 
 		if (!row.tax_excluded) //For tax excluded, tax and rate already adjusted
 		{
-			frappe.call(
-				{
-					method: 'frappe.client.get_value',
-					args: {
-						'doctype': 'Tax',
-						'filters': { 'tax_name': row.tax },
-						'fieldname': ['tax_name', 'tax_rate']
-					},
-					callback: (r2) => {
-						row.tax_rate = r2.message.tax_rate;
-						frm.refresh_field("items");
-						frm.trigger("make_taxes_and_totals");
-					}
-				});
+			digitz_erp.si_engine.load_tax_rate(row).then(() => {
+				frm.refresh_field("items");
+				frm.trigger("make_taxes_and_totals");
+			});
 		}
 	},
 	qty(frm, cdt, cdn) {
@@ -1357,6 +840,9 @@ frappe.ui.form.on('Sales Invoice Item', {
 	typing_charges(frm, cdt, cdn) {
 		frm.trigger("make_taxes_and_totals");
 	},
+	transaction_charges(frm, cdt, cdn) {
+		frm.trigger("make_taxes_and_totals");
+	},
 	// rate(frm, cdt, cdn) {
 	// 	frm.trigger("make_taxes_and_totals");
 	// },
@@ -1364,59 +850,23 @@ frappe.ui.form.on('Sales Invoice Item', {
 		frm.trigger("make_taxes_and_totals");
 	},
 	// The `unit` handler used to look up a UOM conversion factor and rescale the rate
-	// from it. Units are ignored in this document and the rate comes only from Service Charge + Typing Charges + GOV,
+	// from it. Units are ignored in this document and the rate comes only from Service Charge + Typing Charges + Transaction Charges + GOV,
 	// so there is nothing left for it to do. Deliberately removed.
 	discount_percentage(frm, cdt, cdn) {
 		let row = frappe.get_doc(cdt, cdn);
-
-		// gross_amount is only populated after make_taxes_and_totals has run, so on a
-		// freshly added row it is still undefined. Derive the base from qty * (Service Charge + Typing Charges + GOV)
-		// instead of trusting it, otherwise a percentage silently becomes a 0 discount.
-		let base = line_discount_base(row);
-		let pct = flt(row.discount_percentage);
-
-		if (!isFinite(pct) || pct <= 0) {
-			row.discount_percentage = 0;
-			row.discount_amount = 0;
-		}
-		else {
-			if (pct > 100) {
-				pct = 100;
-				frappe.msgprint(__("Discount percentage cannot exceed 100."));
-			}
-			row.discount_percentage = pct;
-			row.discount_amount = flt(base) * (pct / 100);
+		const message = digitz_erp.si_engine.apply_discount_percentage(row);
+		if (message) {
+			frappe.msgprint(message);
 		}
 
 		frm.refresh_field("items");
 		frm.trigger("make_taxes_and_totals");
 	},
 	discount_amount(frm, cdt, cdn) {
-
 		let row = frappe.get_doc(cdt, cdn);
-
-		let base = line_discount_base(row);
-		let discount = flt(row.discount_amount);
-
-		if (!isFinite(discount) || discount <= 0) {
-			row.discount_amount = 0;
-			row.discount_percentage = 0;
-		}
-		else if (!base) {
-			// Base is qty * (Service Charge + Typing Charges + GOV). With no qty, or with them all missing on the
-			// Item, a percentage here would be Infinity or NaN and would be written
-			// straight into the document.
-			row.discount_amount = 0;
-			row.discount_percentage = 0;
-			frappe.msgprint(__("Enter Qty first, and make sure Service Charge, Typing Charges or GOV is set on the Item - the rate is derived from them."));
-		}
-		else {
-			if (discount > base) {
-				discount = base;
-				row.discount_amount = discount;
-				frappe.msgprint(__("Discount amount cannot exceed the line amount."));
-			}
-			row.discount_percentage = (discount * 100) / base;
+		const message = digitz_erp.si_engine.apply_discount_amount(row);
+		if (message) {
+			frappe.msgprint(message);
 		}
 
 		frm.refresh_field("items");
@@ -1449,10 +899,7 @@ frappe.ui.form.on('Sales Invoice Item', {
 // same rule the token sync and data import use): the customer's Default Payment
 // Mode, else the company's. A credit sale has no payment mode.
 function get_sales_payment_defaults(frm) {
-	return frappe.call({
-		method: "digitz_erp.selling.doctype.sales_invoice.sales_invoice.get_sales_payment_defaults",
-		args: { customer: frm.doc.customer || null, company: frm.doc.company || null },
-	}).then((r) => r.message || {});
+	return digitz_erp.si_engine.payment_defaults(frm.doc);
 }
 
 // On a draft, when the customer is picked (or a new invoice already has one):
@@ -1576,151 +1023,13 @@ if (
 }
 
 let general_ledgers = function (frm) {
-    frappe.call({
-        method: "digitz_erp.api.accounts_api.get_gl_postings",
-        args: {
-            voucher: frm.doc.doctype,
-            voucher_no: frm.doc.name
-        },
-        callback: function (response) {
-            let gl_postings = response.message.gl_postings;
-            let totalDebit = parseFloat(response.message.total_debit).toFixed(2);
-            let totalCredit = parseFloat(response.message.total_credit).toFixed(2);
-
-            // Generate HTML content for the popup
-            let htmlContent = '<div style="max-height: 680px; overflow-y: auto;">' +
-                              '<table class="table table-bordered" style="width: 100%;">' +
-                              '<thead>' +
-                              '<tr>' +
-                              '<th style="width: 15%;">Account</th>' +
-							  '<th style="width: 25%;">Remarks</th>' +
-                              '<th style="width: 10%;">Debit Amount</th>' +
-                              '<th style="width: 10%;">Credit Amount</th>' +
-							  '<th style="width: 10%;">Party</th>' +
-                              '<th style="width: 10%;">Against Account</th>' +                              
-                              '<th style="width: 10%;">Project</th>' +
-                              '<th style="width: 10%;">Cost Center</th>' +                              
-                              '</tr>' +
-                              '</thead>' +
-                              '<tbody>';
-
-			console.log("gl_postings",gl_postings)
-
-            gl_postings.forEach(function (gl_posting) {
-                let remarksText = gl_posting.remarks || '';
-                let debitAmount = parseFloat(gl_posting.debit_amount).toFixed(2);
-                let creditAmount = parseFloat(gl_posting.credit_amount).toFixed(2);
-
-                htmlContent += '<tr>' +
-                               `<td>${gl_posting.account}</td>` +
-							   `<td>${remarksText}</td>` +
-                               `<td style="text-align: right;">${debitAmount}</td>` +
-                               `<td style="text-align: right;">${creditAmount}</td>` +
-							   `<td>${gl_posting.party}</td>` +
-                               `<td>${gl_posting.against_account}</td>` +                               
-                               `<td>${gl_posting.project}</td>` +
-                               `<td>${gl_posting.cost_center}</td>` +
-                               
-                               '</tr>';
-            });
-
-            // Add totals row
-            htmlContent += '<tr>' +
-                           '<td style="font-weight: bold;">Total</td>' +
-						   '<td></td>'+
-                           `<td style="text-align: right; font-weight: bold;">${totalDebit}</td>` +
-                           `<td style="text-align: right; font-weight: bold;">${totalCredit}</td>` +
-                           '<td colspan="5"></td>' +
-                           '</tr>';
-
-            htmlContent += '</tbody></table></div>';
-
-            // Create and show the dialog
-            let d = new frappe.ui.Dialog({
-                title: 'General Ledgers',
-                fields: [{
-                    fieldtype: 'HTML',
-                    fieldname: 'general_ledgers_html',
-                    options: htmlContent
-                }],
-                primary_action_label: 'Close',
-                primary_action: function () {
-                    d.hide();
-                }
-            });
-
-            // Set custom width for the dialog
-            d.$wrapper.find('.modal-dialog').css('max-width', '90%'); 
-
-            d.show();
-        }
-    });
+	digitz_erp.si_engine.show_gl_postings(frm.doc.doctype, frm.doc.name);
 };
 
 let stock_ledgers = function (frm) {
-    frappe.call({
-        method: "digitz_erp.api.accounts_api.get_stock_ledgers",
-        args: {
-			voucher: frm.doc.doctype,
-            voucher_no: frm.doc.name
-        },
-        callback: function (response) {
-            let stock_ledgers_data = response.message;
-
-            // Generate HTML content for the popup
-            let htmlContent = '<div style="max-height: 400px; overflow-y: auto;">' +
-                              '<table class="table table-bordered" style="width: 100%;">' +
-                              '<thead>' +
-                              '<tr>' +
-                              '<th style="width: 10%;">Item Code</th>' +
-							  '<th style="width: 20%;">Item Name</th>' +
-                              '<th style="width: 15%;">Warehouse</th>' +
-                              '<th style="width: 10%;">Qty In</th>' +
-                              '<th style="width: 10%;">Qty Out</th>' +
-                              '<th style="width: 15%;">Valuation Rate</th>' +
-                              '<th style="width: 15%;">Balance Qty</th>' +
-                              '<th style="width: 15%;">Balance Value</th>' +
-                              '</tr>' +
-                              '</thead>' +
-                              '<tbody>';
-
-            // Loop through the data and create rows
-            stock_ledgers_data.forEach(function (ledger) {
-                htmlContent += '<tr>' +
-                               `<td><a href="/app/item/${ledger.item}" target="_blank">${ledger.item}</a></td>` +
-							   `<td>${ledger.item_name}</td>` +
-                               `<td>${ledger.warehouse}</td>` +
-                               `<td>${ledger.qty_in}</td>` +
-                               `<td>${ledger.qty_out}</td>` +
-                               `<td>${ledger.valuation_rate}</td>` +
-                               `<td>${ledger.balance_qty}</td>` +
-                               `<td>${ledger.balance_value}</td>` +
-                               '</tr>';
-            });
-
-            htmlContent += '</tbody></table></div>';
-
-            // Create and show the dialog
-            let d = new frappe.ui.Dialog({
-                title: 'Stock Ledgers',
-                fields: [{
-                    fieldtype: 'HTML',
-                    fieldname: 'stock_ledgers_html',
-                    options: htmlContent
-                }],
-                primary_action_label: 'Close',
-                primary_action: function () {
-                    d.hide();
-                }
-            });
-
-            // Set custom width for the dialog
-            d.$wrapper.find('.modal-dialog').css('max-width', '85%'); // or any specific width like 800px
-
-            d.show();
-        }
-    });
+	digitz_erp.si_engine.show_stock_ledgers(frm.doc.doctype, frm.doc.name);
 };
+
 
 
 
@@ -1860,7 +1169,7 @@ function update_prices_for_item(frm, mode) {
 	apply_item_charges(frm);
 }
 
-// Set Service Charge, Typing Charges and GOV on `rows` (default: every row with an
+// Set Service Charge, Typing Charges, Transaction Charges and GOV on `rows` (default: every row with an
 // item) from the invoice's price list, falling back to the Item master, then
 // recalculate. Only a draft is re-priced.
 function apply_item_charges(frm, rows) {
@@ -1868,48 +1177,12 @@ function apply_item_charges(frm, rows) {
 		return;
 	}
 
-	rows = (rows || frm.doc.items || []).filter((row) => row.item);
-	if (!rows.length) {
-		frm.trigger("make_taxes_and_totals");
-		return;
-	}
-
-	frappe.call({
-		method: "digitz_erp.api.item_price_api.get_item_charges",
-		args: {
-			items: rows.map((row) => row.item),
-			price_list: frm.doc.price_list || null,
-			posting_date: frm.doc.posting_date,
-		},
-		callback(r) {
-			const charges = r.message || {};
-			const rate_only = [];
-
-			rows.forEach((row) => {
-				const c = charges[row.item];
-				if (!c) {
-					return;
-				}
-				row.service_charge = flt(c.service_charge);
-				row.typing_charges = flt(c.typing_charges);
-				row.gov = flt(c.gov);
-				row.rate = row.service_charge + row.typing_charges + row.gov;
-				if (c.source === "Item (price list has rate only)") {
-					rate_only.push(row.item);
-				}
-			});
-
-			if (rate_only.length) {
-				frappe.show_alert({
-					message: __("{0} has only a rate in price list {1}, with no Service Charge / Typing Charges / GOV, so the Item master charges were used.",
-						[[...new Set(rate_only)].join(", "), frm.doc.price_list]),
-					indicator: "orange",
-				}, 8);
-			}
-
+	digitz_erp.si_engine.apply_item_charges(frm.doc, rows).then((rate_only) => {
+		if (rate_only) {
+			digitz_erp.si_engine.rate_only_alert(frm.doc, rate_only);
 			frm.refresh_field("items");
-			frm.trigger("make_taxes_and_totals");
-		},
+		}
+		frm.trigger("make_taxes_and_totals");
 	});
 }
 
@@ -1922,21 +1195,16 @@ function apply_customer_billing_details(frm, set_values) {
 		return;
 	}
 
-	frappe.call({
-		method: "digitz_erp.selling.doctype.sales_invoice.sales_invoice.get_customer_billing_details",
-		args: { customer: frm.doc.customer },
-		callback(r) {
-			const details = r.message || {};
-			const editable = details.is_walk_in && frm.doc.docstatus === 0;
+	digitz_erp.si_engine.customer_billing_details(frm.doc.customer).then((details) => {
+		const editable = details.is_walk_in && frm.doc.docstatus === 0;
 
-			frm.set_df_property("customer_company", "read_only", editable ? 0 : 1);
-			frm.set_df_property("tax_id", "read_only", editable ? 0 : 1);
+		frm.set_df_property("customer_company", "read_only", editable ? 0 : 1);
+		frm.set_df_property("tax_id", "read_only", editable ? 0 : 1);
 
-			if (set_values) {
-				frm.set_value("customer_company", details.customer_company || "");
-				frm.set_value("tax_id", details.tax_id || "");
-			}
-		},
+		if (set_values) {
+			frm.set_value("customer_company", details.customer_company || "");
+			frm.set_value("tax_id", details.tax_id || "");
+		}
 	});
 }
 
@@ -1945,18 +1213,5 @@ function apply_customer_billing_details(frm, set_values) {
 // apply only to a cash payment mode on a sale that is not on credit; the server
 // works Balance out again on save.
 function set_cash_balance(frm) {
-	if (frm.doc.docstatus !== 0) {
-		return;
-	}
-
-	if (cint(frm.doc.credit_sale) || frm.doc.payment_mode_type !== "Cash") {
-		if (flt(frm.doc.received_amount) || flt(frm.doc.balance_amount)) {
-			frm.set_value("received_amount", 0);
-			frm.set_value("balance_amount", 0);
-		}
-		return;
-	}
-
-	const received = flt(frm.doc.received_amount);
-	frm.set_value("balance_amount", received ? received - flt(frm.doc.rounded_total) : 0);
+	digitz_erp.si_engine.set_cash_balance(frm.doc, (fieldname, value) => frm.set_value(fieldname, value));
 }

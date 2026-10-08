@@ -3,8 +3,8 @@
 
 """Seed the Al Taj letterhead images as public File attachments.
 
-Run manually; this is deliberately not a patch, so `bench migrate` never
-triggers it.
+The patch v1_0.set_altaj_letterhead runs this on `bench migrate` for an Al Taj
+site and sets the images on the Company. It can also be run by hand:
 
 	bench --site <site> execute digitz_erp.seeds.company_letterhead_seed.run
 
@@ -32,8 +32,9 @@ from frappe.utils import cint
 
 # (file name as it must appear under /files/, what it is used for)
 LETTERHEAD_FILES = (
-	("AlTaj Logo Header.jpeg", "Company header"),
-	("al.taj-fooer.jpeg", "Company footer"),
+	("altaj-letterhead-header.png", "Company header"),
+	("altaj-letterhead-invoice-header.png", "Company invoice header"),
+	("altaj-letterhead-footer.png", "Company footer"),
 )
 
 
@@ -112,5 +113,6 @@ def report(created, existing, problems, dry_run):
 
 	if created and not dry_run:
 		print("\n  Set these on the Company record:")
-		print("    Header -> /files/AlTaj Logo Header.jpeg")
-		print("    Footer -> /files/al.taj-fooer.jpeg")
+		print("    Header -> /files/altaj-letterhead-header.png")
+		print("    Invoice Header -> /files/altaj-letterhead-invoice-header.png")
+		print("    Footer -> /files/altaj-letterhead-footer.png")

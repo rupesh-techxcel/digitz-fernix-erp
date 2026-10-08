@@ -18,13 +18,13 @@ frappe.ui.form.on("Service Items",{
 				args: {
 					'doctype': 'Item',
 					'filters': { 'item_code': row.item },
-					'fieldname': ['item_name','service_charge','typing_charges','gov', 'base_unit', 'tax', 'tax_excluded']
+					'fieldname': ['item_name','service_charge','typing_charges','transaction_charges','gov', 'base_unit', 'tax', 'tax_excluded']
 				},
 				callback: (r) => {
 					console.log("item")
 					console.log(r)
-					// Rate is Service Charge + Typing Charges + GOV; VAT is on the first two only
-					const taxable = flt(r.message.service_charge) + flt(r.message.typing_charges);
+					// Rate is Service Charge + Typing Charges + Transaction Charges + GOV; VAT is on all but GOV
+					const taxable = flt(r.message.service_charge) + flt(r.message.typing_charges) + flt(r.message.transaction_charges);
 					row.item_name = r.message.item_name;
 					row.rate = taxable + flt(r.message.gov);
                     row.unit = r.message.base_unit;
@@ -35,6 +35,7 @@ frappe.ui.form.on("Service Items",{
                     row.net_amount = row.rate;
                     row.service_charge = r.message.service_charge
                     row.typing_charges = r.message.typing_charges
+                    row.transaction_charges = r.message.transaction_charges
                     row.gov = r.message.gov
                     if (!r.message.tax_excluded){
                         row.tax_amount = taxable * 0.05
@@ -51,7 +52,7 @@ frappe.ui.form.on("Service Items",{
         // row.net_amount = row.qty * row.rate
         frappe.model.set_value(cdt,cdn,'net_amount', row.qty * row.rate);
         if (!row.tax_excluded){
-            frappe.model.set_value(cdt,cdn,'tax_amount', (row.qty * (flt(row.service_charge) + flt(row.typing_charges))) * (5 / 100));
+            frappe.model.set_value(cdt,cdn,'tax_amount', (row.qty * (flt(row.service_charge) + flt(row.typing_charges) + flt(row.transaction_charges))) * (5 / 100));
         }
 
     }

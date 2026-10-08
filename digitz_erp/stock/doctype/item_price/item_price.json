@@ -15,6 +15,7 @@
   "column_break_grfof",
   "service_charge",
   "typing_charges",
+  "transaction_charges",
   "gov",
   "rate",
   "unit",
@@ -116,6 +117,12 @@
    "label": "Typing Charges"
   },
   {
+   "description": "Taxable transaction charges.",
+   "fieldname": "transaction_charges",
+   "fieldtype": "Currency",
+   "label": "Transaction Charges"
+  },
+  {
    "description": "Government fee, passed through without VAT.",
    "fieldname": "gov",
    "fieldtype": "Currency",
@@ -131,7 +138,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-28 12:19:50.477484",
+ "modified": "2026-10-08 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Item Price",

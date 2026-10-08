@@ -958,7 +958,7 @@ def item_tax(item_code, taxable_amount):
 
 	Read from the Item master, not from the Medical Service's child row. Those
 	rows are a snapshot: `get_medical_service_items` only refreshes their tax
-	fields when service_charge, typing_charges or gov happens to differ, so a service set up with tax off
+	fields when service_charge, typing_charges, transaction_charges or gov happens to differ, so a service set up with tax off
 	keeps reporting no tax even after the Item is marked taxable. The Item is
 	the authority, which is what the invoice import path also uses
 	(SalesInvoice.populate_item_details_during_import).
@@ -974,7 +974,7 @@ def item_tax(item_code, taxable_amount):
 
 	rate = cint(frappe.db.get_value("Tax", item.tax, "tax_rate"))
 
-	# Charged on the service and typing charges only; the caller passes just those,
+	# Charged on the service, typing and transaction charges only; the caller passes just those,
 	# so the government fee stays outside the taxable amount.
 	return item.tax, rate, flt(taxable_amount) * rate / 100.0
 
@@ -994,7 +994,7 @@ def token_company():
 def build_invoice_items(service_name, price_list=None, rate_includes_tax=0):
 	"""Price the service and return (rows, totals).
 
-	Each item's Service Charge, Typing Charges and GOV come from `price_list` (the
+	Each item's Service Charge, Typing Charges, Transaction Charges and GOV come from `price_list` (the
 	customer's assigned price list) when it has a price for the item, otherwise from
 	the Item master -- the same rule the Sales Invoice form applies when an item is
 	picked (item_price_api.get_item_charges).
@@ -1021,17 +1021,18 @@ def build_invoice_items(service_name, price_list=None, rate_includes_tax=0):
 		item_charges = charges.get(service_item.item) or {}
 		service_charge = flt(item_charges.get("service_charge"))
 		typing_charges = flt(item_charges.get("typing_charges"))
+		transaction_charges = flt(item_charges.get("transaction_charges"))
 		gov = flt(item_charges.get("gov"))
 
-		# Service and typing charges are taxable; the government fee is not
-		taxable_base = qty * (service_charge + typing_charges)
+		# Service, typing and transaction charges are taxable; the government fee is not
+		taxable_base = qty * (service_charge + typing_charges + transaction_charges)
 		gov_amount = qty * gov
 
 		tax_name, tax_rate, _ = item_tax(service_item.item, taxable_base)
 
 		# Mirrors the amounts the desk computes in sales_invoice.js, so an
 		# invoice raised from a token and one keyed in by hand agree. Only the
-		# service and typing charges are taxable; the government fee is passed
+		# service, typing and transaction charges are taxable; the government fee is passed
 		# through untaxed but still billed.
 		if tax_rate and rate_includes_tax:
 			# The charges already carry the tax: strip it back out
@@ -1060,8 +1061,8 @@ def build_invoice_items(service_name, price_list=None, rate_includes_tax=0):
 				"item_name": service_item.item_name,
 				"display_name": service_item.item_name,
 				"qty": qty,
-				# rate is the whole line: service charge, typing charges and government fee.
-				"rate": service_charge + typing_charges + gov,
+				# rate is the whole line: service, typing and transaction charges and government fee.
+				"rate": service_charge + typing_charges + transaction_charges + gov,
 				"rate_includes_tax": rate_includes_tax,
 				"gross_amount": gross_amount,
 				"taxable_amount": taxable_amount,
@@ -1073,6 +1074,7 @@ def build_invoice_items(service_name, price_list=None, rate_includes_tax=0):
 				"net_amount": net_amount,
 				"service_charge": service_charge,
 				"typing_charges": typing_charges,
+				"transaction_charges": transaction_charges,
 				"gov": gov,
 			}
 		)

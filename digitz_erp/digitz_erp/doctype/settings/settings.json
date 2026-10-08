@@ -20,7 +20,9 @@
   "section_break_customer",
   "customer_code_required",
   "section_break_sales_invoice",
-  "customer_mobile_number_mandatory_in_sales_invoice"
+  "customer_mobile_number_mandatory_in_sales_invoice",
+  "section_break_day_open",
+  "show_previous_close_in_day_open"
  ],
  "fields": [
   {
@@ -115,13 +117,25 @@
    "fieldtype": "Link",
    "label": "Default Walk-in Customer",
    "options": "Customer"
+  },
+  {
+   "fieldname": "section_break_day_open",
+   "fieldtype": "Section Break",
+   "label": "Day Open"
+  },
+  {
+   "default": "0",
+   "description": "Off by default: a blind count, where the cashier counts the till without seeing the previous balance. Tick to show the cash left at the last close on the counter and start the opening float from it.",
+   "fieldname": "show_previous_close_in_day_open",
+   "fieldtype": "Check",
+   "label": "Show Previous Day Close Balance in Day Open"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-10-06 10:00:00.000000",
+ "modified": "2026-10-08 19:15:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Settings",

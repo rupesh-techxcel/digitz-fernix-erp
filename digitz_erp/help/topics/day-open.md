@@ -1,7 +1,5 @@
 # Opening your day
 
-▶ **[Watch the three-minute video](#counter-video)** of a day at the counter.
-
 Open your day at the start of your shift, before you bill anyone. Until you do, the system will not let you save invoices, returns, receipts or expenses.
 
 ## Before you start
@@ -11,7 +9,7 @@ Open your day at the start of your shift, before you bill anyone. Until you do, 
 
 ## Steps
 
-1. Click the badge at the top of the page, or open **Day Open** from the Medical Center workspace.
+1. Click the badge at the top of the page, or open the **Cashier Console** from the Medical Center workspace. It starts on **Day Open** when your day is not open yet.
 2. Check **Previous Close on this Counter** on the left. It shows who closed the last day here, when, and the **cash left in the till**.
 3. Count the cash now in the till, in the **Count the Opening Cash** grid. Type how many of each note and coin you have. The **Opening Float** fills in from the count. You can also type the total straight into Opening Float.
 4. Read the note under the float:
@@ -20,6 +18,12 @@ Open your day at the start of your shift, before you bill anyone. Until you do, 
 5. Click **Open Day** and confirm.
 
 The badge turns green (*Day open since …*) and you can bill.
+
+## Blind count (the default)
+
+Unless a System Manager ticks **Show Previous Day Close Balance in Day Open** in **Settings** (section *Day Open*), Day Open is a blind count: it does not show **Previous Close on this Counter**, the Opening Float starts at zero, and there is no *less / more than the last close* note or **Take over this count**. Count the till and enter what is there. The day is still linked to the last close behind the scenes, and supervisors see any difference in the Counter Session.
+
+Steps 2 and 4 above, and *Taking over from the last cashier* below, apply only when that setting is ticked.
 
 ## Taking over from the last cashier
 

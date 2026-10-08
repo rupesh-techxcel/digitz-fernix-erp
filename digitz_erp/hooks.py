@@ -29,6 +29,8 @@ app_include_js = [
 	"/assets/digitz_erp/js/token_notifications.js",
 	# A bundle, so each build gets a new file name and browsers never keep a stale copy
 	"counter_device.bundle.js",
+	# The Sales Invoice rules, shared by the form and the Cashier Console's invoice editor
+	"sales_invoice.bundle.js",
 ]
 
 # The Help Center page (digitz_erp/help) in the navbar Help menu of new sites;
@@ -97,7 +99,14 @@ after_install = "digitz_erp.api.install_api.after_install"
 after_migrate = [
 	"digitz_erp.api.bundled_files.ensure_bundled_files",
 	"digitz_erp.api.token_simulator.update_token_url_after_migrate",
+	# Keeps the Cashier role's rights as the counter needs them, even on a site
+	# whose permissions were edited in Role Permission Manager
+	"digitz_erp.api.cashier_permissions.apply",
 ]
+
+# On a fresh install fixtures are imported after after_install, so the Cashier
+# rights are enforced here, once they are in
+after_sync = ["digitz_erp.api.cashier_permissions.apply"]
 
 # Uninstallation
 # ------------

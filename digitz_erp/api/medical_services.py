@@ -13,14 +13,15 @@ def get_medical_service_items(medical_service: str):
         for item in doc.services:
             item_doc = frappe.get_doc("Item",item.item)
             if (item_doc.service_charge == item.service_charge and item_doc.typing_charges == item.typing_charges
-                    and item_doc.gov == item.gov):
+                    and item_doc.transaction_charges == item.transaction_charges and item_doc.gov == item.gov):
                 pass
             else:
-                # Rate is Service Charge + Typing Charges + GOV; VAT is on the first two only
-                taxable = flt(item_doc.service_charge) + flt(item_doc.typing_charges)
+                # Rate is Service Charge + Typing Charges + Transaction Charges + GOV; VAT is on all but GOV
+                taxable = flt(item_doc.service_charge) + flt(item_doc.typing_charges) + flt(item_doc.transaction_charges)
                 item.rate = taxable + flt(item_doc.gov)
                 item.service_charge = item_doc.service_charge
                 item.typing_charges = item_doc.typing_charges
+                item.transaction_charges = item_doc.transaction_charges
                 item.gov = item_doc.gov
                 item.gross_amount = item.rate
                 item.net_amount = item.rate

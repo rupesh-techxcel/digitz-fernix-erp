@@ -18,8 +18,8 @@ from frappe.utils import money_in_words
 from digitz_erp.api.sales_order_api import check_and_update_sales_order_status,update_sales_order_quantities_on_update
 from digitz_erp.api.settings_api import add_seconds_to_time
 from frappe import _
-from frappe.utils import flt, fmt_money
-from digitz_erp.api.counter_session_api import stamp_counter_session
+from frappe.utils import cint, flt, fmt_money
+from digitz_erp.api.counter_session_api import restrict_cashier_to_today, stamp_counter_session
 from digitz_erp.accounts.doctype.gl_posting.gl_posting import get_party_balance
 from digitz_erp.api.settings_api import get_customer_terms
 from digitz_erp.api.items_api import get_item_uoms 
@@ -110,6 +110,10 @@ class SalesInvoice(Document):
         self.set_customer_company_and_trn()
         self.set_cash_balance()
         self.set_counter()
+        # Reference Date is optional; a bank payment still needs one for its
+        # Bank Reconciliation entry, so it takes the posting date when left empty
+        if self.mode == "Bank" and not self.reference_date:
+            self.reference_date = self.posting_date
         # Optional: Enforce required fields
         if not self.credit_sale and not self.payment_mode:
             frappe.throw("Payment mode is required when not a credit sale.")
@@ -234,6 +238,8 @@ class SalesInvoice(Document):
 
     def validate(self):
         
+        # A cashier saves and submits only today's invoices
+        restrict_cashier_to_today(self)
         self.validate_customer_mobile_number()
         self.validate_received_amount()
         self.validate_line_amounts()
@@ -303,7 +309,7 @@ class SalesInvoice(Document):
     def validate_line_amounts(self):
         """Refuse to save amounts that were worked out from an older Service Charge/Typing Charges/GOV.
 
-        The form derives rate = Service Charge + Typing Charges + GOV and every amount from it, and the server
+        The form derives rate = Service Charge + Typing Charges + Transaction Charges + GOV and every amount from it, and the server
         stores those amounts as sent. If any of them change without a recalculation the
         row, the totals, the paid amount and the printed invoice and receipt all
         carry the stale figures. Advance rows set their own rate, and rows copied
@@ -313,11 +319,11 @@ class SalesInvoice(Document):
             return
 
         for row in self.items:
-            charges = flt(row.service_charge) + flt(row.typing_charges) + flt(row.gov)
+            charges = flt(row.service_charge) + flt(row.typing_charges) + flt(row.transaction_charges) + flt(row.gov)
             if charges and abs(flt(row.rate) - charges) > 0.005:
                 frappe.throw(
                     f"Row {row.idx} ({row.item}): the amounts were calculated for a rate of "
-                    f"{flt(row.rate):.2f}, but Service Charge + Typing Charges + GOV is {charges:.2f}. Change the quantity "
+                    f"{flt(row.rate):.2f}, but Service Charge + Typing Charges + Transaction Charges + GOV is {charges:.2f}. Change the quantity "
                     "or select the item again to recalculate, then save."
                 )
 
@@ -1894,6 +1900,7 @@ class SalesInvoice(Document):
         gross_total = 0
         tax_total = 0
         net_total = 0
+        taxable_total = 0
         discount_total = 0
 
         self.set("taxes", [])
@@ -1905,37 +1912,47 @@ class SalesInvoice(Document):
         self.rounded_total = 0
 
         for entry in self.items:
-            tax_in_rate = 0
             entry.rate_includes_tax = self.rate_includes_tax
             entry.gross_amount = 0
             entry.tax_amount = 0
             entry.net_amount = 0
 
-            if entry.rate_includes_tax:
-                if entry.tax_rate > 0:
-                    tax_in_rate = entry.rate * (entry.tax_rate / (100 + entry.tax_rate))
-                    entry.rate_excluded_tax = entry.rate - tax_in_rate
-                    entry.tax_amount = (entry.qty * entry.rate) * (entry.tax_rate / (100 + entry.tax_rate))
-                else:
-                    entry.rate_excluded_tax = entry.rate
-                    entry.tax_amount = 0
-
-                entry.net_amount = (entry.qty * entry.rate) - entry.discount_amount
-                entry.gross_amount = entry.net_amount - entry.tax_amount
+            # As the shared Sales Invoice engine (public/js/sales_invoice_engine.js)
+            # and the token sync: only Service Charge + Typing Charges + Transaction
+            # Charges are taxable, GOV is billed untaxed, and the rate is always their sum.
+            qty = flt(entry.qty)
+            discount = flt(entry.discount_amount)
+            taxable_rate = flt(entry.service_charge) + flt(entry.typing_charges) + flt(entry.transaction_charges)
+            gov_amount = qty * flt(entry.gov)
+            if taxable_rate or flt(entry.gov):
+                entry.rate = taxable_rate + flt(entry.gov)
             else:
-                entry.rate_excluded_tax = entry.rate
+                # A row without the charges: its rate is all taxable, as before
+                taxable_rate = flt(entry.rate)
+            taxable_base = max(qty * taxable_rate - discount, 0)
+            tax_rate = 0 if cint(entry.tax_excluded) else flt(entry.tax_rate)
 
-                if entry.tax_rate > 0:
-                    entry.tax_amount = ((entry.qty * entry.rate) - entry.discount_amount) * (entry.tax_rate / 100)
-                    entry.net_amount = ((entry.qty * entry.rate) - entry.discount_amount) + entry.tax_amount
-                else:
-                    entry.tax_amount = 0
-                    entry.net_amount = (entry.qty * entry.rate) - entry.discount_amount
+            if tax_rate > 0 and entry.rate_includes_tax:
+                # The charges already carry the tax: strip it back out
+                entry.taxable_amount = flt(taxable_base / (1 + tax_rate / 100), 2)
+                entry.tax_amount = flt(taxable_base - entry.taxable_amount, 2)
+                entry.net_amount = taxable_base + gov_amount
+            elif tax_rate > 0:
+                entry.taxable_amount = taxable_base
+                entry.tax_amount = flt(taxable_base * tax_rate / 100, 2)
+                entry.net_amount = taxable_base + gov_amount + entry.tax_amount
+            else:
+                entry.taxable_amount = 0
+                entry.tax_amount = 0
+                entry.net_amount = taxable_base + gov_amount
 
-                entry.gross_amount = entry.qty * entry.rate_excluded_tax
+            entry.rate_excluded_tax = entry.rate
+            entry.gross_amount = qty * flt(entry.rate)
 
             gross_total += entry.gross_amount
             tax_total += entry.tax_amount
+            net_total += entry.net_amount
+            taxable_total += entry.taxable_amount
             discount_total += entry.discount_amount
 
             entry.qty_in_base_unit = entry.qty * entry.conversion_factor
@@ -1972,7 +1989,10 @@ class SalesInvoice(Document):
             self.additional_discount = 0
 
         self.gross_total = gross_total
-        self.net_total = gross_total + tax_total - self.additional_discount
+        # The lines' net amounts already hold the tax (added on top, or included in
+        # the rate) and the line discounts, as the engine works them out
+        self.net_total = net_total - flt(self.additional_discount)
+        self.taxable_total = taxable_total
         self.tax_total = tax_total
         self.total_discount_in_line_items = discount_total
 

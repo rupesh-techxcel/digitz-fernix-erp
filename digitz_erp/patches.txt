@@ -9,3 +9,4 @@ digitz_erp.patches.v1_0.rename_customer_types
 digitz_erp.patches.v1_0.move_pro_customers_to_salesmen
 digitz_erp.patches.v1_0.single_session_for_cashiers
 digitz_erp.patches.v1_0.add_help_center_to_navbar
+digitz_erp.patches.v1_0.set_altaj_letterhead

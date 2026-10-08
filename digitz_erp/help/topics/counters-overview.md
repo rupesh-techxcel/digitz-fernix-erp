@@ -1,7 +1,5 @@
 # How counters and days work
 
-▶ **[Watch the three-minute video](#counter-video)** of a day at the counter.
-
 Every payment taken at the front desk belongs to a **counter**, a **counter PC** and a **cashier's day**. The system uses these three to work out, at any moment, how much cash should be in each till.
 
 ## The three pieces
@@ -15,7 +13,7 @@ Every payment taken at the front desk belongs to a **counter**, a **counter PC**
 ## A normal day
 
 1. **Open the day.** Count the cash in the till (the *float*) and click **Open Day**. See [Opening your day](#day-open).
-2. **Bill as usual.** Every Sales Invoice, Sales Return, Receipt Entry and Expense Entry you save is stamped with your counter, your PC and your day.
+2. **Bill from the Cashier Console.** Patients' tokens arrive as draft invoices on its **Sales Invoice Board** tab, which updates by itself. Click **Open Invoice**, take payment and submit; the invoice opens in the console's **Sales Invoices** tab and leaves the board once submitted. **Sync Now** fetches new tokens at once. Every Sales Invoice, Sales Return, Receipt Entry and Expense Entry you save is stamped with your counter, your PC and your day.
 3. **Close the day.** The system shows how much cash the till *should* hold. Count what it *does* hold and click **Close Day**. See [Closing your day](#day-close).
 
 Billing is blocked until the day is open. Only cashiers are held to this. Supervisors and the automatic token sync are not.
@@ -31,9 +29,11 @@ The coloured badge at the top of every page shows where you are and what to do n
 | 🟢 *Counter 1 · DEV-0001 · Day open since 09:02* | You are billing on an open day. | Opens Day Close |
 | 🟠 *Counter 1 · DEV-0001 · Day not opened* | You must open the day before billing. | Opens Day Open |
 | 🟠 *… · Close awaiting approval* | Your close had a difference and waits for a supervisor. | Opens Day Close |
-| 🔴 *Unregistered device* | This PC is not a counter. Billing is blocked for cashiers. | Supervisors can register it |
+| 🟠 *Approval pending · Counter 1* | A cashier asked to make this PC Counter 1's PC. That counter already has one, so a supervisor must approve. | Explains what is pending |
+| 🔴 *Request rejected · Counter 1* | A supervisor rejected the request. | Cashiers can ask again |
+| 🔴 *Unregistered device* | This PC is not a counter. Billing is blocked for cashiers. | Supervisors register it; cashiers ask for it |
 
-A number next to the badge (supervisors only) is the count of closes waiting for approval.
+A number next to the badge (supervisors only) counts the day closes and PC registration requests waiting for approval.
 
 ## How the expected cash is worked out
 
@@ -43,6 +43,7 @@ A number next to the badge (supervisors only) is the count of closes waiting for
 + Cash receipts         (Receipt Entries: credit collections paid in cash)
 − Cash refunds          (cash Sales Returns)
 − Cash paid out         (Expense Entries paid in cash)
+− Expenditure           (cash paid out of the till, entered at Day Close)
 = Expected cash in the till
 ```
 

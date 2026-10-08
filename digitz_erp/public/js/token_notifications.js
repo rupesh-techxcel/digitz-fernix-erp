@@ -8,6 +8,16 @@
 
 frappe.provide("digitz_erp.token_notifications");
 
+// Open a Sales Invoice where the user works: in the Cashier Console's invoice
+// editor if they can open the console, else in the Sales Invoice form.
+digitz_erp.open_sales_invoice = function (name) {
+	if ((frappe.boot.page_info || {})["cashier-console"]) {
+		frappe.set_route("cashier-console", "invoices", name);
+	} else {
+		frappe.set_route("Form", "Sales Invoice", name);
+	}
+};
+
 digitz_erp.token_notifications = {
 	EVENT: "digitz_token_invoice_created",
 	ALERT_SECONDS: 8,
@@ -65,7 +75,7 @@ digitz_erp.token_notifications = {
 		frappe.show_alert(
 			{
 				message: __("{0} new invoices from tokens", [invoices.length]),
-				subtitle: __("Open the Sales Invoice Board to work them"),
+				subtitle: __("Open the Sales Invoice Board in the Cashier Console to work them"),
 				indicator: "green",
 			},
 			this.ALERT_SECONDS
@@ -86,13 +96,13 @@ digitz_erp.token_notifications = {
 			if ($(event.target).closest(".close").length) {
 				return;
 			}
-			frappe.set_route("Form", "Sales Invoice", invoice_name);
+			digitz_erp.open_sales_invoice(invoice_name);
 		});
 	},
 
 	// ------------------------------------------------------------ manual sync
 
-	// Shared by the Sales Invoice Board and the Medical Center Dashboard, which
+	// Shared by the Sales Invoice Board (page and console tab) and the Medical Center Dashboard, which
 	// both carry a "Sync Now" button. The server runs the sync inline and hands
 	// back a report, so the popup can say what actually happened.
 	run_sync_now(on_done) {

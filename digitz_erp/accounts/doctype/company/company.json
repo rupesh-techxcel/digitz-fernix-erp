@@ -17,6 +17,7 @@
   "country",
   "tax_id",
   "header_image",
+  "invoice_header_image",
   "footer_image",
   "total_pixels",
   "column_break_9",
@@ -740,6 +741,12 @@
    "label": "Header Image"
   },
   {
+   "description": "Used on Tax Invoice PDFs in place of Header Image. Receipts and other documents keep Header Image.",
+   "fieldname": "invoice_header_image",
+   "fieldtype": "Attach Image",
+   "label": "Invoice Header Image"
+  },
+  {
    "fieldname": "footer_image",
    "fieldtype": "Attach Image",
    "label": "Footer Image"
@@ -771,7 +778,7 @@
  "image_field": "company_logo",
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-06 11:20:40.119270",
+ "modified": "2026-10-08 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Company",
@@ -789,6 +796,11 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Cashier",
+   "select": 1
   }
  ],
  "row_format": "Dynamic",

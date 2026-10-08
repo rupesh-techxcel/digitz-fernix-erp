@@ -42,10 +42,10 @@ Cashiers are automatically limited to **one login at a time**. Signing in elsewh
 
 ## 4. Register each counter PC
 
-On each PC that takes money:
+On each PC that takes money, either:
 
-1. Sign in as a supervisor.
-2. Click the red **Unregistered device** badge. Choose the **Counter** and click **Register**.
+- **a supervisor** signs in on the PC, clicks the red **Unregistered device** badge, chooses the **Counter** and clicks **Register**. To create the counter at the same time, choose **+ New counter**; or
+- **the cashier** signs in on the PC, clicks the badge and asks for a counter. A free counter is theirs at once. A counter that already has a PC needs a supervisor's approval (the badge shows **Approval pending**).
 
 ![The Register this device dialog](/assets/digitz_erp/images/help/register-device.png)
 
@@ -55,9 +55,29 @@ The PC is given a number such as DEV-0003. It is remembered in that browser (a c
 
 - using a different browser or browser profile, or a private window;
 - clearing *all* site data for this site in the browser;
-- the Counter Device, or its Counter, being disabled.
+- the Counter Device, or its Counter, being disabled;
+- another PC or browser taking over the same counter.
 
-Just register it again. It gets a new number.
+Just register it again (or ask again). It gets a new number. See [How counter PCs are recognised](#counter-devices) for requests, approvals and replacing a PC.
+
+### One device per counter
+
+A counter has **one** registered device at a time. Registering a PC or browser to a counter disables the counter's other devices, and whatever that browser was registered as before. The dialog lists them before you click **Register**.
+
+So use **one browser** on each counter PC. If a cashier opens another browser on the same PC, it shows *Unregistered device* and cannot bill. If you register that browser as well, the first one stops working.
+
+A day open on a disabled device is not closed. The dialog warns about it, and the cashier carries on in the same day on the counter's new PC. See [How counter PCs are recognised](#counter-devices) for replacing a PC that has broken.
+
+### Print invoices without the print dialog
+
+In the Cashier Console, an invoice's **Print** menu has **Print Invoice** and **Print Receipt**, which send the PDF straight to the printer, and **Preview Invoice** and **Preview Receipt**, which show it in a popup first. The receipt entries appear for a cash sale, and for a credit sale once it has been paid. Browsers always show their print dialog unless Chrome is started for kiosk printing. To print with no dialog on a counter PC:
+
+1. Right-click the Chrome shortcut the cashier uses, open **Properties**, and add ` --kiosk-printing` at the end of **Target** (after the closing quote).
+2. Make the invoice printer the PC's **default printer** in Windows.
+3. Print one invoice through the dialog first (start Chrome once without the flag) and set the paper size, margins, and **Headers and footers** off. Chrome keeps these settings.
+4. Close every Chrome window and start Chrome from the shortcut again. The flag only takes effect on a fresh start.
+
+Use that one shortcut and browser for the console, the same one the PC is registered in. Without the flag, **Print** still works but shows the usual print dialog.
 
 ## 5. Retire or replace a PC
 
@@ -65,8 +85,8 @@ Open **Counter Device** and find the PC by its number. The list shows its counte
 
 ![The Counter Device list](/assets/digitz_erp/images/help/counter-device-list.png)
 
-Registering a PC again does not disable its old number. Disable the old one yourself.
+To replace a PC, just register the new one to the same counter. The old PC is disabled for you.
 
 ## 6. Where to find everything
 
-The **Medical Center** workspace has shortcuts to Day Open, Day Close, Counter Sessions, Counter Session Summary, Counter, Counter Device and Cashier.
+The **Medical Center** workspace has the **Cashier Console** (Day Open, the invoice board, invoices, Day Close and Day History in one place), and shortcuts to Counter Sessions, Counter Session Summary, Counter, Counter Device and Cashier.

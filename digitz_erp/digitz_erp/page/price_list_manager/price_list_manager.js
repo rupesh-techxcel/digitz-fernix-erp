@@ -253,6 +253,7 @@ digitz_erp.PriceListManager = class PriceListManager {
 						<th>${__("Unit")}</th>
 						<th class="plm-num">${__("Service Charge")}</th>
 						<th class="plm-num">${__("Typing Charges")}</th>
+						<th class="plm-num">${__("Transaction Charges")}</th>
 						<th class="plm-num">${__("GOV")}</th>
 						<th class="plm-num">${__("Rate")}</th>
 						${show_discount ? `
@@ -271,6 +272,7 @@ digitz_erp.PriceListManager = class PriceListManager {
 							<td>${esc(r.unit || "")}</td>
 							<td class="plm-num">${format_currency(r.service_charge, r.currency)}</td>
 							<td class="plm-num">${format_currency(r.typing_charges, r.currency)}</td>
+							<td class="plm-num">${format_currency(r.transaction_charges, r.currency)}</td>
 							<td class="plm-num">${format_currency(r.gov, r.currency)}</td>
 							<td class="plm-num plm-rate">${format_currency(r.rate, r.currency)}</td>
 							${show_discount ? `
@@ -309,10 +311,11 @@ digitz_erp.PriceListManager = class PriceListManager {
 				{ fieldname: "currency", fieldtype: "Link", options: "Currency", label: __("Currency"), reqd: 1 },
 				{
 					fieldname: "charges", fieldtype: "Section Break", label: __("Charges"),
-					description: __("Rate is Service Charge + Typing Charges + GOV. With all three empty, enter the rate directly."),
+					description: __("Rate is Service Charge + Typing Charges + Transaction Charges + GOV. With all of them empty, enter the rate directly."),
 				},
 				{ fieldname: "service_charge", fieldtype: "Currency", label: __("Service Charge"), onchange: () => this.sum_rate(d) },
 				{ fieldname: "typing_charges", fieldtype: "Currency", label: __("Typing Charges"), onchange: () => this.sum_rate(d) },
+				{ fieldname: "transaction_charges", fieldtype: "Currency", label: __("Transaction Charges"), onchange: () => this.sum_rate(d) },
 				{ fieldname: "col3", fieldtype: "Column Break" },
 				{ fieldname: "gov", fieldtype: "Currency", label: __("GOV"), onchange: () => this.sum_rate(d) },
 				{ fieldname: "rate", fieldtype: "Currency", label: __("Rate"), reqd: 1, onchange: () => this.show_discount(d) },
@@ -335,6 +338,7 @@ digitz_erp.PriceListManager = class PriceListManager {
 						rate: values.rate,
 						service_charge: values.service_charge || 0,
 						typing_charges: values.typing_charges || 0,
+						transaction_charges: values.transaction_charges || 0,
 						gov: values.gov || 0,
 						unit: values.unit,
 						currency: values.currency,
@@ -358,7 +362,7 @@ digitz_erp.PriceListManager = class PriceListManager {
 		if (!is_new) {
 			d.set_values({
 				item: row.item, item_name: row.item_name, rate: row.rate, unit: row.unit,
-				service_charge: row.service_charge, typing_charges: row.typing_charges, gov: row.gov,
+				service_charge: row.service_charge, typing_charges: row.typing_charges, transaction_charges: row.transaction_charges, gov: row.gov,
 				currency: row.currency, from_date: row.from_date, to_date: row.to_date,
 			});
 		}
@@ -390,6 +394,7 @@ digitz_erp.PriceListManager = class PriceListManager {
 		// Start from the Item master's charges; the manager can then adjust them for this list
 		d.set_value("service_charge", flt(def.service_charge));
 		d.set_value("typing_charges", flt(def.typing_charges));
+		d.set_value("transaction_charges", flt(def.transaction_charges));
 		d.set_value("gov", flt(def.gov));
 		if (!d.get_value("unit") && def.unit) {
 			d.set_value("unit", def.unit);
@@ -408,7 +413,7 @@ digitz_erp.PriceListManager = class PriceListManager {
 
 	// Rate follows the charges whenever any of them is set, as Item Price does on save.
 	sum_rate(d) {
-		const parts = ["service_charge", "typing_charges", "gov"].map((f) => flt(d.get_value(f)));
+		const parts = ["service_charge", "typing_charges", "transaction_charges", "gov"].map((f) => flt(d.get_value(f)));
 		const has_parts = parts.some((v) => v);
 		d.set_df_property("rate", "read_only", has_parts ? 1 : 0);
 		if (has_parts) {

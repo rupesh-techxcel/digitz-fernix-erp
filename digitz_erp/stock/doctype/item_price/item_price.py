@@ -9,10 +9,11 @@ from datetime import date
 class ItemPrice(Document):
 
 	def before_validate(self):
-		# With any of the three parts set, the rate is their sum, the same way invoice
+		# With any of the parts set, the rate is their sum, the same way invoice
 		# lines derive it. A price without them (e.g. a buying price) keeps its rate as entered.
-		if flt(self.service_charge) or flt(self.typing_charges) or flt(self.gov):
-			self.rate = flt(self.service_charge) + flt(self.typing_charges) + flt(self.gov)
+		if flt(self.service_charge) or flt(self.typing_charges) or flt(self.transaction_charges) or flt(self.gov):
+			self.rate = (flt(self.service_charge) + flt(self.typing_charges)
+				+ flt(self.transaction_charges) + flt(self.gov))
  
 	def validate(self):
 		
@@ -73,7 +74,7 @@ class ItemPrice(Document):
 		# made this change (Item.update_standard_selling_price), so it does not echo back.
 		if (self.price_list == "Standard Selling" and not self.from_date and not self.to_date
 				and not self.flags.from_item):
-			charges = {f: flt(self.get(f)) for f in ("service_charge", "typing_charges", "gov")}
+			charges = {f: flt(self.get(f)) for f in ("service_charge", "typing_charges", "transaction_charges", "gov")}
 			# A rate-only price cannot be split into charges; it only updates the rate
 			values = dict(charges) if any(charges.values()) else {}
 			values["standard_selling_price"] = flt(self.rate)

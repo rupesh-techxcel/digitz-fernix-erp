@@ -32,7 +32,7 @@ STANDARD_RATE_SQL = """
 		(SELECT MAX(std.rate) FROM `tabItem Price` std
 		 WHERE std.item = {item} AND std.price_list = %(standard_price_list)s
 		   AND std.from_date IS NULL AND std.to_date IS NULL),
-		IFNULL(i.service_charge, 0) + IFNULL(i.typing_charges, 0) + IFNULL(i.gov, 0)
+		IFNULL(i.service_charge, 0) + IFNULL(i.typing_charges, 0) + IFNULL(i.transaction_charges, 0) + IFNULL(i.gov, 0)
 	)
 """
 
@@ -64,7 +64,7 @@ def get_item_prices(price_list):
 	return frappe.db.sql(
 		f"""
 		SELECT ip.name, ip.item, COALESCE(i.item_name, ip.item_name) AS item_name,
-			ip.unit, ip.currency, ip.service_charge, ip.typing_charges, ip.gov, ip.rate,
+			ip.unit, ip.currency, ip.service_charge, ip.typing_charges, ip.transaction_charges, ip.gov, ip.rate,
 			ip.from_date, ip.to_date, ip.modified,
 			{STANDARD_RATE_SQL.format(item="ip.item")} AS standard_rate
 		FROM `tabItem Price` ip
@@ -83,7 +83,7 @@ def get_item_defaults(item):
 	check_manager()
 
 	defaults = frappe.db.get_value("Item", item,
-		["item_name", "base_unit as unit", "service_charge", "typing_charges", "gov"], as_dict=True) or {}
+		["item_name", "base_unit as unit", "service_charge", "typing_charges", "transaction_charges", "gov"], as_dict=True) or {}
 	defaults["currency"] = get_default_currency()
 	defaults["standard_rate"] = flt(frappe.db.sql(
 		f"SELECT {STANDARD_RATE_SQL.format(item='i.name')} FROM `tabItem` i WHERE i.name = %(item)s",
@@ -104,10 +104,10 @@ def get_standard_rate(item):
 
 @frappe.whitelist()
 def save_item_price(price_list, item, rate, unit, currency, from_date=None, to_date=None, name=None,
-		service_charge=0, typing_charges=0, gov=0):
+		service_charge=0, typing_charges=0, transaction_charges=0, gov=0):
 	"""Create an Item Price, or update the one called `name`.
 
-	With any of Service Charge, Typing Charges or GOV set, Item Price works the rate
+	With any of Service Charge, Typing Charges, Transaction Charges or GOV set, Item Price works the rate
 	out as their sum on save, so the rate passed in only matters without them.
 	"""
 	check_manager()
@@ -115,7 +115,7 @@ def save_item_price(price_list, item, rate, unit, currency, from_date=None, to_d
 	from_date = from_date or None
 	to_date = to_date or None
 
-	if min(flt(rate), flt(service_charge), flt(typing_charges), flt(gov)) < 0:
+	if min(flt(rate), flt(service_charge), flt(typing_charges), flt(transaction_charges), flt(gov)) < 0:
 		frappe.throw("Rate and charges cannot be negative.")
 
 	if bool(from_date) != bool(to_date):
@@ -135,6 +135,7 @@ def save_item_price(price_list, item, rate, unit, currency, from_date=None, to_d
 	doc.item = item
 	doc.service_charge = flt(service_charge)
 	doc.typing_charges = flt(typing_charges)
+	doc.transaction_charges = flt(transaction_charges)
 	doc.gov = flt(gov)
 	doc.rate = flt(rate)
 	doc.unit = unit

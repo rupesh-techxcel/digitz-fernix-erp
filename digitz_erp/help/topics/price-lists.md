@@ -10,9 +10,9 @@ When you pick a customer on a Sales Invoice, **Price List** is set to the custom
 
 1. a price for the item in that list **with dates covering the invoice date**;
 2. the item's **undated** price in that list;
-3. the **Service Charge**, **Typing Charges** and **GOV** on the Item itself.
+3. the **Service Charge**, **Typing Charges**, **Transaction Charges** and **GOV** on the Item itself.
 
-The line's **Rate** is Service Charge + Typing Charges + GOV. VAT is charged on the Service Charge and Typing Charges only, never on GOV.
+The line's **Rate** is Service Charge + Typing Charges + Transaction Charges + GOV. VAT is charged on the Service Charge, Typing Charges and Transaction Charges only, never on GOV.
 
 - Only selling price lists can be picked on an invoice.
 - Changing **Price List** on a draft re-prices every line. Picking an item prices that line. Changing the date does not re-price, so pick the price list again after changing the date.
@@ -23,7 +23,7 @@ The line's **Rate** is Service Charge + Typing Charges + GOV. VAT is charged on 
 
 **Standard Selling** holds each item's normal price. It always matches the charges on the Item.
 
-- Change Service Charge, Typing Charges or GOV on the **Item**, and its undated Standard Selling price changes to match.
+- Change Service Charge, Typing Charges, Transaction Charges or GOV on the **Item**, and its undated Standard Selling price changes to match.
 - Change the undated Standard Selling price, and the **Item**'s charges change to match.
 - Dated prices in Standard Selling are temporary. They never change the Item.
 
@@ -51,7 +51,7 @@ The new list is empty. Add the items whose price is different. Items you leave o
 Select the list, click Add Item, pick the item and adjust its charges. The rate is their sum.
 
 1. Select the price list on the left, then click **Add Item**.
-2. Pick the **Item**. Its Service Charge, Typing Charges, GOV, Unit and Currency are filled in from the Item.
+2. Pick the **Item**. Its Service Charge, Typing Charges, Transaction Charges, GOV, Unit and Currency are filled in from the Item.
 3. Change the charges for this list. **Rate** is worked out as their sum.
 4. Leave **From Date** and **To Date** empty for a price that always applies.
 5. Click **Add**.

@@ -3,16 +3,16 @@
 		"group": "Counters & Cash",
 		"topics": [
 			{
-				"name": "counter-video",
-				"title": "Video: Using the counter",
-				"summary": "A three-minute narrated walkthrough of a day at the counter.",
-				"keywords": "video tutorial walkthrough watch counter day open close handover"
-			},
-			{
 				"name": "counters-overview",
 				"title": "How counters and days work",
 				"summary": "Counters, counter PCs and the cashier's day, in one page.",
 				"keywords": "counter device session day open close till float badge"
+			},
+			{
+				"name": "counter-devices",
+				"title": "How counter PCs are recognised",
+				"summary": "Registering PCs, cashier requests and supervisor approval, one device per counter, browsers, and replacing a broken PC.",
+				"keywords": "counter device pc register registration browser cookie unregistered replace broken hardware multiple pcs systems one device per counter disabled day open another pc request approval approve reject pending new counter create automatic takeover audit"
 			},
 			{
 				"name": "day-open",
@@ -54,7 +54,7 @@
 				"name": "counter-troubleshooting",
 				"title": "Problems and messages",
 				"summary": "What each message means and what to do about it.",
-				"keywords": "error unregistered device day not opened in use unfinished logged out another session cookie amend cancel"
+				"keywords": "error unregistered device day not opened in use unfinished logged out another session cookie amend cancel approval pending request rejected"
 			}
 		]
 	},
@@ -84,7 +84,7 @@
 				"collapsible": true,
 				"title": "Price lists",
 				"summary": "Standard Selling, customer price lists, temporary prices and the Price List Manager.",
-				"keywords": "price list pricing item price rate service charge typing charges gov standard selling discount customer default price list manager dated offer from date to date typing center"
+				"keywords": "price list pricing item price rate service charge typing charges transaction charges gov standard selling discount customer default price list manager dated offer from date to date typing center"
 			},
 			{
 				"name": "invoice-receipts",

@@ -30,12 +30,15 @@ frappe.ui.form.on('Item Price', {
 		frm.refresh_field("is_selling"); 
 	},
 
-	// The rate is Service Charge + Typing Charges + GOV whenever any of them is set.
+	// The rate is Service Charge + Typing Charges + Transaction Charges + GOV whenever any of them is set.
 	// The server does the same on save; this keeps the form in step while typing.
 	service_charge(frm) {
 		set_rate_from_charges(frm);
 	},
 	typing_charges(frm) {
+		set_rate_from_charges(frm);
+	},
+	transaction_charges(frm) {
 		set_rate_from_charges(frm);
 	},
 	gov(frm) {
@@ -138,8 +141,8 @@ function show_standard_discount(frm) {
 }
 
 function set_rate_from_charges(frm) {
-	const charges = flt(frm.doc.service_charge) + flt(frm.doc.typing_charges) + flt(frm.doc.gov);
-	if (flt(frm.doc.service_charge) || flt(frm.doc.typing_charges) || flt(frm.doc.gov)) {
+	const charges = flt(frm.doc.service_charge) + flt(frm.doc.typing_charges) + flt(frm.doc.transaction_charges) + flt(frm.doc.gov);
+	if (flt(frm.doc.service_charge) || flt(frm.doc.typing_charges) || flt(frm.doc.transaction_charges) || flt(frm.doc.gov)) {
 		frm.set_value("rate", charges);
 	}
 }

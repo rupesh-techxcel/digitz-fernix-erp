@@ -194,6 +194,7 @@ frappe.ui.form.on('Sales Return', {
 												return_item.rate = newRow.rate
 												return_item.service_charge = newRow.service_charge
 												return_item.typing_charges = newRow.typing_charges
+												return_item.transaction_charges = newRow.transaction_charges
 												return_item.gov = newRow.gov
 												return_item.rate_in_base_unit = newRow.rate_in_base_unit
 												return_item.tax = newRow.tax
@@ -346,18 +347,19 @@ credit_days(frm)
 			entry.discount_amount = discount_amount;
 			entry.discount_percentage = flt(entry.discount_percentage);
 
-			// Rate is driven by its three components, the same way sales_invoice.js does it.
+			// Rate is driven by its components, the same way sales_invoice.js does it.
 			const service_charge_rate = flt(entry.service_charge);
 			const typing_charges_rate = flt(entry.typing_charges);
+			const transaction_charges_rate = flt(entry.transaction_charges);
 			const gov_rate = flt(entry.gov);
 			// The taxable part of the rate
-			const taxable_rate = service_charge_rate + typing_charges_rate;
+			const taxable_rate = service_charge_rate + typing_charges_rate + transaction_charges_rate;
 			entry.rate = taxable_rate + gov_rate;
 
 			const tax_rate = flt(entry.tax_rate);
 			const tax_excluded = cint(entry.tax_excluded) ? 1 : 0;
 
-			// TAX APPLIES TO Service Charge + Typing Charges ONLY. GOV is a government fee - a
+			// TAX APPLIES TO Service Charge + Typing Charges + Transaction Charges ONLY. GOV is a government fee - a
 			// disbursement outside VAT scope - and is added to the line untaxed. This return used
 			// to tax the whole rate including GOV, which refunded VAT that the invoice never charged.
 			// Identical to make_taxes_and_totals in sales_invoice.js, including the rounding.
@@ -722,7 +724,7 @@ frappe.ui.form.on('Sales Return Item', {
 				args: {
 					'doctype': 'Item',
 					'filters': { 'item_code': row.item },
-					'fieldname': ['item_name','description','base_unit', 'tax', 'tax_excluded', 'service_charge', 'typing_charges', 'gov']
+					'fieldname': ['item_name','description','base_unit', 'tax', 'tax_excluded', 'service_charge', 'typing_charges', 'transaction_charges', 'gov']
 				},
 				callback: (r) => {
 
@@ -743,8 +745,9 @@ frappe.ui.form.on('Sales Return Item', {
 					row.conversion_factor = 1;
 					row.service_charge = flt(r.message.service_charge);
 					row.typing_charges = flt(r.message.typing_charges);
+					row.transaction_charges = flt(r.message.transaction_charges);
 					row.gov = flt(r.message.gov);
-					row.rate = flt(r.message.service_charge) + flt(r.message.typing_charges) + flt(r.message.gov);
+					row.rate = flt(r.message.service_charge) + flt(r.message.typing_charges) + flt(r.message.transaction_charges) + flt(r.message.gov);
 					row.display_name = row.item_name
 					frm.item = row.item
 					frm.warehouse = row.warehouse
@@ -775,7 +778,7 @@ frappe.ui.form.on('Sales Return Item', {
 					console.log("Price List");
 					console.log(frm.doc.price_list);
 
-					// Rate comes from the item's Service Charge, Typing Charges and GOV above, so the price list
+					// Rate comes from the item's Service Charge, Typing Charges, Transaction Charges and GOV above, so the price list
 					// is no longer consulted here - same as sales_invoice.js.
 					// rate_in_base_unit is derived from the rate in make_taxes_and_totals.
 
@@ -823,11 +826,15 @@ frappe.ui.form.on('Sales Return Item', {
 		frm.trigger("make_taxes_and_totals");
 	},
 	service_charge(frm, cdt, cdn) {
-		// make_taxes_and_totals recomputes rate as service_charge + typing_charges + gov
+		// make_taxes_and_totals recomputes rate as service_charge + typing_charges + transaction_charges + gov
 		frm.trigger("make_taxes_and_totals");
 		frm.refresh_field("items");
 	},
 	typing_charges(frm, cdt, cdn) {
+		frm.trigger("make_taxes_and_totals");
+		frm.refresh_field("items");
+	},
+	transaction_charges(frm, cdt, cdn) {
 		frm.trigger("make_taxes_and_totals");
 		frm.refresh_field("items");
 	},

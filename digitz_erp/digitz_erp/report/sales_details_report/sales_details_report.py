@@ -54,6 +54,12 @@ def get_columns(filters=None):
             "width": 120,
         },
         {
+            "fieldname": "transaction_charges",
+            "label": "Transaction Charges",
+            "fieldtype": "Currency",
+            "width": 120,
+        },
+        {
             "fieldname": "gov_fee",
             "label": "Gov Fee",
             "fieldtype": "Currency",
@@ -105,7 +111,7 @@ def get_columns(filters=None):
     return columns
 
 
-AMOUNT_FIELDS = ("service_charge", "typing_charges", "gov_fee", "gross_amount", "tax_amount", "net_amount")
+AMOUNT_FIELDS = ("service_charge", "typing_charges", "transaction_charges", "gov_fee", "gross_amount", "tax_amount", "net_amount")
 
 
 def get_data(filters):
@@ -136,6 +142,7 @@ def get_documents(doctype, item_doctype, filters):
 
             SUM(IFNULL(sii.service_charge, 0)) AS service_charge,
             SUM(IFNULL(sii.typing_charges, 0)) AS typing_charges,
+            SUM(IFNULL(sii.transaction_charges, 0)) AS transaction_charges,
             SUM(IFNULL(sii.gov, 0)) AS gov_fee,
             SUM(IFNULL(sii.gross_amount, 0)) AS gross_amount,
             SUM(IFNULL(sii.tax_amount, 0))   AS tax_amount,

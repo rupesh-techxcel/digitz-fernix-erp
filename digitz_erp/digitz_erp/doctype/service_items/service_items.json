@@ -17,6 +17,7 @@
   "net_amount",
   "service_charge",
   "typing_charges",
+  "transaction_charges",
   "gov"
  ],
  "fields": [
@@ -84,6 +85,11 @@
    "label": "Typing Charges"
   },
   {
+   "fieldname": "transaction_charges",
+   "fieldtype": "Float",
+   "label": "Transaction Charges"
+  },
+  {
    "fieldname": "gov",
    "fieldtype": "Float",
    "label": "GOV"
@@ -93,7 +99,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-09-28 12:19:50.477484",
+ "modified": "2026-10-08 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Service Items",

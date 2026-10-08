@@ -1,0 +1,2155 @@
+/* Cashier Console
+ *
+ * Loaded by Frappe together with the page (Page.load_assets), so edits here
+ * need a page reload, not a bench build. Colours come from the Digitz desk
+ * theme tokens (public/css/digitz_desk.bundle.css), with fallbacks so the page
+ * still reads correctly if the theme is missing.
+ */
+
+.cashier-console,
+.ci-pay-dialog {
+	--cc-blue: var(--digitz-blue, #214dbb);
+	--cc-blue-dark: var(--digitz-blue-dark, #173b96);
+	--cc-blue-light: var(--digitz-blue-light, #4da3ff);
+	--cc-blue-soft: var(--digitz-blue-soft-2, #edf4ff);
+	--cc-canvas: var(--digitz-blue-soft-3, #f7fbff);
+	--cc-border: var(--digitz-blue-border, #cfe0ff);
+	--cc-gold: var(--digitz-gold, #e0a62f);
+	--cc-text: var(--digitz-text, #1b2b47);
+	--cc-muted: var(--digitz-text-soft, #5f6f8c);
+	--cc-surface: var(--digitz-white, #ffffff);
+	--cc-shadow: var(--digitz-shadow-md, 0 8px 24px rgba(33, 77, 187, 0.08));
+	--cc-shadow-sm: var(--digitz-shadow-sm, 0 2px 8px rgba(33, 77, 187, 0.06));
+	--cc-radius: var(--digitz-radius-lg, 18px);
+	--cc-radius-sm: var(--digitz-radius-sm, 10px);
+	--cc-green: #16a34a;
+	--cc-orange: #ea8a0c;
+	--cc-red: #dc2626;
+	--cc-short: var(--red-600, #dc2626);
+	--cc-over: var(--orange-600, #ea580c);
+}
+
+.cashier-console {
+	max-width: 1320px;
+	margin: 4px auto 32px;
+	color: var(--cc-text);
+}
+
+[data-theme="dark"] .cashier-console,
+[data-theme="dark"] .ci-pay-dialog {
+	--cc-blue-soft: rgba(77, 163, 255, 0.12);
+	--cc-canvas: rgba(255, 255, 255, 0.02);
+	--cc-border: var(--border-color, #2f3b52);
+	--cc-text: var(--text-color, #e6ebf5);
+	--cc-muted: var(--text-muted, #9aa6bd);
+	--cc-surface: var(--card-bg, #1c2333);
+	--cc-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	--cc-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ---------- Header ---------- */
+
+.cc-header {
+	position: relative;
+	overflow: hidden;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: stretch;
+	justify-content: space-between;
+	gap: 20px 32px;
+	padding: 24px 28px;
+	border-radius: var(--cc-radius);
+	background:
+		radial-gradient(circle at 92% -20%, rgba(255, 255, 255, 0.18) 0, transparent 45%),
+		radial-gradient(circle at 70% 140%, rgba(77, 163, 255, 0.45) 0, transparent 50%),
+		linear-gradient(120deg, var(--cc-blue-dark) 0%, var(--cc-blue) 55%, #2f63d6 100%);
+	color: #fff;
+	box-shadow: 0 14px 34px rgba(23, 59, 150, 0.22);
+}
+
+/* Thin gold accent line, echoing the logo. */
+.cc-header::after {
+	content: "";
+	position: absolute;
+	left: 28px;
+	bottom: 0;
+	width: 72px;
+	height: 3px;
+	border-radius: 3px 3px 0 0;
+	background: var(--cc-gold);
+}
+
+.cc-greeting {
+	flex: 1 1 520px;
+	min-width: 0;
+}
+
+.cc-eyebrow {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.72);
+	margin-bottom: 4px;
+}
+
+.cc-title {
+	margin: 0 0 16px;
+	font-size: 24px;
+	font-weight: 600;
+	line-height: 1.25;
+	color: #fff;
+}
+
+.cc-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.cc-meta-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 150px;
+	padding: 9px 14px;
+	border-radius: var(--cc-radius-sm);
+	background: rgba(255, 255, 255, 0.12);
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	backdrop-filter: blur(6px);
+}
+
+.cc-meta-icon {
+	display: inline-flex;
+	width: 30px;
+	height: 30px;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	background: rgba(255, 255, 255, 0.16);
+}
+
+.cc-meta-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.cc-meta-label,
+.cc-shift-label {
+	display: block;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.68);
+}
+
+.cc-meta-value {
+	display: block;
+	font-size: 14px;
+	font-weight: 600;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Shift card (in the header) ---------- */
+
+.cc-shift {
+	--cc-tone: rgba(255, 255, 255, 0.7);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 4px;
+	flex: 0 1 280px;
+	min-width: 240px;
+	padding: 16px 18px;
+	border-radius: var(--cc-radius-sm);
+	background: rgba(255, 255, 255, 0.14);
+	border: 1px solid rgba(255, 255, 255, 0.24);
+	box-shadow: inset 3px 0 0 var(--cc-tone);
+	backdrop-filter: blur(8px);
+}
+
+.cc-shift[data-tone="green"] { --cc-tone: #4ade80; }
+.cc-shift[data-tone="orange"] { --cc-tone: #fbbf24; }
+.cc-shift[data-tone="red"] { --cc-tone: #f87171; }
+.cc-shift[data-tone="blue"] { --cc-tone: #93c5fd; }
+
+.cc-shift-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 17px;
+	font-weight: 600;
+}
+
+.cc-shift-dot {
+	width: 10px;
+	height: 10px;
+	flex: none;
+	border-radius: 50%;
+	background: var(--cc-tone);
+	box-shadow: 0 0 0 4px color-mix(in srgb, var(--cc-tone) 25%, transparent);
+}
+
+.cc-shift.is-loading .cc-shift-dot {
+	animation: cc-pulse 1.2s ease-in-out infinite;
+}
+
+.cc-shift-detail {
+	font-size: 13px;
+	color: rgba(255, 255, 255, 0.8);
+	font-variant-numeric: tabular-nums;
+}
+
+.cc-shift-btn {
+	align-self: flex-start;
+	margin-top: 8px;
+	padding: 6px 14px;
+	border: 1px solid rgba(255, 255, 255, 0.55);
+	border-radius: 8px;
+	background: transparent;
+	color: #fff;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.cc-shift-btn:hover {
+	background: rgba(255, 255, 255, 0.14);
+}
+
+/* The next step of the day, when it is opening it: stands out in gold */
+.cc-shift-btn.is-primary {
+	border-color: transparent;
+	background: var(--cc-gold);
+	color: #1b2b47;
+	box-shadow: 0 6px 16px rgba(224, 166, 47, 0.35);
+}
+
+.cc-shift-btn.is-primary:hover {
+	background: #ebb444;
+}
+
+.cc-shift-btn:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 2px;
+}
+
+/* Work tabs (Board, Sales Invoices, Receipts) need the screen for the work:
+   the header becomes a slim bar with the same facts and the shift button. */
+.cc-compact .cc-header {
+	align-items: center;
+	gap: 10px 20px;
+	padding: 10px 16px;
+	border-radius: 14px;
+}
+
+.cc-compact .cc-header::after,
+.cc-compact .cc-eyebrow,
+.cc-compact .cc-title,
+.cc-compact .cc-shift-label {
+	display: none;
+}
+
+.cc-compact .cc-greeting {
+	flex: 1 1 auto;
+}
+
+.cc-compact .cc-meta-item {
+	min-width: 0;
+	padding: 5px 10px;
+	gap: 8px;
+}
+
+.cc-compact .cc-meta-icon {
+	width: 24px;
+	height: 24px;
+}
+
+.cc-compact .cc-meta-label {
+	display: none;
+}
+
+.cc-compact .cc-shift {
+	flex: 0 1 auto;
+	flex-direction: row;
+	align-items: center;
+	gap: 6px 14px;
+	min-width: 0;
+	padding: 6px 8px 6px 14px;
+}
+
+.cc-compact .cc-shift-status {
+	font-size: 14px;
+}
+
+.cc-compact .cc-shift-detail {
+	font-size: 12px;
+}
+
+.cc-compact .cc-shift-btn {
+	margin-top: 0;
+	padding: 4px 12px;
+	font-size: 12px;
+}
+
+.cc-compact .cc-tabs {
+	margin: 10px 0;
+	padding: 4px;
+}
+
+.cc-compact .cc-tab {
+	padding: 6px 12px;
+}
+
+.cc-compact .cc-tab-icon {
+	width: 32px;
+	height: 32px;
+}
+
+.cc-compact .cc-tab-hint {
+	display: none;
+}
+
+.cc-compact.cashier-console {
+	margin-top: 12px;
+}
+
+/* ---------- Tabs ---------- */
+
+.cc-tabs {
+	position: sticky;
+	top: calc(var(--navbar-height, 48px) + 8px);
+	z-index: 5;
+	display: flex;
+	align-items: stretch;
+	gap: 6px;
+	margin: 18px 0;
+	padding: 6px;
+	border: 1px solid var(--cc-border);
+	border-radius: calc(var(--cc-radius-sm) + 6px);
+	background: var(--cc-surface);
+	box-shadow: var(--cc-shadow-sm);
+}
+
+/* Separates start | work | end of the shift */
+.cc-tab-divider {
+	flex: none;
+	width: 1px;
+	margin: 8px 4px;
+	background: var(--cc-border);
+}
+
+.cc-tab {
+	position: relative;
+	display: flex;
+	flex: 1 1 0;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+	padding: 10px 14px;
+	border: 0;
+	border-radius: var(--cc-radius-sm);
+	background: transparent;
+	color: var(--cc-muted);
+	text-align: left;
+	cursor: pointer;
+	transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.cc-tab.cc-tab-compact {
+	flex: none;
+	gap: 10px;
+	padding: 10px 12px;
+}
+
+.cc-tab-compact .cc-tab-hint,
+.cc-tab-compact .cc-tab-key {
+	display: none;
+}
+
+.cc-tab:hover {
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+}
+
+.cc-tab:focus-visible {
+	outline: 2px solid var(--cc-blue-light);
+	outline-offset: 2px;
+}
+
+.cc-tab-icon {
+	position: relative;
+	display: inline-flex;
+	width: 38px;
+	height: 38px;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	border-radius: 10px;
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+	transition: inherit;
+}
+
+.cc-tab-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+/* Day Open's status: green once the day is open, orange while it is due */
+.cc-tab-dot {
+	display: none;
+	position: absolute;
+	top: -2px;
+	right: -2px;
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	border: 2px solid var(--cc-surface);
+}
+
+.cc-tab-dot.is-open {
+	display: block;
+	background: var(--cc-green);
+}
+
+.cc-tab-dot.is-due {
+	display: block;
+	background: var(--cc-orange);
+	animation: cc-pulse 1.4s ease-in-out 3;
+}
+
+.cc-tab-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+}
+
+.cc-tab-label {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--cc-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.cc-tab-hint {
+	font-size: 12px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.cc-tab-count {
+	min-width: 22px;
+	padding: 2px 7px;
+	border-radius: 999px;
+	background: var(--cc-gold);
+	color: #fff;
+	font-size: 11px;
+	font-weight: 700;
+	text-align: center;
+}
+
+.cc-tab-key {
+	flex: none;
+	padding: 2px 6px;
+	border: 1px solid var(--cc-border);
+	border-radius: 6px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--cc-muted);
+	font-family: inherit;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+}
+
+.cc-tab.active {
+	background: linear-gradient(120deg, var(--cc-blue) 0%, #2f63d6 100%);
+	color: rgba(255, 255, 255, 0.82);
+	box-shadow: 0 8px 20px rgba(33, 77, 187, 0.28);
+}
+
+.cc-tab.active .cc-tab-label {
+	color: #fff;
+}
+
+.cc-tab.active .cc-tab-icon {
+	background: rgba(255, 255, 255, 0.18);
+	color: #fff;
+}
+
+.cc-tab.active .cc-tab-dot {
+	border-color: var(--cc-blue);
+}
+
+.cc-tab.active .cc-tab-key {
+	border-color: rgba(255, 255, 255, 0.35);
+	color: rgba(255, 255, 255, 0.85);
+}
+
+@keyframes cc-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.35; }
+}
+
+/* ---------- Panes ---------- */
+
+.cc-pane {
+	min-height: 420px;
+	border: 1px solid var(--cc-border);
+	border-radius: var(--cc-radius);
+	background: var(--cc-surface);
+	box-shadow: var(--cc-shadow);
+	animation: cc-fade 0.22s ease;
+}
+
+.cc-pane[hidden] {
+	display: none;
+}
+
+/* Panes that host a full screen (Day Open / Close / History): a soft canvas,
+   so the screen's own cards don't read as cards inside a card */
+.cc-pane-flush {
+	padding: 20px;
+	background: var(--cc-canvas);
+}
+
+.cc-pane-flush .dayops {
+	max-width: none;
+}
+
+.cc-pane-flush .dayops-head,
+.cc-pane-flush .dayops-card {
+	background: var(--cc-surface);
+	border-color: var(--cc-border);
+	border-radius: 14px;
+	box-shadow: var(--cc-shadow-sm);
+}
+
+@keyframes cc-fade {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.cc-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 420px;
+	padding: 48px 24px;
+	text-align: center;
+}
+
+.cc-empty-icon {
+	display: inline-flex;
+	width: 72px;
+	height: 72px;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 18px;
+	border-radius: 20px;
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+	box-shadow: inset 0 0 0 1px var(--cc-border);
+}
+
+.cc-empty-icon svg {
+	width: 34px;
+	height: 34px;
+}
+
+.cc-chip {
+	display: inline-block;
+	margin-bottom: 12px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: var(--digitz-gold-soft, #fff4d9);
+	color: #9a6a0c;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+[data-theme="dark"] .cc-chip {
+	background: rgba(224, 166, 47, 0.16);
+	color: var(--cc-gold);
+}
+
+.cc-empty h3 {
+	margin: 0 0 8px;
+	font-size: 20px;
+	font-weight: 600;
+	color: var(--cc-text);
+}
+
+.cc-empty p {
+	max-width: 460px;
+	margin: 0 0 22px;
+	color: var(--cc-muted);
+	font-size: 14px;
+	line-height: 1.6;
+}
+
+.cc-empty-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 10px;
+}
+
+/* ---------- Day History ---------- */
+
+.cc-history {
+	transition: opacity 0.18s ease;
+}
+
+.cc-history.is-loading {
+	opacity: 0.6;
+}
+
+.cc-hist-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 12px 20px;
+	padding: 14px 16px 4px;
+	margin-bottom: 16px;
+	border: 1px solid var(--cc-border);
+	border-radius: 14px;
+	background: var(--cc-surface);
+	box-shadow: var(--cc-shadow-sm);
+}
+
+.cc-hist-fields {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 12px;
+}
+
+.cc-hist-field {
+	width: 160px;
+}
+
+.cc-hist-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding-bottom: 14px;
+}
+
+.cc-hist-chip {
+	padding: 5px 12px;
+	border: 1px solid var(--cc-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--cc-muted);
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.cc-hist-chip:hover {
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+}
+
+.cc-hist-chip.active {
+	border-color: var(--cc-blue);
+	background: var(--cc-blue);
+	color: #fff;
+}
+
+.cc-hist-tiles {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+.cc-hist-tile {
+	position: relative;
+	overflow: hidden;
+	padding: 14px 16px;
+	border: 1px solid var(--cc-border);
+	border-radius: 14px;
+	background: var(--cc-surface);
+	box-shadow: var(--cc-shadow-sm);
+}
+
+.cc-hist-tile::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 3px;
+	background: var(--cc-blue);
+	opacity: 0.6;
+}
+
+.cc-hist-tile-label {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--cc-muted);
+}
+
+.cc-hist-tile-value {
+	margin-top: 4px;
+	font-size: 20px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.cc-hist-tile.is-short .cc-hist-tile-value { color: var(--cc-short); }
+.cc-hist-tile.is-short::before { background: var(--cc-short); opacity: 1; }
+.cc-hist-tile.is-over .cc-hist-tile-value { color: var(--cc-over); }
+.cc-hist-tile.is-over::before { background: var(--cc-over); opacity: 1; }
+.cc-hist-tile.is-pending::before { background: var(--cc-gold); opacity: 1; }
+
+.cc-hist-table {
+	border: 1px solid var(--cc-border);
+	border-radius: 14px;
+	background: var(--cc-surface);
+	box-shadow: var(--cc-shadow-sm);
+	overflow: hidden;
+}
+
+.cc-hist-scroll {
+	max-height: 560px;
+	overflow: auto;
+}
+
+.cc-hist-grid {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 13px;
+}
+
+.cc-hist-grid th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 10px 12px;
+	background: var(--cc-blue-soft);
+	color: var(--cc-muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	border-bottom: 1px solid var(--cc-border);
+}
+
+[data-theme="dark"] .cc-hist-grid th {
+	background: var(--cc-surface);
+}
+
+.cc-hist-grid td {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--cc-border);
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.cc-hist-grid tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.cc-hist-grid tbody tr:hover td {
+	background: var(--cc-canvas);
+}
+
+.cc-num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.cc-nowrap {
+	white-space: nowrap;
+}
+
+.cc-hist-grid td.is-short { color: var(--cc-short); font-weight: 600; }
+.cc-hist-grid td.is-over { color: var(--cc-over); font-weight: 600; }
+
+.cc-hist-grid .btn-xs + .btn-xs {
+	margin-left: 4px;
+}
+
+.cc-hist-foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 10px 14px;
+	border-top: 1px solid var(--cc-border);
+}
+
+.cc-hist-empty {
+	padding: 48px 20px;
+	text-align: center;
+	color: var(--cc-muted);
+}
+
+/* ---------- Sales Invoices (public/js/cashier_invoices.js) ---------- */
+
+.ci {
+	--ci-gap: 12px;
+}
+
+/* Inner tab strip: All Invoices | open invoices | + New */
+.ci-strip {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: -6px 0 12px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--cc-border);
+	overflow-x: auto;
+	scrollbar-width: thin;
+}
+
+.ci-stab-docs {
+	display: flex;
+	gap: 6px;
+	min-width: 0;
+}
+
+.ci-stab,
+.ci-new {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 8px;
+	max-width: 240px;
+	padding: 7px 12px;
+	border: 1px solid var(--cc-border);
+	border-radius: 10px;
+	background: var(--cc-surface);
+	color: var(--cc-muted);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ci-stab:hover {
+	color: var(--cc-blue);
+	border-color: var(--cc-blue-light);
+}
+
+.ci-stab.active {
+	border-color: var(--cc-blue);
+	background: var(--cc-blue);
+	color: #fff;
+	box-shadow: 0 6px 16px rgba(33, 77, 187, 0.22);
+}
+
+.ci-stab .icon,
+.ci-new .icon {
+	stroke: currentColor;
+}
+
+.ci-stab-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+/* State dot: new / draft / submitted / cancelled */
+.ci-stab-dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--cc-muted);
+}
+
+.ci-stab[data-state="new"] .ci-stab-dot,
+.ci-stab[data-state="draft"] .ci-stab-dot { background: var(--cc-orange); }
+.ci-stab[data-state="submitted"] .ci-stab-dot { background: var(--cc-green); }
+.ci-stab[data-state="cancelled"] .ci-stab-dot { background: var(--cc-red); }
+.ci-stab.active .ci-stab-dot { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85); }
+
+/* Unsaved changes: the label gets a trailing bullet */
+.ci-stab.is-dirty .ci-stab-label::after {
+	content: " ●";
+	color: var(--cc-gold);
+}
+
+.ci-stab-close {
+	display: inline-flex;
+	padding: 2px;
+	margin-right: -4px;
+	border-radius: 6px;
+	opacity: 0.65;
+}
+
+.ci-stab-close:hover {
+	opacity: 1;
+	background: rgba(127, 127, 127, 0.18);
+}
+
+.ci-stab-close .icon {
+	stroke: currentColor;
+}
+
+.ci-new {
+	margin-left: auto;
+	border-style: dashed;
+	color: var(--cc-blue);
+}
+
+/* The open invoice's PDFs, at the right of the strip beside New Invoice */
+.ci-strip-files {
+	display: flex;
+	flex: none;
+	gap: 6px;
+	margin-left: auto;
+}
+
+.ci-strip-files:empty {
+	display: none;
+}
+
+.ci-strip-files:not(:empty) + .ci-new {
+	margin-left: 0;
+}
+
+.ci-strip-file {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 12px;
+	border: 1px solid var(--cc-border);
+	border-radius: 10px;
+	background: var(--cc-surface);
+	color: var(--cc-text);
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+	text-decoration: none;
+}
+
+.ci-strip-file:hover {
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+	text-decoration: none;
+}
+
+.ci-strip-file .icon {
+	stroke: var(--cc-blue);
+}
+
+/* Show Company / Show TRN: what the printout shows */
+.ci-print-flags {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 12px;
+	border: 1px solid var(--cc-border);
+	border-radius: 10px;
+	background: var(--cc-surface);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.ci-print-caption {
+	color: var(--cc-muted);
+	font-weight: 600;
+}
+
+.ci-print-flag {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin: 0;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.ci-print-flag input {
+	margin: 0;
+}
+
+.ci-print-flag:has(input:disabled) {
+	cursor: default;
+	opacity: 0.6;
+}
+
+.ci-new:hover {
+	background: var(--cc-blue-soft);
+}
+
+.ci-view[hidden] {
+	display: none;
+}
+
+.ci-loading {
+	padding: 60px 20px;
+	text-align: center;
+	color: var(--cc-muted);
+}
+
+/* ---------- List ---------- */
+
+.ci-list {
+	transition: opacity 0.18s ease;
+}
+
+.is-loading > .ci-list,
+.ci-view.is-loading .ci-list {
+	opacity: 0.6;
+}
+
+.ci-list-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 16px;
+	margin-bottom: 10px;
+}
+
+.ci-list-bar-sub {
+	margin-bottom: 14px;
+}
+
+.ci-search {
+	position: relative;
+	flex: 1 1 260px;
+	max-width: 380px;
+}
+
+/* Period: a dropdown, so the status and payment chips fit on the same row */
+.ci-range {
+	flex: none;
+	width: auto;
+	height: 38px;
+	padding-right: 32px;
+	border-radius: 10px;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.ci-search .icon {
+	position: absolute;
+	top: 50%;
+	left: 12px;
+	transform: translateY(-50%);
+	stroke: var(--cc-muted);
+}
+
+.ci-search input {
+	height: 38px;
+	padding-left: 36px;
+	border-radius: 10px;
+}
+
+.ci-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.ci-chip {
+	padding: 5px 12px;
+	border: 1px solid var(--cc-border);
+	border-radius: 999px;
+	background: var(--cc-surface);
+	color: var(--cc-muted);
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.ci-chip:hover {
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+}
+
+.ci-chip.active {
+	border-color: var(--cc-blue);
+	background: var(--cc-blue);
+	color: #fff;
+}
+
+.ci-list-count {
+	margin-left: auto;
+	font-size: 12px;
+}
+
+.ci-list-table {
+	border: 1px solid var(--cc-border);
+	border-radius: 14px;
+	background: var(--cc-surface);
+	box-shadow: var(--cc-shadow-sm);
+	overflow: hidden;
+}
+
+.ci-scroll {
+	overflow-x: auto;
+}
+
+.ci-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 13px;
+}
+
+.ci-table th {
+	padding: 10px 12px;
+	background: var(--cc-blue-soft);
+	color: var(--cc-muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	border-bottom: 1px solid var(--cc-border);
+}
+
+[data-theme="dark"] .ci-table th {
+	background: var(--cc-surface);
+}
+
+.ci-table td {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--cc-border);
+	vertical-align: middle;
+}
+
+.ci-table tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.ci-table-list tbody tr {
+	cursor: pointer;
+}
+
+.ci-table-list tbody tr:hover td,
+.ci-table-list tbody tr:focus-visible td {
+	background: var(--cc-canvas);
+}
+
+.ci-table-list tbody tr:focus-visible {
+	outline: 2px solid var(--cc-blue-light);
+	outline-offset: -2px;
+}
+
+/* Invoices open in a tab get a blue marker */
+.ci-open-mark {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	margin-right: 6px;
+	border-radius: 50%;
+	vertical-align: middle;
+	background: transparent;
+}
+
+tr.is-open .ci-open-mark {
+	background: var(--cc-blue);
+}
+
+.ci-num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.ci-strong {
+	font-weight: 600;
+	color: var(--cc-text);
+}
+
+.ci-nowrap {
+	white-space: nowrap;
+}
+
+.ci-ellipsis {
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ci-sub {
+	font-size: 12px;
+	color: var(--cc-muted);
+}
+
+.ci-tag {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.ci-tag-credit {
+	background: var(--digitz-gold-soft, #fff4d9);
+	color: #9a6a0c;
+}
+
+.ci-tag-vat {
+	background: rgba(22, 163, 74, 0.12);
+	color: var(--cc-green);
+}
+
+[data-theme="dark"] .ci-tag-credit {
+	background: rgba(224, 166, 47, 0.16);
+	color: var(--cc-gold);
+}
+
+.ci-empty-list {
+	padding: 48px 20px;
+	text-align: center;
+	color: var(--cc-muted);
+}
+
+.ci-list-more {
+	padding: 14px 0 0;
+	text-align: center;
+}
+
+/* ---------- Editor ---------- */
+
+.ci-banner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 16px;
+	margin-bottom: 12px;
+	padding: 10px 14px;
+	border-radius: 12px;
+	border: 1px solid;
+	font-size: 13px;
+}
+
+.ci-banner-blue { border-color: var(--cc-border); background: var(--cc-blue-soft); color: var(--cc-blue-dark); }
+.ci-banner-orange { border-color: rgba(234, 138, 12, 0.35); background: rgba(234, 138, 12, 0.1); color: #9a5b06; }
+.ci-banner-red { border-color: rgba(220, 38, 38, 0.3); background: rgba(220, 38, 38, 0.08); color: var(--cc-red); }
+[data-theme="dark"] .ci-banner-blue { color: var(--cc-text); }
+[data-theme="dark"] .ci-banner-orange { color: #fbbf24; }
+
+.ci-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px 20px;
+	margin-bottom: 12px;
+	padding: 8px 14px;
+	border: 1px solid var(--cc-border);
+	border-radius: 14px;
+	background: var(--cc-surface);
+	box-shadow: var(--cc-shadow-sm);
+}
+
+.ci-head-main {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 12px;
+	min-width: 0;
+}
+
+.ci-docname {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 700;
+	color: var(--cc-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.ci-head-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 14px;
+	font-size: 12px;
+	color: var(--cc-muted);
+}
+
+.ci-head-meta .icon {
+	stroke: currentColor;
+	vertical-align: -2px;
+}
+
+.ci-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.ci-actions .btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.ci-actions .btn .icon {
+	stroke: currentColor;
+}
+
+/* One column: customer, items, then Payment and Total side by side, then More Details */
+.ci-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ci-gap);
+}
+
+.ci-main {
+	display: grid;
+	gap: var(--ci-gap);
+	min-width: 0;
+}
+
+.ci-side {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ci-gap);
+	align-items: stretch;
+	min-width: 0;
+}
+
+.ci-card {
+	padding: 14px 16px;
+	border: 1px solid var(--cc-border);
+	border-radius: 14px;
+	background: var(--cc-surface);
+	box-shadow: var(--cc-shadow-sm);
+	min-width: 0;
+}
+
+.ci-card[hidden] {
+	display: none;
+}
+
+.ci-card-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+
+.ci-card h4 {
+	margin: 0;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--cc-muted);
+}
+
+.ci-balance {
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+	font-size: 12px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.ci-balance[hidden] {
+	display: none;
+}
+
+/* Customer: one row of what every invoice needs, the rest folds away */
+.ci-card-customer {
+	padding-bottom: 10px;
+}
+
+.ci-fields.ci-fields-customer-main {
+	grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 1.2fr);
+}
+
+.ci-fields-customer-main .form-group {
+	margin-bottom: 8px;
+}
+
+.ci-cust-foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px 12px;
+	padding-top: 8px;
+	border-top: 1px dashed var(--cc-border);
+}
+
+.ci-cust-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 2px 0;
+	border: 0;
+	background: transparent;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.ci-cust-toggle .icon {
+	stroke: var(--cc-muted);
+	transition: transform 0.18s ease;
+}
+
+.ci-cust-toggle[aria-expanded="true"] .icon {
+	transform: rotate(180deg);
+}
+
+.ci-cust-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.ci-chip-info {
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: var(--digitz-gold-soft, #fff4d9);
+	color: #9a6a0c;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+[data-theme="dark"] .ci-chip-info {
+	background: rgba(224, 166, 47, 0.16);
+	color: var(--cc-gold);
+}
+
+.ci-chip-info[hidden] {
+	display: none;
+}
+
+.ci-cust-body {
+	margin-top: 12px;
+}
+
+.ci-cust-body[hidden] {
+	display: none;
+}
+
+/* Fields: a two-column grid of standard Frappe controls */
+.ci-fields {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0 16px;
+}
+
+.ci-field[hidden] {
+	display: none;
+}
+
+.ci-span-2 {
+	grid-column: span 2;
+}
+
+.ci-field .form-group {
+	margin-bottom: 12px;
+}
+
+.ci-field .control-label {
+	font-size: 12px;
+}
+
+/* Field descriptions are long; the payment card keeps them, as they guide the cashier */
+.ci-fields-customer .help-box,
+.ci-fields-more .help-box,
+.ci-fields-row .help-box {
+	display: none;
+}
+
+.is-readonly .ci-field .control-value {
+	min-height: 0;
+}
+
+/* Items: the search box and the line count share the top row */
+.ci-items-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 10px;
+}
+
+/* Item search (narrower), the Payment button beside it, the line count at the right */
+.ci-items-bar .ci-item-search {
+	flex: 0 1 420px;
+	min-width: 0;
+}
+
+.ci-pay-btn {
+	flex: none;
+	height: 40px;
+	padding: 0 18px;
+	border-radius: 10px;
+	font-weight: 600;
+}
+
+.ci-items-bar .ci-count {
+	margin-left: auto;
+}
+
+.ci-items-bar {
+	flex-wrap: wrap;
+}
+
+/* How the invoice is paid, beside the Payment button; opens the popup */
+.ci-pay-info {
+	display: flex;
+	flex: 1 1 280px;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 14px;
+	min-width: 0;
+	min-height: 40px;
+	padding: 6px 12px;
+	border: 1px solid var(--cc-border);
+	border-radius: 10px;
+	background: var(--cc-surface);
+	color: var(--cc-text);
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.ci-pay-info:hover:not(:disabled) {
+	border-color: var(--cc-blue-light);
+	background: var(--cc-blue-soft);
+}
+
+.ci-pay-info:disabled {
+	cursor: default;
+	opacity: 1;
+}
+
+.ci-pay-mode {
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+	font-weight: 700;
+}
+
+.ci-pay-mode.is-credit {
+	background: rgba(234, 138, 12, 0.12);
+	color: var(--cc-orange);
+}
+
+.ci-pay-mode.is-missing {
+	background: rgba(220, 38, 38, 0.1);
+	color: var(--cc-red);
+}
+
+.ci-pay-part {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 5px;
+	white-space: nowrap;
+}
+
+.ci-pay-part > span,
+.ci-pay-account {
+	color: var(--cc-muted);
+}
+
+.ci-pay-part b {
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+
+.ci-pay-part.is-short b {
+	color: var(--cc-short);
+}
+
+/* Payment popup: the total and the change, above its fields */
+.ci-pay-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px 32px;
+	margin-bottom: 12px;
+	padding: 12px 16px;
+	border-radius: 10px;
+	background: var(--cc-blue-soft, var(--subtle-fg));
+}
+
+.ci-pay-summary div {
+	display: grid;
+}
+
+.ci-pay-summary span {
+	color: var(--text-muted);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.ci-pay-summary strong {
+	font-size: 20px;
+	font-variant-numeric: tabular-nums;
+}
+
+.ci-pay-summary .is-short strong {
+	color: var(--red-600, #dc2626);
+}
+
+.ci-count {
+	flex: none;
+	color: var(--cc-muted);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.ci-count:empty {
+	display: none;
+}
+
+.ci-item-search .form-group {
+	margin: 0;
+}
+
+.ci-item-search input {
+	height: 40px;
+	border-radius: 10px;
+	border: 1px dashed var(--cc-blue-light);
+	background: var(--cc-canvas);
+}
+
+.ci-items th,
+.ci-items td {
+	padding: 8px 6px;
+}
+
+.ci-items .ci-col-item {
+	min-width: 200px;
+	text-align: left;
+}
+
+.ci-item-name {
+	font-weight: 600;
+	color: var(--cc-text);
+}
+
+.ci-item-code {
+	margin-right: 8px;
+}
+
+.ci-input {
+	width: 76px;
+	padding: 5px 8px;
+	border: 1px solid var(--cc-border);
+	border-radius: 8px;
+	background: var(--cc-surface);
+	color: var(--cc-text);
+	font-size: 13px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ci-input:focus {
+	outline: none;
+	border-color: var(--cc-blue);
+	box-shadow: 0 0 0 3px rgba(33, 77, 187, 0.15);
+}
+
+.ci-row-actions {
+	white-space: nowrap;
+	text-align: right;
+}
+
+.ci-row-actions .btn + .btn {
+	margin-left: 4px;
+}
+
+.ci-row-actions .icon {
+	stroke: currentColor;
+}
+
+.ci-fields-row {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	padding: 6px 4px 0;
+}
+
+.ci-items-empty td {
+	padding: 28px 12px;
+	text-align: center;
+	color: var(--cc-muted);
+}
+
+.ci-stock-hint {
+	margin-top: 8px;
+	font-size: 12px;
+}
+
+.ci-stock-hint:empty {
+	display: none;
+}
+
+/* More details */
+.ci-more-toggle {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	text-align: left;
+	cursor: pointer;
+}
+
+.ci-more-hint {
+	flex: 1;
+	font-size: 12px;
+}
+
+.ci-more-toggle .icon {
+	stroke: var(--cc-muted);
+	transition: transform 0.18s ease;
+}
+
+.ci-more-toggle[aria-expanded="true"] .icon {
+	transform: rotate(180deg);
+}
+
+.ci-more-body {
+	margin-top: 14px;
+}
+
+.ci-more-body[hidden] {
+	display: none;
+}
+
+/* Total */
+/* Total: light, with the amount in the brand blue */
+.ci-card-total {
+	color: var(--cc-text);
+	border: 1px solid var(--cc-border);
+	background: var(--cc-blue-soft);
+	box-shadow: var(--cc-shadow-sm);
+}
+
+.ci-total-label {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--cc-muted);
+}
+
+.ci-total-value {
+	margin: 2px 0 2px;
+	font-size: 32px;
+	font-weight: 700;
+	line-height: 1.15;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+	color: var(--cc-blue-dark);
+}
+
+[data-theme="dark"] .ci-total-value {
+	color: var(--cc-blue-light);
+}
+
+.ci-total-words {
+	min-height: 0;
+	font-size: 12px;
+	color: var(--cc-muted) !important;
+}
+
+.ci-sums {
+	margin-top: 12px;
+	padding-top: 10px;
+	border-top: 1px solid var(--cc-border);
+}
+
+.ci-sum {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 3px 0;
+	font-size: 13px;
+	color: var(--cc-text);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Receipt schedule (in the Payment popup) */
+.ci-schedule-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin: 4px 0 8px;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--cc-muted);
+}
+
+.ci-schedule-table th,
+.ci-schedule-table td {
+	padding: 6px 4px;
+}
+
+.ci-schedule-table .ci-input {
+	width: 100%;
+	min-width: 0;
+	text-align: left;
+}
+
+.ci-schedule-table .ci-num .ci-input {
+	text-align: right;
+}
+
+@media (max-width: 767px) {
+	.ci-fields,
+	.ci-fields-row,
+	.ci-fields.ci-fields-customer-main {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.ci-cust-summary {
+		display: none;
+	}
+
+	.ci-span-2 {
+		grid-column: auto;
+	}
+
+	.ci-new span,
+	.ci-strip-file span,
+	.ci-print-caption {
+		display: none;
+	}
+
+	/* Item rows become stacked cards with labelled values */
+	.ci-card-items .ci-scroll {
+		overflow: visible;
+	}
+
+	.ci-items,
+	.ci-items tbody {
+		display: block;
+	}
+
+	.ci-items thead {
+		display: none;
+	}
+
+	.ci-items tr[data-row] {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 8px 10px;
+		padding: 12px 0;
+		border-bottom: 1px solid var(--cc-border);
+	}
+
+	.ci-items tr[data-row] td {
+		display: block;
+		padding: 0;
+		border: 0;
+		text-align: left;
+	}
+
+	.ci-items td.ci-col-item,
+	.ci-items td.ci-row-actions {
+		grid-column: 1 / -1;
+		min-width: 0;
+	}
+
+	.ci-items td.ci-row-actions {
+		text-align: right;
+	}
+
+	.ci-items td[data-label]::before {
+		content: attr(data-label);
+		display: block;
+		margin-bottom: 2px;
+		font-size: 10px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--cc-muted);
+	}
+
+	.ci-items .ci-input {
+		width: 100%;
+		text-align: left;
+	}
+
+	.ci-items tr.ci-items-empty td {
+		display: block;
+	}
+
+	.ci-head {
+		padding: 12px 14px;
+	}
+
+	.ci-total-value {
+		font-size: 26px;
+	}
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1499px) {
+	.cc-tab-key {
+		display: none;
+	}
+}
+
+@media (max-width: 1199px) {
+	.cc-tab-compact .cc-tab-text {
+		display: none;
+	}
+}
+
+@media (max-width: 767px) {
+	.cc-header {
+		padding: 20px;
+	}
+
+	.cc-title {
+		font-size: 20px;
+	}
+
+	.cc-meta-item {
+		flex: 1 1 140px;
+		min-width: 0;
+	}
+
+	.cc-shift {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+
+	/* Six tabs don't fit a phone: scroll the bar instead of squeezing them */
+	.cc-tabs {
+		top: calc(var(--navbar-height, 48px) + 4px);
+		overflow-x: auto;
+		scroll-snap-type: x proximity;
+		scrollbar-width: none;
+	}
+
+	.cc-tabs::-webkit-scrollbar {
+		display: none;
+	}
+
+	.cc-tab,
+	.cc-tab.cc-tab-compact {
+		flex: none;
+		flex-direction: column;
+		gap: 6px;
+		min-width: 88px;
+		padding: 10px 8px;
+		text-align: center;
+		scroll-snap-align: start;
+	}
+
+	.cc-tab-text,
+	.cc-tab-compact .cc-tab-text {
+		display: flex;
+		align-items: center;
+	}
+
+	.cc-tab-label {
+		font-size: 12px;
+	}
+
+	.cc-tab-hint {
+		display: none;
+	}
+
+	.cc-tab-count {
+		position: absolute;
+		top: 6px;
+		right: 8px;
+	}
+
+	.cc-pane-flush {
+		padding: 12px;
+	}
+
+	.cc-hist-field {
+		width: calc(50% - 6px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.cc-tab,
+	.cc-pane,
+	.cc-tab-dot,
+	.cc-shift-dot {
+		transition: none;
+		animation: none;
+	}
+}
+
+/* Light buttons on the Sales Invoices and Board tabs: Save, Submit, Payment,
+   New Invoice, Sync Now, Open Invoice */
+.cashier-console .ci .btn-primary,
+.cashier-console .cb-board .btn-primary {
+	border: 1px solid var(--cc-border);
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+	box-shadow: none;
+}
+
+.cashier-console .ci .btn-primary:hover,
+.cashier-console .ci .btn-primary:focus,
+.cashier-console .cb-board .btn-primary:hover,
+.cashier-console .cb-board .btn-primary:focus {
+	border-color: var(--cc-blue-light);
+	background: var(--cc-surface);
+	color: var(--cc-blue-dark);
+}
+
+.cashier-console .ci .btn-primary .icon,
+.cashier-console .cb-board .btn-primary .icon {
+	stroke: currentColor;
+}
+
+[data-theme="dark"] .cashier-console .ci .btn-primary,
+[data-theme="dark"] .cashier-console .cb-board .btn-primary {
+	color: var(--cc-blue-light);
+}
+
+/* PDF popup (Print PDF, or Invoice PDF / Receipt PDF at the top right) */
+.ci-pdf-switch {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 10px;
+}
+
+.ci-pdf-frame {
+	display: block;
+	width: 100%;
+	height: 72vh;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	background: var(--subtle-fg, #f4f5f6);
+}
+
+/* Divider between the Invoice and Receipt entries of the Print menu */
+.cashier-console .ci-menu-divider {
+	display: block;
+	height: 0;
+	margin: 4px 8px;
+	border-top: 1px solid var(--cc-border);
+	list-style: none;
+}
+
+/* Inside an open invoice: no blue header, the invoice gets the room */
+.cashier-console.cc-in-invoice .cc-header {
+	display: none;
+}
+
+/* ---------- Receipts (public/js/cashier_receipts.js) ---------- */
+
+/* Customer, payment mode, then the bank reference when it applies */
+.cr-fields-party.ci-fields {
+	grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.2fr) minmax(0, 1fr);
+}
+
+.cr-fields-remarks.ci-fields {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.cr-card-party .form-group,
+.cr-card-remarks .form-group {
+	margin-bottom: 4px;
+}
+
+.cr-received {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 8px;
+}
+
+.cr-received-label {
+	margin: 0;
+	font-size: 12px;
+	color: var(--cc-muted);
+}
+
+.cr-received .cr-received-input {
+	width: 130px;
+}
+
+.cr-table .ci-input {
+	width: 110px;
+}
+
+.cr-table td {
+	vertical-align: middle;
+}
+
+.cr-col-check {
+	width: 36px;
+	text-align: center;
+}
+
+.cr-table tr.is-paying td {
+	background: var(--cc-blue-soft);
+}
+
+.cr-empty {
+	padding: 18px 4px;
+	font-size: 13px;
+	text-align: center;
+}
+
+.cr-editor .ci-total-value {
+	font-size: 28px;
+}
+
+@media (max-width: 991px) {
+	.cr-fields-party.ci-fields {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 575px) {
+	.cr-fields-party.ci-fields {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* Record Payment dialog (a credit invoice in the Sales Invoices tab): the
+   customer on its own line above the payment summary's figures */
+.cr-quick-summary .cr-quick-customer {
+	flex-basis: 100%;
+	font-weight: 600;
+}

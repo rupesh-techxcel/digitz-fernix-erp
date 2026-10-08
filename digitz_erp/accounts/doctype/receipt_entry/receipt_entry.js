@@ -146,32 +146,6 @@ frappe.ui.form.on('Receipt Entry', {
 			}
 		});
 	},
-	refresh_allocations_may_be_removed(frm)
-	{
-		var allocations = frm.doc.receipt_allocation || [];
-		for(var i = 0; i < allocations.length; i++)
-		{
-
-			var receipts = frm.doc.receipt_entry_details;
-
-			var allocation_found =false;
-
-			for(var j = 0; j < receipts.length; j++)
-			{
-				if(receipts[j].customer == allocations[i].customer && allocations[i].allocated_amount>0)
-				{
-					allocation_found = true;
-				}
-			}
-
-			if( !allocation_found)
-			{
-				cur_frm.get_field('receipt_allocation').grid.grid_rows[i].remove();
-			}
-
-		}
-		cur_frm.refresh()
-	},
 	before_save(frm)
 	{
 		frm.trigger("clean_allocations");
@@ -319,12 +293,6 @@ frappe.ui.form.on("Receipt Entry", "onload", function (frm) {
 );
 
  frappe.ui.form.on("Receipt Entry Detail", {
-	 reference_type(frm, cdt, cdn){
-		 var child = locals[cdt][cdn];
-		 if (frm.doc.default_cost_center) {
-			 frappe.model.set_value(cdt, cdn, 'cost_center', frm.doc.default_cost_center);
-		}
-	 },
 	receipt_type: function(frm, cdt, cdn) {
 		console.log("hitting receipt_type");
 
@@ -390,6 +358,9 @@ frappe.ui.form.on("Receipt Entry", "onload", function (frm) {
 },
 	
 reference_type: function(frm, cdt, cdn) {
+	if (frm.doc.default_cost_center) {
+		frappe.model.set_value(cdt, cdn, 'cost_center', frm.doc.default_cost_center);
+	}
 	frm.trigger("receipt_type", cdt, cdn); // Correct way to trigger another function
 },
 	
@@ -458,11 +429,11 @@ allocations: function(frm, cdt, cdn)
 
 			var receipt = receipt_entries[i];
 
-			if(receipt.supplier == selected_customer && typeof(receipt.reference_type) != undefined &&  receipt.reference_type==selected_reference_type && receipt.allocated_amount>0
+			if(receipt.customer == selected_customer && receipt.reference_type==selected_reference_type && receipt.allocated_amount>0
 				 && receipt.name !=cdn )
 			{
 				// Create the message string
-				var message = "Allocation exists for the {0} and {1} at line no {2}".format(selected_customer, selected_reference_type, i);
+				var message = "Allocation exists for the {0} and {1} at line no {2}".format(selected_customer, selected_reference_type, i + 1);
 
 				// Display the message using frappe.msgprint
 				frappe.msgprint(message);
@@ -683,7 +654,7 @@ allocations: function(frm, cdt, cdn)
 
 									pending_invoices_with_value[idx1].paying_amount = pending_invoices_with_value[idx1].paying_amount - difference
 
-									frappe.msgprint("Excess allocation found. Allocation changed for " + allocation.purchase_invoice);
+									frappe.msgprint("Excess allocation found. Allocation changed for " + allocation.reference_name);
 								}
 
 							}
@@ -802,7 +773,6 @@ allocations: function(frm, cdt, cdn)
 					row_allocation.paid_amount = element.paid_amount
 					row_allocation.balance_amount = element.balance_amount
 					totalPay = totalPay + element.paying_amount
-					row_allocation.receipt_entry_detail = frm.doc.receipt_entry_details[row.idx]
 	
 					if (element.reference_type && element.reference_name) {
 						frappe.call({

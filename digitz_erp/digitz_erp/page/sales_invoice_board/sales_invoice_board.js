@@ -8,10 +8,22 @@
 // now (digitz_erp/api/token_sync.py, run by a cron job every minute). This page
 // only renders and reacts: it refreshes when the server says something changed,
 // with a slow timer as a safety net in case the socket drops.
+//
+// The board now lives in the Cashier Console (public/js/cashier_board.js).
+// Anyone who can open the console is sent to its Board tab; this page stays for
+// those who cannot, such as a Cashier Approver without the Cashier role.
 
 frappe.provide("digitz_erp");
 
+function digitz_can_open_console() {
+	return !!(frappe.boot.page_info || {})["cashier-console"];
+}
+
 frappe.pages["Sales Invoice Board"].on_page_load = function (wrapper) {
+	if (digitz_can_open_console()) {
+		return; // on_page_show sends them to the console
+	}
+
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
 		title: "Sales Invoice Board",
@@ -19,6 +31,15 @@ frappe.pages["Sales Invoice Board"].on_page_load = function (wrapper) {
 	});
 
 	wrapper.board = new digitz_erp.SalesInvoiceBoard(page, wrapper);
+};
+
+// Runs on every visit. Replaces the route, so the back button does not bounce
+// off this page.
+frappe.pages["Sales Invoice Board"].on_page_show = function () {
+	if (digitz_can_open_console()) {
+		frappe.route_flags.replace_route = true;
+		frappe.set_route("cashier-console", "board");
+	}
 };
 
 digitz_erp.SalesInvoiceBoard = class SalesInvoiceBoard {

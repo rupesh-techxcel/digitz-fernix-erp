@@ -59,6 +59,12 @@ class Item(Document):
 		if frappe.session.user == "Administrator":
 			return
 
+		# A save by the system on the user's behalf, not an edit: the customer's
+		# latest rate recorded when a Cashier submits an invoice
+		# (item_price_api.update_customer_item_price)
+		if self.flags.ignore_permissions:
+			return
+
 		if "Cashier" in frappe.get_roles(frappe.session.user):
 			frappe.throw("You are not allowed to edit Items.")
 	def before_validate(self):
@@ -99,13 +105,13 @@ class Item(Document):
 	def update_standard_selling_price(self):
 		"""Keep the item's undated 'Standard Selling' Item Price in step with its charges.
 
-		Items are priced by Service Charge + Typing Charges + GOV, so those three are
-		what gets copied, and the Item Price works its rate out as their sum. The
+		Items are priced by Service Charge + Typing Charges + Transaction Charges +
+		GOV, so those are what gets copied, and the Item Price works its rate out as their sum. The
 		hidden Standard Selling Price field follows the same sum. Item Price copies
 		changes back the other way (ItemPrice.on_update); `from_item` stops that
 		echoing straight back here.
 		"""
-		charges = {f: flt(self.get(f)) for f in ("service_charge", "typing_charges", "gov")}
+		charges = {f: flt(self.get(f)) for f in ("service_charge", "typing_charges", "transaction_charges", "gov")}
 		total = sum(charges.values())
 
 		if flt(self.standard_selling_price) != total:

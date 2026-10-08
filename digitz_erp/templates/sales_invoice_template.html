@@ -51,6 +51,19 @@
       background-color: #f9f9f9;
     }
 
+    /* The items table's Total row: shaded like the header, figures in bold */
+    .delivery-note-table .total-row td {
+      background-color: #eaeaea;
+      font-weight: bold;
+      font-size: 11.5px;
+      vertical-align: middle;
+    }
+
+    .delivery-note-table .total-row .ar-sub {
+      font-size: 10px;
+      font-weight: bold;
+    }
+
     .delivery-note-table thead th {
       background-color: #eaeaea;
       color: #222;
@@ -90,7 +103,7 @@
     .section-header {
       font-size: 15px;
       font-weight: bold;
-      color: #4c4545ca;
+      color: rgba(76, 69, 69, 0.79); /* #4c4545ca, which the PDF CSS parser rejects */
       background-color: #f4f4f4;
       margin-bottom: 8px;
       border-radius: 6px;
@@ -100,7 +113,8 @@
 </head>
 <body style="padding-top: {{ total_pixels }}px;">
 
-<!-- Title row -->
+<!-- Title row, unless the company's invoice header already shows it -->
+{% if not title_in_header %}
 <table class="table-no-border">
   <tr>
     <td colspan="2" style="text-align: center; padding: 10px 12px; background-color: #f2f2f2;">
@@ -109,6 +123,7 @@
     </td>
   </tr>
 </table>
+{% endif %}
 
 <!-- Beautified Customer and Invoice Info -->
 <table class="table-no-border">
@@ -139,10 +154,6 @@
       <td style="font-weight: bold;">Date:</td>
       <td>{{ date }}</td>
     </tr>
-    <tr>
-      <td style="font-weight: bold;">Payment Mode:</td>
-      <td>{{ doc.payment_mode or "" }}</td>
-    </tr>
   </table>
 </td>
 
@@ -154,17 +165,18 @@
   <thead>
     <tr>
       <th style="width: 4%;">Sl<span class="ar-sub">م</span></th>
-      <th style="width: 27%;">Item<span class="ar-sub">الصنف</span></th>
+      <th style="width: 22%;">Item<span class="ar-sub">الصنف</span></th>
       <th style="width: 5%;">Qty<span class="ar-sub">الكمية</span></th>
       <th style="width: 9%;">Service Charge<span class="ar-sub">رسوم الخدمة</span></th>
       <th style="width: 9%;">Typing Charge<span class="ar-sub">رسوم الطباعة</span></th>
+      <th style="width: 9%;">Transaction Charges<span class="ar-sub">رسوم المعاملة</span></th>
       <th style="width: 9%;">Gov Fee<span class="ar-sub">الرسوم الحكومية</span></th>
-      <th style="width: 12%;">Taxable Amount<span class="ar-sub">المبلغ الخاضع للضريبة</span></th>
+      <th style="width: 10%;">Taxable Amount<span class="ar-sub">المبلغ الخاضع للضريبة</span></th>
       {# The VAT rate the lines carry: 5% in the UAE, and the fallback when lines mix rates or carry none #}
       {% set tax_rates = items | map(attribute="tax_rate") | select | unique | list %}
       {% set header_tax_rate = tax_rates[0] if tax_rates | length == 1 else 5 %}
       <th style="width: 11%;">Tax Amount ({{ header_tax_rate | int }}%)<span class="ar-sub">مبلغ الضريبة ({{ header_tax_rate | int }}%)</span></th>
-      <th style="width: 14%;">Net Amount<span class="ar-sub">المبلغ الصافي</span></th>
+      <th style="width: 12%;">Net Amount<span class="ar-sub">المبلغ الصافي</span></th>
     </tr>
   </thead>
   <tbody>
@@ -180,6 +192,7 @@
       <td style="text-align: center;">{{ "%g"|format(item.qty or 0) }}</td>
       <td style="text-align: right;">{{ "%.2f"|format(item.service_charge or 0) }}</td>
       <td style="text-align: right;">{{ "%.2f"|format(item.typing_charges or 0) }}</td>
+      <td style="text-align: right;">{{ "%.2f"|format(item.transaction_charges or 0) }}</td>
       <td style="text-align: right;">{{ "%.2f"|format(item.gov or 0) }}</td>
       <td style="text-align: right;">{{ "%.2f"|format(item.taxable_amount or 0) }}</td>
       <td style="text-align: right;">{{ "%.2f"|format(item.tax_amount or 0) }}</td>
@@ -187,61 +200,95 @@
     </tr>
     {% endfor %}
   </tbody>
+  {# Column totals. The charge columns are per unit, so they are totalled as
+     qty x charge: what the line billed, and what Taxable and Net are built from. #}
+  {% set t = namespace(qty=0, sc=0, tc=0, trc=0, gov=0, taxable=0, tax=0, net=0) %}
+  {% for item in items %}
+    {% set q = item.qty or 0 %}
+    {% set t.qty = t.qty + q %}
+    {% set t.sc = t.sc + q * (item.service_charge or 0) %}
+    {% set t.tc = t.tc + q * (item.typing_charges or 0) %}
+    {% set t.trc = t.trc + q * (item.transaction_charges or 0) %}
+    {% set t.gov = t.gov + q * (item.gov or 0) %}
+    {% set t.taxable = t.taxable + (item.taxable_amount or 0) %}
+    {% set t.tax = t.tax + (item.tax_amount or 0) %}
+    {% set t.net = t.net + (item.net_amount or 0) %}
+  {% endfor %}
+  <tfoot>
+    <tr class="total-row">
+      <td colspan="2" style="text-align: center;">Total<span class="ar-sub">الإجمالي</span></td>
+      <td style="text-align: center;">{{ "%g"|format(t.qty) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(t.sc) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(t.tc) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(t.trc) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(t.gov) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(t.taxable) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(t.tax) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(t.net) }}</td>
+    </tr>
+  </tfoot>
 </table>
 
 <!-- Totals Section with Bank Details -->
 <!-- Totals Section -->
 <div style="margin-top: 20px;">
-  <p style="font-size: 12px; margin-bottom: 6px;">
-    {{ doc.in_words }}
-  </p>
-
   {% if doc.remarks %}
   <p><b>Note:</b></p>
   <p>{{ doc.remarks }}</p>
   {% endif %}
 
+  {# Paid is what has been received: the whole total on a cash sale, the submitted
+     receipts on a credit sale. Balance is what is still owed. #}
+  {% set paid = doc.paid_amount or 0 %}
+  {% set balance = [(doc.rounded_total or 0) - paid, 0] | max %}
   <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
     <tr>
-      <!-- Disclaimer on the left -->
-      <td style="width: 55%; vertical-align: top; padding-right: 20px;">
-        <div style="
-          border: 1px solid #ddd;
-          border-radius: 6px;
-          padding: 12px;
-          background-color: #fbfbfb;
-          line-height: 1.8;
-        ">
-          
-        <!-- <div>In case of any query please contact</div>
-          <div><strong>Tel:</strong> +97142355524</div>
-          <div><strong>P.O. Box:</strong> 25250, Dubai, United Arab Emirates</div>
-          <div><strong>Email:</strong> sv.alquoz@medcenter.ae</div>--> 
+      <!-- Left: the amount in words, in English then Arabic, and the PAID stamp -->
+      <td style="width: 64%; vertical-align: top; padding-right: 14px;">
+        <div style="font-size: 12.5px; margin: 2px 0 6px;">
+          <strong style="font-size: 14px;">AED</strong>&nbsp;
+          {{ (doc.in_words or "")[4:] if (doc.in_words or "").startswith("AED ") else doc.in_words }}
         </div>
+        {% if in_words_ar %}
+        <div style="background-color: #f2f4f5; border-radius: 6px; padding: 7px 12px; direction: rtl; text-align: right; font-size: 12.5px;">
+          {{ in_words_ar }}
+        </div>
+        {% endif %}
+        {% if receipt_info and paid_stamp %}
+        <!-- Paid: the invoice carries Receipt Info. Here, level with the totals,
+             it covers no text and never adds a page -->
+        <div style="text-align: center; margin-top: 6px;">
+          <img src="{{ paid_stamp }}" alt="PAID" style="width: 120px;">
+        </div>
+        {% endif %}
       </td>
 
-      <!-- Totals on the right -->
-      <td style="width: 45%; vertical-align: top;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.4;">
+      <!-- Right, behind a divider: what has been paid and what is left -->
+      <td style="width: 36%; vertical-align: top; border-left: 1.5px solid #444; padding-left: 14px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          {% if doc.additional_discount %}
           <tr>
-            <td style="text-align: right; padding: 3px 4px;">TOTAL (AED):</td>
-            <td style="text-align: right; padding: 3px 4px;">{{ "%.2f"|format(doc.gross_total) }} د.إ</td>
+            <td style="padding: 3px 0;"><strong>DISCOUNT</strong><span class="ar-sub" style="font-size: 11px; text-align: left;">الخصم</span></td>
+            <td style="width: 12px; text-align: center;">:</td>
+            <td style="text-align: right; white-space: nowrap;">{{ "{:,.2f}".format(doc.additional_discount) }} د.إ</td>
+          </tr>
+          {% endif %}
+          {% if doc.round_off %}
+          <tr>
+            <td style="padding: 3px 0;"><strong>ROUND OFF</strong><span class="ar-sub" style="font-size: 11px; text-align: left;">التقريب</span></td>
+            <td style="width: 12px; text-align: center;">:</td>
+            <td style="text-align: right; white-space: nowrap;">{{ "{:,.2f}".format(doc.round_off) }} د.إ</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td style="padding: 3px 0 7px; border-bottom: 1px solid #bbb;"><strong>PAID AMOUNT</strong><span class="ar-sub" style="font-size: 11px; text-align: left;">المبلغ المدفوع</span></td>
+            <td style="width: 12px; text-align: center; border-bottom: 1px solid #bbb;">:</td>
+            <td style="text-align: right; white-space: nowrap; font-size: 13px; border-bottom: 1px solid #bbb;">{{ "{:,.2f}".format(paid) }} د.إ</td>
           </tr>
           <tr>
-            <td style="text-align: right; padding: 3px 4px;">TAX:</td>
-            <td style="text-align: right; padding: 3px 4px;">{{ "%.2f"|format(doc.tax_total) }} د.إ</td>
-          </tr>
-          <tr>
-            <td style="text-align: right; padding: 3px 4px;">NET TOTAL (AED):</td>
-            <td style="text-align: right; padding: 3px 4px;">{{ "%.2f"|format(doc.net_total) }} د.إ</td>
-          </tr>
-          <tr>
-            <td style="text-align: right; padding: 4px 4px; font-weight: bold;">ROUNDED TOTAL:</td>
-            <td style="text-align: right; padding: 4px 4px; font-weight: bold;">{{ "%.2f"|format(doc.rounded_total) }} د.إ</td>
-          </tr>
-          <tr>
-            <td style="text-align: right; padding: 4px 4px; font-weight: bold;">PAID AMOUNT:</td>
-            <td style="text-align: right; padding: 4px 4px; font-weight: bold;">{{ "%.2f"|format(doc.paid_amount) }} د.إ</td>
+            <td style="padding: 7px 0 3px;"><strong>BALANCE</strong><span class="ar-sub" style="font-size: 11px; text-align: left;">الرصيد المتبقي</span></td>
+            <td style="width: 12px; text-align: center;">:</td>
+            <td style="text-align: right; white-space: nowrap; font-size: 13px;">{{ "{:,.2f}".format(balance) }} د.إ</td>
           </tr>
         </table>
       </td>

@@ -7,7 +7,19 @@ This PC is not a counter, so a cashier cannot save cash documents on it.
 ![Day Open on a PC that is not a registered counter](/assets/digitz_erp/images/help/day-open.png)
 
 - **New PC, or a new browser or profile on it?** A supervisor registers it. See [Setting up counters](#counter-setup).
-- **It worked yesterday?** The browser's data may have been cleared, or the device or counter was disabled. Reload once with Ctrl+Shift+R. If the badge is still red, a supervisor registers it again.
+- **It worked yesterday?** The browser's data may have been cleared, the device or counter was disabled, or another PC or browser was registered to the same counter (a counter has one device). Reload once with Ctrl+Shift+R. If the badge is still red, a supervisor registers it again.
+
+## *Approval pending · Counter 1*
+
+You asked for this PC to become Counter 1's PC, and Counter 1 already has one. A supervisor must approve it. The badge turns blue as soon as they do. You do not need to reload. Until then, bill on Counter 1's current PC.
+
+## *Request rejected · Counter 1*
+
+A supervisor rejected your request. Ask them why. Click the badge to ask again.
+
+## Cashier Console: *Day open on another PC*
+
+Your day is open on a different counter's PC. Your day follows you to any PC you sign in to, but you can bill only on its counter's PC. Go back to that PC, or close the day here. If that PC has broken, a supervisor registers this PC to your counter and you carry on. See [How counter PCs are recognised](#counter-devices).
 
 ## "Day Not Opened": *Open the day on Counter 1 before billing*
 

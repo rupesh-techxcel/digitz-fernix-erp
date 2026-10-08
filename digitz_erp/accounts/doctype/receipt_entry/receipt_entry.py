@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import frappe
+from frappe import _
 from digitz_erp.api.counter_session_api import stamp_counter_session
 from frappe.model.document import Document
 from frappe.utils import flt
@@ -207,23 +208,6 @@ class ReceiptEntry(Document):
 			_("You cannot allocate multiple rows with 'Sales Order' as the reference type. Please keep only one row with 'Sales Order'.")
 			)
 
-	def clean_deleted_allocations(self):
-
-		allocations = self.receipt_allocation
-		#print('allocations :', allocations)
-
-		if(allocations):
-			for allocation in allocations[:]:
-
-				receipt_details = self.receipt_entry_details
-				allocation_exist = False
-				if receipt_details:
-					for receipt_entry in receipt_details:
-						if receipt_entry.customer == allocation.customer and receipt_entry.allocated_amount and receipt_entry.allocated_amount>0:
-							allocation_exist= True
-					if allocation_exist==False:
-						self.receipt_allocation.remove(allocation)
-
 	def check_reference_numbers(self):
 
 		if self.payment_mode != "Bank":
@@ -299,14 +283,14 @@ class ReceiptEntry(Document):
 		if(receipt_details):
 			for receipt_detail in receipt_details:
 
-				total_amount_in_rows = total_amount_in_rows+ receipt_detail.amount if receipt_detail.amount else 0
+				total_amount_in_rows += flt(receipt_detail.amount)
 
 				if receipt_detail.receipt_type != "Customer":
 					continue
 
 				# If there is an allocation in the lineitem make sure the amount and allocated amount are same
 				if(receipt_detail.allocated_amount and receipt_detail.allocated_amount>0):
-					if(receipt_detail.amount!= receipt_detail.allocated_amount):
+					if flt(receipt_detail.amount, 2) != flt(receipt_detail.allocated_amount, 2):
 						frappe.throw("Allocated amount mismatch.")
 
 				if(receipt_detail.allocated_amount):
@@ -321,8 +305,7 @@ class ReceiptEntry(Document):
 		#print(amount)
 		#print("total_amount_in_rows")
 		#print(total_amount_in_rows)
-		amount=total_amount_in_rows=10
-		if(amount != total_amount_in_rows):
+		if flt(amount, 2) != flt(total_amount_in_rows, 2):
 			frappe.throw("Mismatch in total amount. Please check the document inputs")
 
 		allocated_amount = 0
@@ -340,52 +323,35 @@ class ReceiptEntry(Document):
 
 
 	def check_excess_allocation(self):
-		#print("from check excces allocation")
-		allocations = self.receipt_allocation
+		"""No document may be allocated more than is left of it after the other
+		receipts' allocations, drafts included (they hold their share)."""
+		receipt_no = "" if self.is_new() else self.name
 
-		if(allocations):
-			for allocation in allocations:
-				if(allocation.paying_amount>0):
-					is_new = self.is_new()
-					#print("self.is_new()")
-					#print(self.is_new())
+		for allocation in self.receipt_allocation or []:
+			if flt(allocation.paying_amount) <= 0 or allocation.reference_type not in PAID_DOCUMENTS:
+				continue
 
-					receipt_no = self.name
-					if self.is_new():
-						receipt_no = ""
-					#print("receipt_no")
-					#print(receipt_no)
+			get_allocations, total_field = PAID_DOCUMENTS[allocation.reference_type]
+			document_total = flt(frappe.db.get_value(allocation.reference_type, allocation.reference_name, total_field))
+			previous_paid_amount = sum(flt(a.paying_amount) for a in get_allocations(allocation.reference_name, receipt_no))
 
-					if(allocation.reference_type == "Sales Invoice"):
-						previous_paid_amount = 0
-						allocations_exists = get_allocations_for_sales_invoice(allocation.reference_name, receipt_no)
-      
-					if(allocation.reference_type == "Progressive Sales Invoice"):
-						previous_paid_amount = 0
-						allocations_exists = get_allocations_for_progressive_sales_invoice(allocation.reference_name, receipt_no)
-
-					if(allocation.reference_type == "Sales Return"):
-						previous_paid_amount = 0
-						allocations_exists = get_allocations_for_sales_return(allocation.reference_name, receipt_no)
-
-						for existing_allocation in allocations_exists:
-							previous_paid_amount = previous_paid_amount +  existing_allocation.paying_amount
-
-						if allocation.paying_amount > allocation.total_amount-previous_paid_amount:
-							#print("throws error")
-							frappe.throw("Excess allocation for the invoice numer " + allocation.reference_name )
+			if flt(allocation.paying_amount, 2) > flt(document_total - previous_paid_amount, 2):
+				frappe.throw(_("Excess allocation for {0} {1}: {2} left to pay, {3} allocated.").format(
+					allocation.reference_type, allocation.reference_name,
+					flt(document_total - previous_paid_amount, 2), flt(allocation.paying_amount, 2)))
 
 	def on_update(self):
 
-		self.update_sales_invoices()
 		self.update_progressive_sales_invoices()
-		self.update_sales_return()
-		self.update_credit_note()
 		self.update_for_advance_receipt()
 
 	def on_submit(self):
 		# self.do_posting()
 		init_document_posting_status(self.doctype,self.name)
+
+		# Only a submitted receipt pays its documents; a draft just holds the
+		# balance (see check_excess_allocation)
+		self.update_paid_documents()
 
 		turn_off_background_job = frappe.db.get_single_value("Global Settings",'turn_off_background_job')
 
@@ -405,37 +371,18 @@ class ReceiptEntry(Document):
 		update_posting_status(self.doctype,self.name,'posting_status','Completed')
 		create_bank_reconciliation("Receipt Entry", self.name)
 
-	def update_sales_invoices(self):
-		
-		allocations = self.receipt_allocation
+	def update_paid_documents(self):
+		"""Set paid_amount (and an invoice's payment_status) on each Sales Invoice,
+		Sales Return and Credit Note this receipt pays: the other submitted
+		receipts' allocations plus this one's."""
+		for allocation in self.receipt_allocation or []:
+			if allocation.reference_type in PAID_DOCUMENTS and flt(allocation.paying_amount) > 0:
+				set_document_paid(allocation.reference_type, allocation.reference_name,
+					self.other_submitted_allocations(allocation) + flt(allocation.paying_amount))
 
-		if(allocations):
-			for allocation in allocations:
-
-				if allocation.reference_type != "Sales Invoice":
-					continue
-
-				if(allocation.paying_amount>0):
-
-					receipt_no = self.name
-					if self.is_new():
-						receipt_no = ""
-
-					previous_paid_amount = 0
-					allocations_exists = get_allocations_for_sales_invoice(allocation.reference_name, receipt_no)
-
-					for existing_allocation in allocations_exists:
-						previous_paid_amount = previous_paid_amount +  existing_allocation.paying_amount
-
-					invoice_total = previous_paid_amount + allocation.paying_amount
-
-					frappe.db.set_value("Sales Invoice", allocation.reference_name, {'paid_amount': invoice_total})
-
-					invoice_amount = frappe.db.get_value("Sales Invoice", allocation.reference_name,["rounded_total"])
-					if(round(invoice_amount,2) > round(invoice_total,2)):
-						frappe.db.set_value("Sales Invoice", allocation.reference_name, {'payment_status': "Partial"})
-					elif round(invoice_amount,2) == round(invoice_total,2):
-						frappe.db.set_value("Sales Invoice", allocation.reference_name, {'payment_status': "Paid"})
+	def other_submitted_allocations(self, allocation):
+		get_allocations = PAID_DOCUMENTS[allocation.reference_type][0]
+		return sum(flt(a.paying_amount) for a in get_allocations(allocation.reference_name, self.name, submitted_only=True))
 
 	def update_progressive_sales_invoices(self):
 		
@@ -471,57 +418,6 @@ class ReceiptEntry(Document):
 
 
 
-	def update_sales_return(self):
-		allocations = self.receipt_allocation
-
-		if(allocations):
-			for allocation in allocations:
-
-				if allocation.reference_type != "Sales Return":
-					continue
-
-				if(allocation.paying_amount>0):
-
-					receipt_no = self.name
-					if self.is_new():
-						receipt_no = ""
-
-					previous_paid_amount = 0
-					allocations_exists = get_allocations_for_sales_return(allocation.reference_name, receipt_no)
-
-					for existing_allocation in allocations_exists:
-						previous_paid_amount = previous_paid_amount +  existing_allocation.paying_amount
-
-					invoice_total = previous_paid_amount + allocation.paying_amount
-
-					frappe.db.set_value("Sales Return", allocation.reference_name, {'paid_amount': invoice_total})
-
-	def update_credit_note(self):
-		allocations = self.receipt_allocation
-
-		if(allocations):
-			for allocation in allocations:
-
-				if allocation.reference_type != "Credit Note":
-					continue
-
-				if(allocation.paying_amount>0):
-
-					receipt_no = self.name
-					if self.is_new():
-						receipt_no = ""
-
-					previous_paid_amount = 0
-					allocations_exists = get_allocations_for_credit_note(allocation.reference_name, receipt_no)
-
-					for existing_allocation in allocations_exists:
-						previous_paid_amount = previous_paid_amount +  existing_allocation.paying_amount
-
-					invoice_total = previous_paid_amount + allocation.paying_amount
-
-					frappe.db.set_value("Credit Note", allocation.reference_name, {'paid_amount': invoice_total})
-     
-    
 	def check_projects(self):
 		projects = False
 		for row in self.receipt_entry_details:
@@ -539,6 +435,9 @@ class ReceiptEntry(Document):
 
     
 	def insert_gl_records(self):
+		# GL Postings are the system's bookkeeping, inserted with ignore_permissions
+		# (as in Sales Invoice): a Cashier submits receipts from the Cashier Console
+		# without holding any permission on GL Posting.
 
 		if self.check_projects():
 			print("Calling insert_gl_records_for_projects")
@@ -581,7 +480,7 @@ class ReceiptEntry(Document):
 					gl_doc.party = receipt_entry.customer
 					gl_doc.against_account = self.account
 					gl_doc.remarks = self.remarks if self.remarks else remarks
-					gl_doc.insert()
+					gl_doc.insert(ignore_permissions=True)
 
 				else: #Other Receipt Type
         
@@ -598,7 +497,7 @@ class ReceiptEntry(Document):
 					gl_doc.credit_amount = receipt_entry.amount
 					gl_doc.against_account = self.account
 					gl_doc.remarks = self.remarks if self.remarks else remarks
-					gl_doc.insert()
+					gl_doc.insert(ignore_permissions=True)
      
 		# Credit for the return with payment mode (cash/bank/etc).
 		if for_return_amount >0:
@@ -614,7 +513,7 @@ class ReceiptEntry(Document):
 			gl_doc.credit_amount = for_return_amount
 			gl_doc.against_account = self.GetAccountForTheHighestAmountInPayments()
 			gl_doc.remarks = self.remarks if self.remarks else remarks		
-			gl_doc.insert()
+			gl_doc.insert(ignore_permissions=True)
    
 		# Avoid zero
 		# Debit for the payment mode cash/bank/etc
@@ -630,7 +529,7 @@ class ReceiptEntry(Document):
 			gl_doc.debit_amount = self.amount -for_return_amount
 			gl_doc.against_account = self.GetAccountForTheHighestAmountInPayments()
 			gl_doc.remarks = self.remarks if self.remarks else remarks		
-			gl_doc.insert()
+			gl_doc.insert(ignore_permissions=True)
 
 
 	def insert_gl_records_for_projects(self):
@@ -683,7 +582,7 @@ class ReceiptEntry(Document):
 						]
 						for allocation in filtered_returns:
 							return_key = (allocation.project, allocation.customer, receipt_entry.account)
-							project_customer_account_wise_return_total[return_key] = project_customer_account_wise_return_total.get(return_key, 0) + allocation.amount
+							project_customer_account_wise_return_total[return_key] = project_customer_account_wise_return_total.get(return_key, 0) + allocation.paying_amount
 
 				elif receipt_entry.reference_type  == "On Account":
 					reference_key = (receipt_entry.project,receipt_entry.account)
@@ -742,7 +641,7 @@ class ReceiptEntry(Document):
 				gl_doc_credit.debit_amount = amount
 				gl_doc_credit.against_account = self.account
 				gl_doc_credit.remarks = remarks
-				gl_doc_credit.insert()
+				gl_doc_credit.insert(ignore_permissions=True)
 
 				# Create debit entry for the return
 				idx += 1
@@ -757,7 +656,7 @@ class ReceiptEntry(Document):
 				gl_doc_debit.credit_amount = amount
 				gl_doc_debit.against_account = account
 				gl_doc_debit.remarks = remarks
-				gl_doc_debit.insert()
+				gl_doc_debit.insert(ignore_permissions=True)
 			else:
 				# Create debit entry for payments
 				idx += 1
@@ -774,7 +673,7 @@ class ReceiptEntry(Document):
 				gl_doc_debit.credit_amount = amount
 				gl_doc_debit.against_account = self.account
 				gl_doc_debit.remarks = remarks
-				gl_doc_debit.insert()
+				gl_doc_debit.insert(ignore_permissions=True)
 
 				# Create credit entry for payments
 				idx += 1
@@ -789,7 +688,7 @@ class ReceiptEntry(Document):
 				gl_doc_credit.debit_amount = amount
 				gl_doc_credit.against_account = account
 				gl_doc_credit.remarks = remarks
-				gl_doc_credit.insert()
+				gl_doc_credit.insert(ignore_permissions=True)
 
 		print("project_customer_account_wise_return_total")
 		print(project_customer_account_wise_return_total)
@@ -837,9 +736,10 @@ class ReceiptEntry(Document):
 		receipt in `allocated_receipt_entry` -- a plain Data field, not a Link, so the
 		invoice and the receipt do not link to each other -- and its invoice PDF is
 		regenerated with this receipt's details, with a receipt PDF attached beside
-		it. On cancel the field is cleared again (if it still names this receipt)
-		and the PDFs regenerated without it. One receipt may pay several invoices;
-		each is refreshed. Partial allocation is not supported: one receipt per invoice.
+		it. On cancel the field (if it still names this receipt) falls back to the
+		latest other submitted receipt paying the invoice, or is cleared, and the
+		PDFs are regenerated. One receipt may pay several invoices, and an invoice
+		paid in parts shows the latest receipt; each invoice is refreshed.
 
 		A PDF failure is logged and reported but never blocks the receipt itself.
 		"""
@@ -859,7 +759,8 @@ class ReceiptEntry(Document):
 			if cancel:
 				if details.allocated_receipt_entry != self.name:
 					continue
-				frappe.db.set_value("Sales Invoice", invoice, "allocated_receipt_entry", None, update_modified=False)
+				frappe.db.set_value("Sales Invoice", invoice, "allocated_receipt_entry",
+					self.latest_other_receipt(invoice), update_modified=False)
 			else:
 				frappe.db.set_value("Sales Invoice", invoice, "allocated_receipt_entry", self.name, update_modified=False)
 
@@ -874,6 +775,17 @@ class ReceiptEntry(Document):
 				f"The printout of {', '.join(failed)} could not be refreshed with this receipt. "
 				"Use Print > Attach PDF on the invoice to try again; the error is in the Error Log.",
 				indicator="orange")
+
+	def latest_other_receipt(self, invoice):
+		"""The latest submitted receipt other than this one that pays `invoice`, or None."""
+		receipts = frappe.db.sql("""
+			SELECT re.name FROM `tabReceipt Entry` re
+			INNER JOIN `tabReceipt Allocation` ra ON ra.parent = re.name AND ra.parenttype = 'Receipt Entry'
+			WHERE ra.reference_type = 'Sales Invoice' AND ra.reference_name = %s AND ra.paying_amount > 0
+				AND re.docstatus = 1 AND re.name != %s
+			ORDER BY re.posting_date DESC, re.posting_time DESC, re.creation DESC
+			LIMIT 1""", (invoice, self.name))
+		return receipts[0][0] if receipts else None
 
 	def GetAccountForTheHighestAmountInPayments(self):
 
@@ -894,28 +806,18 @@ class ReceiptEntry(Document):
 
 
 	def revert_documents_paid_amount_for_receipt(self):
-		#print("onl here")
+		# Sales Invoice, Sales Return, Credit Note: back to what the other
+		# submitted receipts have paid
+		for allocation in self.receipt_allocation or []:
+			if allocation.reference_type in PAID_DOCUMENTS and flt(allocation.paying_amount) > 0:
+				set_document_paid(allocation.reference_type, allocation.reference_name,
+					self.other_submitted_allocations(allocation))
+
 		allocations = self.receipt_allocation
 		previous_paid_amount = 0
 		if(allocations):
 			for allocation in allocations:
-				#print("allocation.reference_type")
-				#print(allocation.reference_type)
 
-				if allocation.reference_type == "Sales Invoice":
-					if(allocation.paying_amount>0):
-						receipt_no = self.name
-						if self.is_new():
-							receipt_no = ""
-
-						previous_paid_amount = 0
-						allocations_exists = get_allocations_for_sales_invoice(allocation.reference_name, receipt_no)
-						for existing_allocation in allocations_exists:
-							previous_paid_amount = previous_paid_amount +  existing_allocation.paying_amount
-
-						total_paid_Amount = previous_paid_amount
-						frappe.db.set_value("Sales Invoice", allocation.reference_name, {'paid_amount': total_paid_Amount})
-      
 				if allocation.reference_type == "Progressive Sales Invoice":
 					if(allocation.paying_amount>0):
 						receipt_no = self.name
@@ -930,20 +832,6 @@ class ReceiptEntry(Document):
 						total_paid_Amount = previous_paid_amount
 						frappe.db.set_value("Sales Invoice", allocation.reference_name, {'paid_amount': total_paid_Amount})
 
-				if allocation.reference_type == "Sales Return":
-					if(allocation.paying_amount>0):
-						receipt_no = self.name
-						if self.is_new():
-							receipt_no = ""
-
-						previous_paid_amount = 0
-						allocations_exists = get_allocations_for_sales_return(allocation.reference_name, receipt_no)
-						for existing_allocation in allocations_exists:
-							previous_paid_amount = previous_paid_amount +  existing_allocation.paying_amount
-
-						total_paid_Amount = previous_paid_amount
-						frappe.db.set_value("Sales Return", allocation.reference_name, {'paid_amount': total_paid_Amount})
-      
 				if allocation.reference_type == "Sales Order":
 					if(allocation.paying_amount>0):
 						receipt_no = self.name
@@ -964,35 +852,23 @@ def get_amount(receipt_entry_id):
 
     return amt
 
-@frappe.whitelist()
-def receipt_allocation_updates(receipt_entry_id, sales_inv_id):
-    receipt_entry = frappe.get_doc("Receipt Entry", receipt_entry_id)
-    sales_inv_doc = frappe.get_doc("Sales Invoice", sales_inv_id)
-    
-    # Check if the row already exists in receipt_allocation_copy
-    row_exists = False
-    for row in receipt_entry.receipt_allocation_copy:
-        if (row.reference_type == "Sales Invoice" and
-            row.reference_name == sales_inv_id and
-            row.customer == sales_inv_doc.customer and
-            row.total_amount == sales_inv_doc.net_total):
-            row_exists = True
-            break
-    
-    if not row_exists:
-        # Append a new row to receipt_allocation_copy
-        receipt_entry.allocated_amount = sales_inv_doc.net_total
-        new_row = receipt_entry.append("receipt_allocation_copy", {
-            "reference_type": "Sales Invoice",
-            "reference_name": sales_inv_id,
-            "customer": sales_inv_doc.customer,
-            "total_amount": sales_inv_doc.net_total
-        })
-        
-        # Save the document to persist changes
-        receipt_entry.save()
-        
-        return "Row added successfully"
-    else:
-        return "Row already exists, no action taken"
 
+# The documents a receipt pays, each with its allocation getter and total field
+PAID_DOCUMENTS = {
+	"Sales Invoice": (get_allocations_for_sales_invoice, "rounded_total"),
+	"Sales Return": (get_allocations_for_sales_return, "rounded_total"),
+	"Credit Note": (get_allocations_for_credit_note, "grand_total"),
+}
+
+
+def set_document_paid(doctype, name, paid_amount):
+	"""Record `paid_amount` on a document a receipt pays. A Sales Invoice's
+	payment_status follows: Paid, Partial, or back to Credit when nothing is paid."""
+	paid_amount = flt(paid_amount, 2)
+	values = {"paid_amount": paid_amount}
+
+	if doctype == "Sales Invoice":
+		total = flt(frappe.db.get_value(doctype, name, "rounded_total"), 2)
+		values["payment_status"] = "Paid" if paid_amount >= total else "Partial" if paid_amount > 0 else "Credit"
+
+	frappe.db.set_value(doctype, name, values)

@@ -151,12 +151,13 @@ def child_row(item_code):
 	existing records do and what makes token_sync.build_invoice_items treat the
 	line as zero rated.
 	"""
-	item = frappe.db.get_value("Item", item_code, ["item_name", "service_charge", "typing_charges", "gov"], as_dict=True)
+	item = frappe.db.get_value("Item", item_code, ["item_name", "service_charge", "typing_charges", "transaction_charges", "gov"], as_dict=True)
 
 	service_charge = flt(item.service_charge)
 	typing_charges = flt(item.typing_charges)
+	transaction_charges = flt(item.transaction_charges)
 	gov = flt(item.gov)
-	rate = service_charge + typing_charges + gov
+	rate = service_charge + typing_charges + transaction_charges + gov
 
 	return {
 		"item": item_code,
@@ -169,5 +170,6 @@ def child_row(item_code):
 		"tax_amount": 0,
 		"service_charge": service_charge,
 		"typing_charges": typing_charges,
+		"transaction_charges": transaction_charges,
 		"gov": gov,
 	}

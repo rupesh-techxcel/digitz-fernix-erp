@@ -458,6 +458,10 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		"payment_terms": payment_terms,
 		"receipt_number": receipt_number,
 		"receipt_info": receipt_info,
+		# Receipt Info means the invoice is paid: the PAID stamp under the totals
+		"paid_stamp": get_paid_stamp() if receipt_info else None,
+		# The amount in words in Arabic, under the English one on the invoice
+		"in_words_ar": get_arabic_amount_in_words(doc.get("rounded_total")) if doc.doctype == "Sales Invoice" else "",
 		"party_trn_no": party_trn_no,
 		# The templates' own top padding. Header clearance now comes from the page
 		# margin below, which repeats on every page; padding only cleared page one,
@@ -481,6 +485,13 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 
 	if file_suffix_override:
 		file_suffix = file_suffix_override
+
+	# A tax invoice can carry its own header, with the TAX INVOICE title and TRN
+	# in it; its receipt keeps the plain one. company_doc is this function's own
+	# copy, so the header overlay below picks the swap up without it being saved.
+	if doc.doctype == "Sales Invoice" and not template_override and company_doc.get("invoice_header_image"):
+		company_doc.header_image = company_doc.invoice_header_image
+		context["title_in_header"] = True
 
 	html = render_template(template_path, context)
 
@@ -548,8 +559,6 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	output_stream = io.BytesIO()
 	output_pdf.write(output_stream)
 
-	from frappe.utils.file_manager import save_file
-
 	file_name = f"{doc.name}-{file_suffix}.pdf"
 
 	# Match on the file name, not just the document: an invoice and its receipt
@@ -566,18 +575,64 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		pluck="name",
 	)
 	for name in stale:
-		frappe.get_doc("File", name).delete()
+		# Another request may hold the old file at this moment (e.g. a save still
+		# regenerating it): leave it then rather than fail the print. The new PDF
+		# is the newest, and the daily cleanup removes the old one.
+		try:
+			frappe.get_doc("File", name).delete()
+		except (frappe.QueryTimeoutError, frappe.QueryDeadlockError):
+			# frappe.throw queued its message for the browser: drop it, the print goes on
+			frappe.clear_last_message()
+			frappe.log_error(
+				title="Print PDF: old attachment kept",
+				message=f"{name} of {doc.doctype} {doc.name} was locked; left for the daily cleanup.",
+			)
 
-	save_file(
-		fname=file_name,
-		content=output_stream.getvalue(),
-		dt=doc.doctype,
-		dn=doc.name,
-		folder="Home/Attachments",
-		is_private=0
-	)
+	# A File with its content writes the PDF once. frappe's legacy save_file
+	# wrote it, then the File it inserted wrote it again under a second name,
+	# leaving one untracked copy on disk for every PDF generated.
+	frappe.get_doc({
+		"doctype": "File",
+		"file_name": file_name,
+		"content": output_stream.getvalue(),
+		"attached_to_doctype": doc.doctype,
+		"attached_to_name": doc.name,
+		"folder": "Home/Attachments",
+		"is_private": 0,
+	}).insert(ignore_permissions=True)
 
 	frappe.msgprint(f"Print format attached to the document as <b>{file_name}</b>.", alert=True)
+
+
+def get_paid_stamp():
+	"""The PAID stamp (public/images/paid-stamp.png) as a data URI, so the PDF
+	renderer embeds it without fetching anything over the network."""
+	import base64
+	import os
+
+	path = os.path.join(frappe.get_app_path("digitz_erp"), "public", "images", "paid-stamp.png")
+	if not os.path.exists(path):
+		return None
+	with open(path, "rb") as f:
+		return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+
+
+def get_arabic_amount_in_words(amount):
+	"""`amount` in Arabic words as dirhams and fils, for the bilingual invoice.
+
+	num2words' own AED currency mode names the riyal, so the dirham and fils
+	wording is put together here around its plain number words.
+	"""
+	from frappe.utils import flt
+	from num2words import num2words
+
+	fils_total = int(round(flt(amount) * 100))
+	dirhams, fils = divmod(abs(fils_total), 100)
+
+	words = f"{num2words(dirhams, lang='ar')} درهم إماراتي"
+	if fils:
+		words += f" و {num2words(fils, lang='ar')} فلس"
+	return words + " فقط"
 
 
 def get_sales_invoice_receipt_info(doc):

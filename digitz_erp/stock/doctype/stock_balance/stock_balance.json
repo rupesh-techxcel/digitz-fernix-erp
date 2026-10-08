@@ -57,7 +57,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2023-10-23 20:03:30.510570",
+ "modified": "2026-10-08 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Stock Balance",
@@ -74,6 +74,11 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Cashier",
+   "select": 1
   }
  ],
  "read_only": 1,

@@ -76,7 +76,7 @@ digitz_erp.MedicalCenterDashboard = class MedicalCenterDashboard {
 		this.$wrapper.on("hide", () => this.stop());
 
 		this.$wrapper.on("click", "[data-route-name]", (event) => {
-			frappe.set_route("Form", "Sales Invoice", $(event.currentTarget).attr("data-route-name"));
+			digitz_erp.open_sales_invoice($(event.currentTarget).attr("data-route-name"));
 		});
 
 		this.$wrapper.on("click", "[data-open-board]", () => {

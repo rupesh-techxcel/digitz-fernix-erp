@@ -24,6 +24,7 @@ def get_columns():
 		currency("cash_receipts", "Cash Receipts"),
 		currency("cash_refunds", "Refunds"),
 		currency("cash_paid_out", "Paid Out"),
+		currency("cash_expenditure", "Expenditure"),
 		currency("expected_cash", "Expected"),
 		currency("counted_cash", "Counted"),
 		currency("difference", "Difference"),
@@ -46,6 +47,7 @@ def get_data(filters):
 		f"""
 		SELECT cs.name, cs.counter, IFNULL(u.full_name, cs.cashier) AS cashier_name, cs.opened_on, cs.closed_on,
 			cs.status, cs.opening_float, cs.cash_sales, cs.cash_receipts, cs.cash_refunds, cs.cash_paid_out,
+			cs.cash_expenditure,
 			cs.expected_cash, cs.counted_cash, cs.difference, IFNULL(c.full_name, cs.closed_by) AS closed_by,
 			IFNULL(a.full_name, cs.approved_by) AS approved_by
 		FROM `tabCounter Session` cs

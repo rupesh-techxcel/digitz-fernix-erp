@@ -1,0 +1,47 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"mcNavBlock01\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Medical Center Navigator\",\"col\":12}},{\"id\":\"mcNavSpacer1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"nhyNVLhvrX\",\"type\":\"spacer\",\"data\":{\"col\":12}}]",
+ "creation": "2026-09-29 11:08:33.608807",
+ "custom_blocks": [
+  {
+   "custom_block_name": "Medical Center Navigator",
+   "label": "Medical Center Navigator"
+  }
+ ],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "tag",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Medical Center",
+ "links": [],
+ "modified": "2026-09-29 16:00:00",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "Medical Center",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [
+  {
+   "role": "Cashier"
+  },
+  {
+   "role": "Cashier Approver"
+  },
+  {
+   "role": "Management"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "sequence_id": 0.0,
+ "shortcuts": [],
+ "title": "Medical Center"
+}

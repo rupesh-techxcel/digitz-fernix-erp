@@ -18,13 +18,21 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import flt, now_datetime
 
+# A receipt's cash: its amount adds Sales Return / Credit Note lines as positive,
+# but they are paid out, so the cash taken is the amount less twice those lines
+# (as the receipt's GL posts it)
+RECEIPT_CASH = """d.amount - 2 * IFNULL((
+	SELECT SUM(r.amount) FROM `tabReceipt Entry Detail` r
+	WHERE r.parent = d.name AND r.parenttype = 'Receipt Entry' AND r.receipt_type = 'Customer'
+		AND r.reference_type IN ('Sales Return', 'Credit Note')), 0)"""
+
 # Cash is anything settled through a payment mode whose Mode is Cash
 CASH_MOVEMENTS = (
-	# (field on this session, doctype, amount field, sign in expected cash, skip credit sales)
-	("cash_sales", "Sales Invoice", "rounded_total", 1, True),
-	("cash_receipts", "Receipt Entry", "amount", 1, False),
-	("cash_refunds", "Sales Return", "rounded_total", -1, True),
-	("cash_paid_out", "Expense Entry", "paid_amount", -1, False),
+	# (field on this session, doctype, amount (SQL over the document `d`), sign in expected cash, skip credit sales)
+	("cash_sales", "Sales Invoice", "d.rounded_total", 1, True),
+	("cash_receipts", "Receipt Entry", RECEIPT_CASH, 1, False),
+	("cash_refunds", "Sales Return", "d.rounded_total", -1, True),
+	("cash_paid_out", "Expense Entry", "d.paid_amount", -1, False),
 )
 
 # Differences below this are treated as a clean close
@@ -83,16 +91,17 @@ class CounterSession(Document):
 			self.counted_cash = total
 
 	def calculate_cash(self):
-		"""Sum the submitted cash documents of this session, and the expected cash."""
+		"""Sum the submitted cash documents of this session and, less the
+		expenditure entered at Day Close, the expected cash."""
 		expected = flt(self.opening_float)
 
-		for field, doctype, amount_field, sign, skip_credit in CASH_MOVEMENTS:
+		for field, doctype, amount_expr, sign, skip_credit in CASH_MOVEMENTS:
 			amount = 0
 			if not self.is_new():
 				credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
 				amount = flt(frappe.db.sql(
 					f"""
-					SELECT SUM(d.`{amount_field}`)
+					SELECT SUM({amount_expr})
 					FROM `tab{doctype}` d
 					INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
 					WHERE d.counter_session = %s AND d.docstatus = 1 AND pm.mode = 'Cash' {credit}
@@ -101,6 +110,9 @@ class CounterSession(Document):
 				)[0][0])
 			self.set(field, amount)
 			expected += sign * amount
+
+		# Paid out of the till, entered at Day Close: kept on the session only
+		expected -= flt(self.cash_expenditure)
 
 		self.expected_cash = expected
 		self.difference = flt(self.counted_cash) - expected if self.status in ("Closing", "Closed") else 0

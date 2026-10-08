@@ -29,6 +29,7 @@
   "section_break_ohog",
   "service_charge",
   "typing_charges",
+  "transaction_charges",
   "gov",
   "standard_buying_price",
   "margin_",
@@ -319,7 +320,7 @@
    "precision": "2"
   },
   {
-   "description": "Taxable service charge. VAT applies to this and to Typing Charges.",
+   "description": "Taxable service charge. VAT applies to this, Typing Charges and Transaction Charges.",
    "fieldname": "service_charge",
    "fieldtype": "Float",
    "in_list_view": 1,
@@ -331,6 +332,13 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Typing Charges"
+  },
+  {
+   "description": "Taxable transaction charges. Added to the rate with Service Charge, Typing Charges and GOV.",
+   "fieldname": "transaction_charges",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Transaction Charges"
   },
   {
    "description": "Government fee, passed through without VAT.",
@@ -351,7 +359,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-28 12:19:50.477484",
+ "modified": "2026-10-08 21:00:00.000000",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Item",
@@ -369,6 +377,11 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Cashier",
+   "select": 1
   }
  ],
  "row_format": "Dynamic",

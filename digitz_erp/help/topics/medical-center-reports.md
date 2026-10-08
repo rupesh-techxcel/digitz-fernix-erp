@@ -113,7 +113,7 @@ One row per invoice or Sales Return, with its items, charges, VAT, payment mode 
 | Type | **Sales Invoice** or **Sales Return** |
 | Document No | Click to open the invoice or return |
 | Item Name | All the items on the invoice |
-| Service Charge, Typing Charges | The taxable charges |
+| Service Charge, Typing Charges, Transaction Charges | The taxable charges |
 | Gov Fee | The government fee, not taxed |
 | Gross Amount, Tax Amount, Net Amount | Before VAT, the VAT, and after VAT |
 | Payment Mode | The payment mode, or **Credit Sale** |
