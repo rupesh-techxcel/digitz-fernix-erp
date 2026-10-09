@@ -4,8 +4,11 @@
 // search on the left, the guide on the right. /app/digitz-help/<topic> opens a
 // topic directly, which is how the Help buttons on other pages link here.
 // Links between guides arrive as /app/digitz-help/<topic> routes (help_api).
+// The same guides, as one printable PDF, ship in the app's assets (USER_GUIDE).
 // The list shows only the groups at first; a group opens on click, when it holds
 // the guide being read, or when a search matches something in it.
+
+const USER_GUIDE = "/assets/digitz_erp/docs/FERNIX-ERP-User-Guide.pdf";
 
 frappe.pages["digitz-help"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({ parent: wrapper, title: __("Help Center"), single_column: true });
@@ -20,6 +23,7 @@ class HelpCenter {
 	constructor(page) {
 		this.page = page;
 		this.inject_styles();
+		this.page.set_primary_action(__("Download User Guide (PDF)"), () => window.open(USER_GUIDE, "_blank"), "download");
 		this.$root = $(`
 			<div class="dzh">
 				<aside class="dzh-side">
@@ -64,7 +68,10 @@ class HelpCenter {
 			this.current = null;
 			this.render_nav();
 			this.page.set_title(__("Help Center"));
-			this.$body.html(`<p class="text-muted">${__("Pick a section on the left to see its guides.")}</p>`);
+			this.$body.html(`
+				<p class="text-muted">${__("Pick a section on the left to see its guides.")}</p>
+				<p class="text-muted">${__("All of them, as one printable guide:")}
+					<a href="${USER_GUIDE}" target="_blank" rel="noopener">${__("FERNIX ERP User Guide (PDF)")}</a></p>`);
 		}
 	}
 

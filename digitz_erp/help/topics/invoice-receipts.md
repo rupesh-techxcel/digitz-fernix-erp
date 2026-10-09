@@ -2,6 +2,31 @@
 
 Every Sales Invoice gets its tax invoice as a PDF attachment. A cash sale gets its receipt at the same time. A credit sale gets its receipt later, when a Receipt Entry pays it, and the receipt is still attached to the invoice. Open a section for the details.
 
+## What the tax invoice shows
+
+The bilingual tax invoice, on the company letterhead.
+
+- **Header:** the company letterhead, with **TAX INVOICE / فاتورة ضريبية** and the company's **TRN** on the right. The receipt has the plain letterhead, without the title.
+- **Applicant, company and TRN**, the invoice number and date. Company and TRN print only when ticked on the invoice (see [Walk-in and corporate customers](#walk-in-customer)).
+- **The lines:** Qty, Service Charge, Typing Charge, Transaction Charges, Gov Fee, Taxable Amount, Tax Amount (5%) and Net Amount, in English and Arabic.
+- **A Total row** under the lines. The charge columns are per unit, so their totals are qty × charge.
+- **The amount in words**, in English (after **AED**) and in Arabic.
+- **Paid Amount** and **Balance** on the right. Paid is the whole total for a cash sale, and what receipts have paid for a credit sale. **Round Off** and **Discount** show above them when the invoice has them.
+- The **PAID** stamp once the invoice is paid, **RECEIPT INFO** (below), and the disclaimer.
+- **Billed By**: the cashier who billed the invoice, and **Printed On**: when this copy was made.
+- **Footer:** the company's address, contacts and services strip.
+
+The letterhead images are set on the **Company**: **Header Image** (receipts and other documents), **Invoice Header Image** (tax invoices) and **Footer Image**.
+
+## Print an invoice or receipt
+
+Print Invoice and Print Receipt save the invoice first, then send the PDF to the printer.
+
+- **Sales Invoice form:** **Print → Print Invoice** or **Print Receipt**, or press **Ctrl+P**.
+- **Cashier Console:** the invoice's **Print** menu, or **Ctrl+P**. See [Billing in the Cashier Console](#cashier-console).
+
+An invoice with unsaved changes is saved first, so the printout always shows what is stored. If the save is stopped, nothing prints. **Print Receipt** appears for a cash sale, and for a credit sale once it is paid.
+
 ## Where to find the printouts
 
 The invoice and receipt PDFs are attached to the Sales Invoice. Find them under Attachments in the form's sidebar.
@@ -33,7 +58,7 @@ The **RECEIPT INFO** block shows:
 | Receipt Number | RCPT- plus the invoice number |
 | Amount | The amount paid |
 | Date | The invoice date |
-| Collected By | The username of whoever created the invoice |
+| Collected By | The username of the cashier who billed the invoice: whoever last saved or submitted it |
 | Payment Mode | The invoice's payment mode, with the **Authorization Code** (Reference No) for a card payment |
 
 ![RECEIPT INFO at the bottom of the invoice](/assets/digitz_erp/images/help/invoice-receipt-info.png)

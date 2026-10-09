@@ -27,6 +27,18 @@ You have no open day on this counter. Click the badge and open the day. See [Ope
 
 If you **do** have an open day, it is on a **different counter**. Close that one first.
 
+## "Not Today's Invoice": *… is dated … A cashier can save and submit only today's invoices*
+
+Cashiers bill only invoices dated today. An invoice from another day opens read-only in the Cashier Console, and its date cannot be changed. Ask a supervisor to handle it. See [Supervisor tasks](#supervisor-tasks).
+
+## A draft from yesterday is not on the Sales Invoice Board
+
+The Board lists today's drafts only. Older ones are in the **Sales Invoice** list for a supervisor. See [Supervisor tasks](#supervisor-tasks).
+
+## Print did nothing
+
+Print saves the invoice first. If the save was stopped, for example by a missing field or the *Not Today's Invoice* message, nothing prints: fix what the message says and print again. *Items are required before printing* means the invoice has no items yet.
+
 ## *Counter 1 is in use* / *already has a day open by …*
 
 Another cashier's day is still open on this counter.

@@ -52,6 +52,8 @@ standard_help_items = [
 # include js in doctype views
 # doctype_js =  {"Item": "public/js/item_restrictions.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+# Role list opens on the enabled roles (the unused ones are disabled by api/role_visibility.py)
+doctype_list_js = {"Role": "public/js/role_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 fixtures = ["Custom Field", "Custom DocPerm",
@@ -102,11 +104,17 @@ after_migrate = [
 	# Keeps the Cashier role's rights as the counter needs them, even on a site
 	# whose permissions were edited in Role Permission Manager
 	"digitz_erp.api.cashier_permissions.apply",
+	# Hides the roles the Medical Center never assigns (none still held by a user)
+	"digitz_erp.api.role_visibility.apply",
 ]
 
 # On a fresh install fixtures are imported after after_install, so the Cashier
-# rights are enforced here, once they are in
-after_sync = ["digitz_erp.api.cashier_permissions.apply"]
+# rights are enforced here, once they are in -- and the unused roles, which the
+# doctypes create as they sync, are hidden then too
+after_sync = [
+	"digitz_erp.api.cashier_permissions.apply",
+	"digitz_erp.api.role_visibility.apply",
+]
 
 # Uninstallation
 # ------------

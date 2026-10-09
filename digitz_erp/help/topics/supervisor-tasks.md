@@ -7,7 +7,9 @@ Anyone with one of these can supervise:
 - the **System Manager** or **Management** role, or
 - a **Cashier** record with **Is Supervisor** ticked.
 
-Supervisors can register PCs, approve PC requests, approve cash differences and close other cashiers' days. The counter badge shows them the number of closes and PC requests waiting for approval.
+Supervisors can register PCs, approve PC requests, approve cash differences and close other cashiers' days. They are not held to an open day or to today's invoices. The counter badge shows them the number of closes and PC requests waiting for approval.
+
+The **Cashier Approver** role is not a supervisor: it can cancel, amend and delete invoices, but none of the tasks on this page. See [Roles and who can do what](#roles-permissions).
 
 ## Approve a cash difference
 
@@ -53,6 +55,15 @@ A cashier can ask for their PC to be registered. A request for a counter that al
 3. Click **Approve**, or **Reject** and give a reason.
 
 Reject a request from a second browser on a PC that already works, and a request to move a counter to another desk while its day is open. See [How counter PCs are recognised](#counter-devices).
+
+## Drafts from earlier days
+
+Token invoices not billed on their day drop off the Sales Invoice Board. Cashiers cannot bill them; a supervisor can.
+
+1. Open the **Sales Invoice** list and filter **Status** to **Draft** and **Date** to before today.
+2. Open each one and decide: bill it, or **Delete** it if the patient never paid. To bill it, set the **Date** to today, or tick **Edit Posting Date and Time** to keep its own date, then save and submit.
+
+A cashier's own Sales Invoice list shows only their invoices, and token drafts are often owned by another desk or by Administrator, so cashiers may not see these at all. Check for them regularly.
 
 ## Good practice
 

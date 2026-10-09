@@ -27,6 +27,13 @@
 				"keywords": "day close expected cash count difference short over slip print"
 			},
 			{
+				"name": "returns-expenses",
+				"title": "Refunds and expenses",
+				"summary": "Sales Returns and Expense Entries, and how they come off the till.",
+				"keywords": "sales return refund return credit note get items from sales expense entry expense paid out cash refund till expected cash",
+				"collapsible": true
+			},
+			{
 				"name": "shift-handover",
 				"title": "Handing over a counter",
 				"summary": "Changing cashiers on the same counter during the day.",
@@ -37,6 +44,13 @@
 				"title": "Supervisor tasks",
 				"summary": "Approve differences, close a day for a cashier, register PCs.",
 				"keywords": "supervisor approve approval difference close for cashier register device open days"
+			},
+			{
+				"name": "roles-permissions",
+				"title": "Roles and who can do what",
+				"summary": "Cashier, Cashier Approver, Management and System Manager, supervisors, cashier rules and hidden roles.",
+				"keywords": "roles permissions role cashier cashier approver management system manager supervisor is supervisor who can access hidden disabled role permission manager today only",
+				"collapsible": true
 			},
 			{
 				"name": "counter-setup",
@@ -62,6 +76,13 @@
 		"group": "Token Sync",
 		"topics": [
 			{
+				"name": "token-sync",
+				"title": "How tokens become invoices",
+				"summary": "Token sync setup, Medical Services, what the invoice gets, Medical Service Logs and Sync Now.",
+				"keywords": "token sync tokens reception medical services display name medical service logs completed skipped failed pending retry sync now token url enable token sync cashier username desk scheduler",
+				"collapsible": true
+			},
+			{
 				"name": "token-simulator",
 				"title": "Testing with simulated tokens",
 				"summary": "Feed the token sync from test tokens, without the real service.",
@@ -72,6 +93,13 @@
 	{
 		"group": "Customers & Invoicing",
 		"topics": [
+			{
+				"name": "cashier-console",
+				"title": "Billing in the Cashier Console",
+				"summary": "The Sales Invoice Board, invoices, payment, printing, credit payments and keyboard shortcuts.",
+				"keywords": "cashier console board sales invoice board search today draft open invoice billing payment received amount credit sale print print invoice print receipt preview ctrl+p ctrl+s alt+n alt+p shortcuts keyboard record payment receipts receipt entry today only owner billed by",
+				"collapsible": true
+			},
 			{
 				"name": "walk-in-customer",
 				"collapsible": true,

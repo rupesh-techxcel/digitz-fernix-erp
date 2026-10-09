@@ -33,8 +33,9 @@ For a **Cash** mode, the invoice asks for the **Received Amount** (the cash hand
 
 For each person who takes money:
 
-1. Give their **User** the **Cashier** role.
+1. Give their **User** the **Cashier** role. Give a billing lead **Cashier Approver** as well, and supervisors **Management**. See [Roles and who can do what](#roles-permissions).
 2. Create a **Cashier** record for them. Tick **Is Supervisor** for shift leads who may approve differences and close days for others.
+3. Give the **User** a **username** that matches the desk name the token service sends, so their tokens' invoices are raised in their name. See [How tokens become invoices](#token-sync).
 
 ![A Cashier record](/assets/digitz_erp/images/help/cashier-form.png)
 
@@ -70,7 +71,7 @@ A day open on a disabled device is not closed. The dialog warns about it, and th
 
 ### Print invoices without the print dialog
 
-In the Cashier Console, an invoice's **Print** menu has **Print Invoice** and **Print Receipt**, which send the PDF straight to the printer, and **Preview Invoice** and **Preview Receipt**, which show it in a popup first. The receipt entries appear for a cash sale, and for a credit sale once it has been paid. Browsers always show their print dialog unless Chrome is started for kiosk printing. To print with no dialog on a counter PC:
+In the Cashier Console, an invoice's **Print** menu has **Print Invoice** and **Print Receipt**, which send the PDF straight to the printer, and **Preview Invoice** and **Preview Receipt**, which show it in a popup first. The receipt entries appear for a cash sale, and for a credit sale once it has been paid. **Ctrl+P** prints the invoice, here and on the Sales Invoice form, and every print saves the invoice first. Browsers always show their print dialog unless Chrome is started for kiosk printing. To print with no dialog on a counter PC:
 
 1. Right-click the Chrome shortcut the cashier uses, open **Properties**, and add ` --kiosk-printing` at the end of **Target** (after the closing quote).
 2. Make the invoice printer the PC's **default printer** in Windows.
@@ -89,4 +90,4 @@ To replace a PC, just register the new one to the same counter. The old PC is di
 
 ## 6. Where to find everything
 
-The **Medical Center** workspace has the **Cashier Console** (Day Open, the invoice board, invoices, Day Close and Day History in one place), and shortcuts to Counter Sessions, Counter Session Summary, Counter, Counter Device and Cashier.
+The **Medical Center** workspace has the **Cashier Console** (Day Open, the Sales Invoice Board, Sales Invoices, Receipts, Day Close and Day History in one place), and cards for Counter Sessions, Counter Session Summary, Counter, Counter Device and Cashier. **Permissions Help** at the top shows what each role can do, and **Help Center** opens these pages.

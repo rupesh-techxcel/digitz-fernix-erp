@@ -13,10 +13,10 @@ Every payment taken at the front desk belongs to a **counter**, a **counter PC**
 ## A normal day
 
 1. **Open the day.** Count the cash in the till (the *float*) and click **Open Day**. See [Opening your day](#day-open).
-2. **Bill from the Cashier Console.** Patients' tokens arrive as draft invoices on its **Sales Invoice Board** tab, which updates by itself. Click **Open Invoice**, take payment and submit; the invoice opens in the console's **Sales Invoices** tab and leaves the board once submitted. **Sync Now** fetches new tokens at once. Every Sales Invoice, Sales Return, Receipt Entry and Expense Entry you save is stamped with your counter, your PC and your day.
+2. **Bill from the Cashier Console.** Patients' tokens arrive as draft invoices on its **Sales Invoice Board** tab, which shows today's drafts for every counter and updates by itself. Search it by invoice number, customer, company or token. Click **Open Invoice**, take payment and submit; the invoice opens in the console's **Sales Invoices** tab and leaves the board once submitted. **Sync Now** fetches new tokens at once. See [Billing in the Cashier Console](#cashier-console). Every Sales Invoice, Sales Return, Receipt Entry and Expense Entry you save is stamped with your counter, your PC and your day.
 3. **Close the day.** The system shows how much cash the till *should* hold. Count what it *does* hold and click **Close Day**. See [Closing your day](#day-close).
 
-Billing is blocked until the day is open. Only cashiers are held to this. Supervisors and the automatic token sync are not.
+Billing is blocked until the day is open, and cashiers bill only invoices dated today. Only cashiers are held to this. Supervisors and the automatic token sync are not. See [Roles and who can do what](#roles-permissions).
 
 ## The counter badge
 
