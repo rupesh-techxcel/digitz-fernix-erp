@@ -591,7 +591,7 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	# A File with its content writes the PDF once. frappe's legacy save_file
 	# wrote it, then the File it inserted wrote it again under a second name,
 	# leaving one untracked copy on disk for every PDF generated.
-	frappe.get_doc({
+	file_doc = frappe.get_doc({
 		"doctype": "File",
 		"file_name": file_name,
 		"content": output_stream.getvalue(),
@@ -602,6 +602,8 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	}).insert(ignore_permissions=True)
 
 	frappe.msgprint(f"Print format attached to the document as <b>{file_name}</b>.", alert=True)
+
+	return file_doc.file_url
 
 
 def get_paid_stamp():

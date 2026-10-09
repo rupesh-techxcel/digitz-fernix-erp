@@ -1237,3 +1237,42 @@ hr,
     color: var(--orange-400, #fb923c);
 }
 
+
+/* Keyboard shortcut hints on the Sales Invoice form and the Cashier Console's
+   invoice editor (si_engine.shortcuts_html) */
+.si-shortcuts {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 14px;
+	padding: 6px 10px;
+	margin-bottom: 10px;
+	border: 1px solid var(--border-color);
+	border-radius: var(--border-radius);
+	background: var(--subtle-fg);
+	color: var(--text-muted);
+	font-size: var(--text-xs);
+}
+.si-shortcuts-title {
+	font-weight: 600;
+	color: var(--text-color);
+}
+.si-shortcut {
+	white-space: nowrap;
+}
+.si-shortcut kbd {
+	display: inline-block;
+	padding: 1px 5px;
+	border: 1px solid var(--border-color);
+	border-bottom-width: 2px;
+	border-radius: 4px;
+	background: var(--card-bg);
+	color: var(--text-color);
+	font-family: inherit;
+	font-size: 11px;
+	line-height: 1.3;
+	box-shadow: none;
+}
+@media (max-width: 767px) {
+	.si-shortcuts { display: none; }
+}

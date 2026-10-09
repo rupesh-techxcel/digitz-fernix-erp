@@ -148,6 +148,11 @@ frappe.provide("digitz_erp");
 				page: this.page,
 				ignore_inputs: true,
 			});
+			// Ctrl+P prints the open invoice (saving it first), not the page
+			E().on_ctrl_p({
+				applies: () => frappe.get_route()[0] === ROUTE[0] && this.is_visible() && !!this.active_editor(),
+				print: () => this.active_editor().print_direct("invoice"),
+			});
 			frappe.ui.keys.add_shortcut({
 				shortcut: "ctrl+s",
 				action: () => {
@@ -449,7 +454,7 @@ frappe.provide("digitz_erp");
 					<div class="ci-list-bar">
 						<div class="ci-search">
 							${frappe.utils.icon("search", "sm")}
-							<input type="search" class="form-control" placeholder="${__("Search invoice no, customer, mobile or token")}" aria-label="${__("Search invoices")}">
+							<input type="search" class="form-control" placeholder="${__("Search invoice no, customer, company, mobile or token")}" aria-label="${__("Search invoices")}">
 						</div>
 						<select class="form-control ci-range" aria-label="${__("Period")}">
 							${[["today", __("Today")], ["week", __("This Week")], ["month", __("This Month")], ["30", __("Last 30 Days")], ["all", __("All")]]
@@ -520,11 +525,11 @@ frappe.provide("digitz_erp");
 					args: {
 						doctype: DOCTYPE,
 						fields: ["name", "posting_date", "posting_time", "customer", "customer_name", "customer_display_name",
-							"customer_mobile_number", "customer_token", "medical_service", "credit_sale", "payment_mode",
+							"customer_company", "customer_mobile_number", "customer_token", "medical_service", "credit_sale", "payment_mode",
 							"payment_status", "rounded_total", "docstatus"],
 						filters: this.filters(),
 						or_filters: this.search
-							? ["name", "customer", "customer_display_name", "customer_mobile_number", "customer_token"].map((f) => [DOCTYPE, f, "like", like])
+							? ["name", "customer", "customer_display_name", "customer_company", "customer_mobile_number", "customer_token"].map((f) => [DOCTYPE, f, "like", like])
 							: [],
 						order_by: "posting_date desc, posting_time desc, creation desc",
 						limit_start: start,
@@ -578,7 +583,8 @@ frappe.provide("digitz_erp");
 								<td class="ci-strong ci-nowrap"><span class="ci-open-mark" title="${__("Open in a tab")}"></span>${esc(row.name)}</td>
 								<td class="ci-nowrap">${frappe.datetime.str_to_user(row.posting_date)} <span class="text-muted">${time(row)}</span></td>
 								<td><div class="ci-ellipsis">${esc(row.customer_display_name || row.customer_name || row.customer)}</div>
-									${row.customer_display_name && row.customer_display_name !== row.customer ? `<div class="ci-sub ci-ellipsis">${esc(row.customer)}</div>` : ""}</td>
+									${row.customer_display_name && row.customer_display_name !== row.customer ? `<div class="ci-sub ci-ellipsis">${esc(row.customer)}</div>` : ""}
+									${row.customer_company && row.customer_company !== row.customer ? `<div class="ci-sub ci-ellipsis">${esc(row.customer_company)}</div>` : ""}</td>
 								<td class="ci-nowrap">${esc(row.customer_mobile_number)}</td>
 								<td><div class="ci-ellipsis">${esc(row.customer_token)}</div><div class="ci-sub ci-ellipsis">${esc(row.medical_service)}</div></td>
 								<td>${row.credit_sale ? `<span class="ci-tag ci-tag-credit">${__("Credit")}</span>` : `<span class="ci-tag">${esc(row.payment_mode || row.payment_status || __("Cash"))}</span>`}</td>
@@ -686,6 +692,7 @@ frappe.provide("digitz_erp");
 						</div>
 						<div class="ci-actions"></div>
 					</header>
+					<div class="ci-shortcuts-slot"></div>
 					<div class="ci-layout">
 						<div class="ci-main">
 							<section class="ci-card ci-card-customer">
@@ -941,13 +948,16 @@ frappe.provide("digitz_erp");
 			// A submitted credit sale not yet fully paid: take the payment here
 			// (public/js/cashier_receipts.js), as a Receipt Entry
 			this.can_record_payment() && buttons.push(btn("record-payment", __("Record Payment"), "btn-primary"));
-			if (saved) {
-				// One Print menu. Print sends the PDF straight to the printer (no dialog
-				// where Chrome runs with --kiosk-printing); Preview shows it in a popup.
+			// One Print menu. Print sends the PDF straight to the printer (no dialog
+			// where Chrome runs with --kiosk-printing); Preview shows it in a popup.
+			// Both save the invoice first when it has unsaved changes, so it is also
+			// offered on a new or edited invoice that has items.
+			const can_print = saved || (this.is_editable() && (doc.items || []).some((r) => r.item));
+			if (can_print) {
 				// A receipt exists for a cash sale, and for a credit sale once a receipt
 				// has paid it, so its two entries show only then.
 				const has_receipt = !cint(doc.credit_sale) || !!doc.allocated_receipt_entry;
-				!this.dirty && buttons.push(`
+				buttons.push(`
 					<div class="btn-group">
 						<button type="button" class="btn btn-sm btn-default dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
 							${frappe.utils.icon("printer", "sm")}<span>${__("Print")}</span>
@@ -960,7 +970,8 @@ frappe.provide("digitz_erp");
 								${item("preview-receipt", __("Preview Receipt"))}` : ""}
 						</ul>
 					</div>`);
-
+			}
+			if (saved) {
 				doc.docstatus === 1 && menu.push(item("cancel", __("Cancel")));
 				doc.docstatus === 2 && menu.push(item("amend", __("Amend")));
 				doc.docstatus === 0 && menu.push(item("delete", __("Delete")));
@@ -980,6 +991,12 @@ frappe.provide("digitz_erp");
 					</div>`);
 			}
 			this.$el.find(".ci-actions").html(buttons.join(""));
+
+			const shortcuts = [["Alt+N", __("New Invoice")]];
+			this.is_editable() && shortcuts.push(["Ctrl+S", __("Save")], ["Alt+P", __("Payment")]);
+			can_print && shortcuts.push(["Ctrl+P", __("Print Invoice")]);
+			shortcuts.push(["?", __("All Shortcuts")]);
+			this.$el.find(".ci-shortcuts-slot").html(E().shortcuts_html(shortcuts));
 		}
 
 		// Visibility and read-only state, which depend on the document
@@ -1943,9 +1960,11 @@ frappe.provide("digitz_erp");
 
 		// Regenerate the Invoice / Receipt PDFs. The index in this.pdfs of the
 		// Invoice PDF (or of the Receipt PDF, for `kind` "receipt"), or -1.
-		async generate_pdfs(kind = "invoice") {
+		// `fresh`: a save has just regenerated them (before_save), so they are only
+		// looked up.
+		async generate_pdfs(kind = "invoice", fresh = false) {
 			try {
-				await frappe.call({
+				fresh || await frappe.call({
 					method: "digitz_erp.selling.doctype.sales_invoice.sales_invoice.print_sales_invoice_pdf",
 					args: { docname: this.doc.name },
 					freeze: true,
@@ -1967,9 +1986,24 @@ frappe.provide("digitz_erp");
 			return kind === "receipt" ? index : Math.max(0, index);
 		}
 
-		// Preview: regenerate, then show the Invoice (or Receipt) PDF in a popup
+		// Save before a print or preview when there are unsaved changes, so the PDF
+		// shows what is stored. true: saved now; false: nothing to save; null: the
+		// save did not go through (its message is shown), so do not print.
+		async save_for_print() {
+			if (!this.is_editable() || (!this.dirty && !this.doc.__islocal)) {
+				return false;
+			}
+			await this.save("Save");
+			return this.dirty || this.doc.__islocal ? null : true;
+		}
+
+		// Preview: save if needed, regenerate, then show the Invoice (or Receipt) PDF in a popup
 		async preview_pdf(kind = "invoice") {
-			const index = await this.generate_pdfs(kind);
+			const fresh = await this.save_for_print();
+			if (fresh === null) {
+				return;
+			}
+			const index = await this.generate_pdfs(kind, fresh);
 			index >= 0 && this.show_pdf(index);
 		}
 
@@ -1979,30 +2013,16 @@ frappe.provide("digitz_erp");
 		// a counter PC whose Chrome runs with --kiosk-printing, the usual print
 		// dialog anywhere else.
 		async print_direct(kind = "invoice") {
-			const index = await this.generate_pdfs(kind);
+			const fresh = await this.save_for_print();
+			if (fresh === null) {
+				return;
+			}
+			const index = await this.generate_pdfs(kind, fresh);
 			if (index < 0) {
 				return;
 			}
 			const pdf = this.pdfs[index];
-			$(".ci-print-frame").remove();
-			const frame = $(`<iframe class="ci-print-frame" title="${esc(pdf.label)}"
-				style="position: fixed; right: 0; bottom: 0; width: 1px; height: 1px; border: 0; opacity: 0;"></iframe>`)
-				.appendTo(document.body)[0];
-			frame.onload = () => {
-				// The PDF viewer needs a moment after load before it can print
-				setTimeout(() => {
-					try {
-						frame.contentWindow.focus();
-						frame.contentWindow.print();
-						frappe.show_alert({ message: __("Sent {0} to the printer", [pdf.label]), indicator: "green" });
-					} catch (e) {
-						this.show_pdf(index);
-					}
-					// Removed later, not now: printing reads from it
-					setTimeout(() => frame.remove(), 60000);
-				}, 600);
-			};
-			frame.src = `${encodeURI(pdf.file_url)}?v=${Date.now()}`;
+			E().print_pdf(pdf.file_url, pdf.label, () => this.show_pdf(index));
 		}
 
 		// The invoice's PDFs in a popup: switch between Invoice and Receipt, print

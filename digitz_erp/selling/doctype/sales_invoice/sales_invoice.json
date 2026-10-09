@@ -749,7 +749,8 @@
   {
    "fieldname": "customer_token",
    "fieldtype": "Data",
-   "label": "Customer Token"
+   "label": "Customer Token",
+   "in_standard_filter": 1
   },
   {
    "description": "The Medical Services record this invoice was raised from. Written by the Sales Invoice Board so takings can be reported by service.",
@@ -795,7 +796,8 @@
    "description": "Set from the customer. Editable only for the Default Walk-in Customer.",
    "fieldname": "customer_company",
    "fieldtype": "Data",
-   "label": "Customer Company"
+   "label": "Customer Company",
+   "in_standard_filter": 1
   },
   {
    "allow_on_submit": 1,
@@ -892,7 +894,7 @@
    "table_fieldname": "receipt_allocation"
   }
  ],
- "modified": "2026-10-08 18:30:00.000000",
+ "modified": "2026-10-09 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Sales Invoice",
@@ -916,5 +918,6 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "track_changes": 1
+ "track_changes": 1,
+ "search_fields": "customer,customer_company,customer_token"
 }

@@ -87,7 +87,9 @@ class SalesInvoice(Document):
             self.attach_print_pdfs()
 
     def attach_print_pdfs(self):
-        generate_custom_invoice_pdf(self)
+        """Attach the invoice PDF, and the receipt PDF when there is one.
+        Returns {"invoice": file_url, "receipt": file_url or None}."""
+        files = {"invoice": generate_custom_invoice_pdf(self), "receipt": None}
 
         # A cash sale is settled at the counter and gets a RECEIPT alongside the
         # invoice. A credit sale is billed now and paid later: it gets one only
@@ -95,7 +97,7 @@ class SalesInvoice(Document):
         # by ReceiptEntry.refresh_credit_invoice_prints); until then, or after that
         # receipt is cancelled, any receipt attached earlier is removed.
         if not self.credit_sale or self.allocated_receipt_entry:
-            generate_custom_invoice_pdf(
+            files["receipt"] = generate_custom_invoice_pdf(
                 self,
                 template_override="digitz_erp/templates/receipt_template.html",
                 file_suffix_override="receipt",
@@ -105,6 +107,8 @@ class SalesInvoice(Document):
                     "attached_to_doctype": self.doctype, "attached_to_name": self.name,
                     "file_name": ["like", f"{self.name}-receipt%"]}):
                 frappe.get_doc("File", name).delete(ignore_permissions=True)
+
+        return files
     def before_validate(self):
         self.company = frappe.get_last_doc("Company").name
         self.set_customer_company_and_trn()
@@ -2131,11 +2135,25 @@ def print_sales_invoice_pdf(docname):
     if not doc.items:
         frappe.throw("Items are required before printing.")
 
-    doc.attach_print_pdfs()
+    files = doc.attach_print_pdfs()
 
     return {
-        "message": "PDF generated successfully"
+        "message": "PDF generated successfully",
+        "files": files,
     }
+
+@frappe.whitelist()
+def get_print_pdf_urls(docname):
+    """The latest invoice and receipt PDFs attached to an invoice, without
+    regenerating them: a save has just done that (before_save)."""
+    frappe.get_doc("Sales Invoice", docname).check_permission("read")
+
+    files = {"invoice": None, "receipt": None}
+    for f in frappe.get_all("File", fields=["file_name", "file_url"], order_by="creation desc", limit=10,
+            filters={"attached_to_doctype": "Sales Invoice", "attached_to_name": docname, "file_name": ["like", "%.pdf"]}):
+        kind = "receipt" if "receipt" in (f.file_name or "").lower() else "invoice"
+        files[kind] = files[kind] or f.file_url
+    return files
 
 @frappe.whitelist()
 def get_customer_mobile_number_mandatory():

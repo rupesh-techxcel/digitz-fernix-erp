@@ -795,4 +795,88 @@ frappe.provide("digitz_erp.si_engine");
 			}
 		});
 	};
+
+	// ------------------------------------------------------------ printing
+
+	// Send a PDF straight to the printer: it loads in a hidden frame and the
+	// browser's print starts on it -- no dialog on a counter PC whose Chrome runs
+	// with --kiosk-printing, the usual print dialog anywhere else. `on_fail` runs
+	// if the browser will not print the frame (it then shows the PDF instead).
+	engine.print_pdf = function (file_url, label, on_fail) {
+		$(".ci-print-frame").remove();
+		const frame = $(`<iframe class="ci-print-frame" title="${frappe.utils.escape_html(label || "")}"
+			style="position: fixed; right: 0; bottom: 0; width: 1px; height: 1px; border: 0; opacity: 0;"></iframe>`)
+			.appendTo(document.body)[0];
+		frame.onload = () => {
+			// The PDF viewer needs a moment after load before it can print
+			setTimeout(() => {
+				try {
+					frame.contentWindow.focus();
+					frame.contentWindow.print();
+					frappe.show_alert({ message: __("Sent {0} to the printer", [label]), indicator: "green" });
+				} catch (e) {
+					on_fail ? on_fail() : window.open(file_url, "_blank");
+				}
+				// Removed later, not now: printing reads from it
+				setTimeout(() => frame.remove(), 60000);
+			}, 600);
+		};
+		// A new URL each time, so a regenerated PDF is never served from cache
+		frame.src = `${encodeURI(file_url)}?v=${Date.now()}`;
+	};
+
+	// The invoice's PDF links, {invoice, receipt}. `fresh` means a save has just
+	// regenerated them (Sales Invoice before_save), so they are only looked up;
+	// otherwise they are generated again, as Print always has.
+	engine.get_print_pdfs = async function (docname, fresh) {
+		const r = await frappe.call({
+			method: fresh
+				? "digitz_erp.selling.doctype.sales_invoice.sales_invoice.get_print_pdf_urls"
+				: "digitz_erp.selling.doctype.sales_invoice.sales_invoice.print_sales_invoice_pdf",
+			args: { docname },
+			freeze: true,
+			freeze_message: __("Generating PDF..."),
+		});
+		return (fresh ? r.message : r.message && r.message.files) || {};
+	};
+
+	// ------------------------------------------------------------ Ctrl+P
+
+	// Ctrl+P on a Sales Invoice prints the invoice PDF instead of opening
+	// Frappe's print view (or the browser's print of the page). Screens register
+	// {applies(), print()}; the first that applies takes the key. Caught in the
+	// capture phase, before the desk's own Ctrl+P handler sees it.
+	engine.ctrl_p_handlers = [];
+	engine.on_ctrl_p = function (handler) {
+		engine.ctrl_p_handlers.push(handler);
+	};
+	if (!engine.ctrl_p_bound) {
+		engine.ctrl_p_bound = true;
+		document.addEventListener("keydown", (e) => {
+			if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || (e.key || "").toLowerCase() !== "p") {
+				return;
+			}
+			const handler = engine.ctrl_p_handlers.find((h) => h.applies());
+			if (!handler) {
+				return;
+			}
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			e.repeat || handler.print();
+		}, true);
+	}
+
+	// ------------------------------------------------------------ shortcuts strip
+
+	// A row of key hints, e.g. [["Ctrl+S", "Save"], ["Ctrl+P", "Print Invoice"]]
+	engine.shortcuts_html = function (shortcuts) {
+		const esc = (v) => frappe.utils.escape_html(v == null ? "" : String(v));
+		const is_mac = /Mac/i.test(navigator.platform || "");
+		return `<div class="si-shortcuts" aria-label="${__("Keyboard shortcuts")}">
+			<span class="si-shortcuts-title">${__("Shortcuts")}</span>
+			${shortcuts.map(([keys, label]) => `
+				<span class="si-shortcut">${keys.split("+").map((k) =>
+					`<kbd>${esc(is_mac && k === "Ctrl" ? "⌘" : k)}</kbd>`).join("+")} ${esc(label)}</span>`).join("")}
+		</div>`;
+	};
 })(digitz_erp.si_engine);

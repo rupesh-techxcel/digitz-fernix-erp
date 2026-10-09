@@ -1,7 +1,7 @@
 // Sales Invoice Board
 //
-// Displays the draft (unsubmitted) Sales Invoices raised from medical tokens,
-// newest first. Submitting an invoice drops it off the board, so this doubles
+// Displays today's draft (unsubmitted) Sales Invoices raised from medical tokens,
+// newest first, with a search by invoice number, customer, company or token. Submitting an invoice drops it off the board, so this doubles
 // as the cashier's work queue.
 //
 // Token fetching, customer creation and invoice creation all live on the server
@@ -62,6 +62,12 @@ digitz_erp.SalesInvoiceBoard = class SalesInvoiceBoard {
 	setup_page() {
 		this.page.set_primary_action(__("Sync Now"), () => this.sync_now(), "refresh");
 		this.page.set_secondary_action(__("Reload"), () => this.refresh());
+		this.search_field = this.page.add_field({
+			fieldtype: "Data",
+			fieldname: "search",
+			placeholder: __("Search invoice no, customer, company or token"),
+			change: frappe.utils.debounce(() => this.refresh(), 300),
+		});
 
 		this.$wrapper.find(".layout-main-section").html(`
 			<div class="post-table-wrapper">
@@ -130,10 +136,10 @@ digitz_erp.SalesInvoiceBoard = class SalesInvoiceBoard {
 
 		frappe.call({
 			method: "digitz_erp.api.token_sync.get_board_invoices",
-			args: { limit: 100 },
+			args: { limit: 100, search: this.search_field.get_value() || "" },
 			callback: (r) => {
 				this.render(r.message || []);
-				this.set_status(__("Updated {0}", [frappe.datetime.now_time()]));
+				this.set_status(__("{0} pending today · Updated {1}", [(r.message || []).length, frappe.datetime.now_time()]));
 			},
 			error: () => {
 				this.set_status(__("Could not refresh. Retrying shortly."));
@@ -154,7 +160,7 @@ digitz_erp.SalesInvoiceBoard = class SalesInvoiceBoard {
 
 	render(invoices) {
 		if (!invoices.length) {
-			this.$container.html(`<p class="text-muted">${__("No pending invoices.")}</p>`);
+			this.$container.html(`<p class="text-muted">${__("No pending invoices today.")}</p>`);
 			return;
 		}
 
@@ -167,7 +173,9 @@ digitz_erp.SalesInvoiceBoard = class SalesInvoiceBoard {
 				(invoice) => `
 				<tr>
 					<td>${esc(invoice.name)}</td>
-					<td>${esc(invoice.customer || "")}</td>
+					<td>${esc(invoice.customer_display_name || invoice.customer || "")}
+						${invoice.customer_company && invoice.customer_company !== invoice.customer
+							? `<div class="text-muted small">${esc(invoice.customer_company)}</div>` : ""}</td>
 					<td>${esc(invoice.medical_service || "")}</td>
 					<td>${frappe.datetime.str_to_user(invoice.posting_date)}</td>
 					<td>${esc(invoice.customer_token || "")}</td>

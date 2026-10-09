@@ -15,6 +15,8 @@ frappe.ui.form.on('Sales Invoice', {
 	},
 	 refresh: function (frm) {
 		 create_custom_buttons(frm);
+		 add_print_buttons(frm);
+		 show_shortcuts(frm);
 
 		//  if (frm.doc.docstatus === 0 && (!frm.doc.quotation && !frm.doc.sales_order)) 
 	
@@ -51,6 +53,8 @@ frappe.ui.form.on('Sales Invoice', {
 
 	 },
 	 setup: function (frm) {
+
+		register_ctrl_p();
 
 		frm.add_fetch('customer', 'full_address', 'customer_address')
 		frm.add_fetch('customer', 'salesman', 'salesman')
@@ -1214,4 +1218,79 @@ function apply_customer_billing_details(frm, set_values) {
 // works Balance out again on save.
 function set_cash_balance(frm) {
 	digitz_erp.si_engine.set_cash_balance(frm.doc, (fieldname, value) => frm.set_value(fieldname, value));
+}
+
+// ------------------------------------------------------------ printing
+
+// Print Invoice / Print Receipt under the Print group. Both save the invoice
+// first when it has unsaved changes, so the printout is always what is stored.
+function add_print_buttons(frm) {
+	if (frm.doc.for_advance_payment) {
+		return;
+	}
+	frm.add_custom_button(__("Print Invoice"), () => print_sales_invoice(frm, "invoice"), __("Print"));
+	// A receipt exists for a cash sale, and for a credit sale once a receipt has paid it
+	if (!frm.is_new() && (!frm.doc.credit_sale || frm.doc.allocated_receipt_entry)) {
+		frm.add_custom_button(__("Print Receipt"), () => print_sales_invoice(frm, "receipt"), __("Print"));
+	}
+}
+
+async function print_sales_invoice(frm, kind = "invoice") {
+	if (!(frm.doc.items || []).some((row) => row.item)) {
+		frappe.msgprint(__("Items are required before printing."));
+		return;
+	}
+
+	// Save first. Saving a draft regenerates its PDFs (before_save), so they are
+	// then only looked up rather than generated a second time.
+	let fresh = false;
+	if (frm.is_new() || frm.is_dirty()) {
+		try {
+			await frm.save(frm.doc.docstatus === 1 ? "Update" : "Save");
+		} catch (e) {
+			return; // the save's own message is already shown
+		}
+		if (frm.is_dirty()) {
+			return; // validation stopped the save
+		}
+		fresh = frm.doc.docstatus === 0;
+	}
+
+	const files = await digitz_erp.si_engine.get_print_pdfs(frm.doc.name, fresh);
+	const url = files[kind];
+	if (!url) {
+		frappe.msgprint(kind === "receipt" ? __("This invoice has no receipt yet.") : __("The PDF was not found. Try again."));
+		return;
+	}
+	digitz_erp.si_engine.print_pdf(url, kind === "receipt" ? __("Receipt PDF") : __("Invoice PDF"));
+	frm.reload_doc();
+}
+
+// Ctrl+P on the Sales Invoice form prints the invoice PDF (saving first), not
+// Frappe's print view. Registered once; it only applies while this form is on screen.
+function register_ctrl_p() {
+	if (digitz_erp.si_form_ctrl_p) {
+		return;
+	}
+	digitz_erp.si_form_ctrl_p = true;
+	digitz_erp.si_engine.on_ctrl_p({
+		applies: () => {
+			const route = frappe.get_route();
+			return route[0] === "Form" && route[1] === "Sales Invoice"
+				&& cur_frm && cur_frm.doctype === "Sales Invoice" && !cur_frm.doc.for_advance_payment
+				&& cur_frm.page.wrapper.is(":visible");
+		},
+		print: () => print_sales_invoice(cur_frm, "invoice"),
+	});
+}
+
+// The form's keyboard shortcuts, as a strip above the fields
+function show_shortcuts(frm) {
+	frm.layout.wrapper.find(".si-shortcuts").remove();
+	const shortcuts = [];
+	frm.doc.docstatus === 0 && shortcuts.push(["Ctrl+S", __("Save / Submit")]);
+	frm.doc.for_advance_payment || shortcuts.push(["Ctrl+P", __("Print Invoice")]);
+	frm.is_new() || shortcuts.push(["Ctrl+B", __("New Sales Invoice")]);
+	shortcuts.push(["Ctrl+G", __("Search")], ["?", __("All Shortcuts")]);
+	frm.layout.wrapper.prepend(digitz_erp.si_engine.shortcuts_html(shortcuts));
 }

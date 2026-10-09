@@ -352,8 +352,10 @@
   <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
     <tr>
       <td style="vertical-align: top; text-align: left; line-height: 1.8;">
-        <div><strong>Prepared By:</strong> {{ frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user }}</div>
-        <div><strong>Time:</strong> {{ frappe.utils.now_datetime().strftime("%d-%m-%Y %I:%M %p") }}</div>
+        {# The invoice's owner: whoever saved or submitted it last (SalesInvoice.take_ownership),
+           so a reprint by someone else still names the cashier who billed it #}
+        <div><strong>Billed By</strong> <span style="direction: rtl;">أصدرت بواسطة</span>: {{ frappe.db.get_value("User", doc.owner, "full_name") or doc.owner }}</div>
+        <div><strong>Printed On:</strong> {{ frappe.utils.now_datetime().strftime("%d-%m-%Y %I:%M %p") }}</div>
       </td>
     </tr>
   </table>

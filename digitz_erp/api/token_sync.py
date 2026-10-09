@@ -1291,9 +1291,10 @@ def notify_invoices_created(invoices):
 
 
 @frappe.whitelist()
-def get_board_invoices(limit=100):
-	"""Draft invoices for the Sales Invoice Board -- the whole counter's, not
-	just the caller's.
+def get_board_invoices(limit=100, search=None):
+	"""Today's draft invoices for the Sales Invoice Board -- the whole counter's,
+	not just the caller's. `search` matches the invoice number, customer, the
+	customer's company or the token number.
 
 	`get_all` rather than `get_list` on purpose: it is the same query builder
 	with `ignore_permissions=True`, which skips the `permission_query_conditions`
@@ -1310,11 +1311,22 @@ def get_board_invoices(limit=100):
 	"""
 	frappe.only_for(("System Manager", "Cashier", "Cashier Approver"))
 
+	search = (search or "").strip()
+	or_filters = None
+	if search:
+		like = f"%{search}%"
+		or_filters = [[f, "like", like] for f in
+			("name", "customer", "customer_display_name", "customer_company", "customer_token")]
+
 	return frappe.get_all(
 		"Sales Invoice",
-		fields=["name", "customer", "customer_token", "medical_service", "posting_date", "rounded_total"],
-		# Drafts only. The board is the queue of invoices still to be taken.
-		filters={"docstatus": 0},
+		fields=["name", "customer", "customer_display_name", "customer_company", "customer_token",
+			"medical_service", "posting_date", "rounded_total"],
+		# Today's drafts only. The board is the queue of invoices still to be
+		# taken, and a cashier bills today's invoices only
+		# (counter_session_api.restrict_cashier_to_today).
+		filters={"docstatus": 0, "posting_date": today()},
+		or_filters=or_filters,
 		order_by="creation desc",
 		limit_page_length=cint(limit) or 100,
 	)

@@ -1,8 +1,9 @@
 // Cashier Console: Sales Invoice Board.
 //
-// The console's Board tab: the draft (unsubmitted) Sales Invoices raised from
+// The console's Board tab: today's draft (unsubmitted) Sales Invoices raised from
 // medical tokens, newest first, for the whole counter. Submitting an invoice
-// drops it off the board, so this is the cashier's work queue.
+// drops it off the board, so this is the cashier's work queue. The search box
+// finds one by invoice number, customer, company or token number.
 //
 // The standalone Sales Invoice Board page (digitz_erp/page/sales_invoice_board)
 // does the same and now sends console users here. Token fetching, customer
@@ -22,13 +23,15 @@ digitz_erp.CashierBoard = class CashierBoard {
 	static FALLBACK_INTERVAL_MS = 60000;
 	static LIMIT = 100;
 
-	// `on_count(n)` gets the number of today's drafts on the board after each
-	// refresh (the console's tab badge): older drafts stay listed, but a cashier
-	// cannot bill them (counter_session_api.restrict_cashier_to_today)
+	// `on_count(n)` gets the number of today's drafts after each refresh (the
+	// console's tab badge). Only today's are listed: a cashier cannot bill older
+	// ones (counter_session_api.restrict_cashier_to_today).
 	constructor($parent, opts = {}) {
 		this.on_count = opts.on_count;
 		this.running = false;
 		this.fetching = false;
+		this.search = "";
+		this.search_later = frappe.utils.debounce(() => this.refresh(), 300);
 		this.realtime_handler = () => this.refresh();
 
 		this.make($parent);
@@ -39,6 +42,10 @@ digitz_erp.CashierBoard = class CashierBoard {
 		this.$el = $(`
 			<div class="ci-list cb-board">
 				<div class="ci-list-bar">
+					<div class="ci-search">
+						${frappe.utils.icon("search", "sm")}
+						<input type="search" class="form-control" placeholder="${__("Search invoice no, customer, company or token")}" aria-label="${__("Search the board")}">
+					</div>
 					<button type="button" class="btn btn-primary btn-sm cb-sync">
 						${frappe.utils.icon("refresh", "sm")} ${__("Sync Now")}
 					</button>
@@ -57,6 +64,10 @@ digitz_erp.CashierBoard = class CashierBoard {
 	bind_events() {
 		this.$el.on("click", ".cb-sync", () => this.sync_now());
 		this.$el.on("click", ".cb-reload", () => this.refresh());
+		this.$el.on("input", ".ci-search input", (e) => {
+			this.search = e.currentTarget.value.trim();
+			this.search_later();
+		});
 
 		const open = (e) => {
 			e.stopPropagation();
@@ -102,8 +113,10 @@ digitz_erp.CashierBoard = class CashierBoard {
 	}
 
 	refresh() {
-		// Guard against a realtime burst and the fallback timer overlapping.
+		// Guard against a realtime burst and the fallback timer overlapping. A
+		// search typed meanwhile runs once the current fetch is back.
 		if (this.fetching) {
+			this.pending = true;
 			return;
 		}
 
@@ -112,16 +125,15 @@ digitz_erp.CashierBoard = class CashierBoard {
 
 		frappe.call({
 			method: "digitz_erp.api.token_sync.get_board_invoices",
-			args: { limit: digitz_erp.CashierBoard.LIMIT },
+			args: { limit: digitz_erp.CashierBoard.LIMIT, search: this.search },
 			callback: (r) => {
 				const invoices = r.message || [];
-				const today = frappe.datetime.get_today();
-				const today_count = invoices.filter((inv) => inv.posting_date === today).length;
 				this.render(invoices);
-				this.on_count && this.on_count(today_count);
-				this.set_status(today_count === invoices.length
-					? __("{0} pending · Updated {1}", [invoices.length, frappe.datetime.now_time()])
-					: __("{0} pending today ({1} in all) · Updated {2}", [today_count, invoices.length, frappe.datetime.now_time()]));
+				// The badge counts the whole queue, not a search's matches
+				this.search || (this.on_count && this.on_count(invoices.length));
+				this.set_status(this.search
+					? __("{0} matching today · Updated {1}", [invoices.length, frappe.datetime.now_time()])
+					: __("{0} pending today · Updated {1}", [invoices.length, frappe.datetime.now_time()]));
 			},
 			error: () => {
 				this.set_status(__("Could not refresh. Retrying shortly."));
@@ -129,6 +141,10 @@ digitz_erp.CashierBoard = class CashierBoard {
 			always: () => {
 				this.fetching = false;
 				this.$parent.removeClass("is-loading");
+				if (this.pending) {
+					this.pending = false;
+					this.refresh();
+				}
 			},
 		});
 	}
@@ -143,7 +159,9 @@ digitz_erp.CashierBoard = class CashierBoard {
 
 	render(invoices) {
 		if (!invoices.length) {
-			this.$table.html(`<div class="ci-empty-list"><p>${__("No pending invoices.")}</p></div>`);
+			this.$table.html(`<div class="ci-empty-list"><p>${this.search
+				? __("No invoice today matches your search.")
+				: __("No pending invoices today.")}</p></div>`);
 			return;
 		}
 
@@ -166,7 +184,9 @@ digitz_erp.CashierBoard = class CashierBoard {
 					<tbody>${invoices.map((invoice) => `
 						<tr data-name="${esc(invoice.name)}" tabindex="0">
 							<td class="ci-strong ci-nowrap">${esc(invoice.name)}</td>
-							<td><div class="ci-ellipsis">${esc(invoice.customer)}</div></td>
+							<td><div class="ci-ellipsis">${esc(invoice.customer_display_name || invoice.customer)}</div>
+								${invoice.customer_company && invoice.customer_company !== invoice.customer
+									? `<div class="ci-sub ci-ellipsis">${esc(invoice.customer_company)}</div>` : ""}</td>
 							<td><div class="ci-ellipsis">${esc(invoice.medical_service)}</div></td>
 							<td class="ci-nowrap">${frappe.datetime.str_to_user(invoice.posting_date)}</td>
 							<td class="ci-nowrap">${esc(invoice.customer_token)}</td>
