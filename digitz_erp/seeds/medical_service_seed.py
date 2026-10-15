@@ -13,72 +13,59 @@ triggers it.
 		--kwargs "{'dry_run': 1}"
 
 The rows are held in SERVICES below rather than read from a spreadsheet, so
-this runs on a server that has no copy of the file. They were taken from
-"Service List_Altaj_31-08-2026.xlsx", one tuple per service:
+this runs on a server that has no copy of the file. They were taken from the
+"Services" sheet of "CJM - Final One 13.10.2026.xlsx", one tuple per row:
 
-	(title, display_name, (item_code, ...))
+	(service_with_code, item_code)
 
-title is also the record name -- Medical Services is autonamed `field:title`.
-Rows in the sheet that shared a Service Name are already merged here into one
-entry with several item codes.
+"Service with Code" fills both `title` and `display_name`; title is also the
+record name -- Medical Services is autonamed `field:title`. The text is kept
+exactly as the sheet has it (ends trimmed only), because token_sync matches the
+service name a token carries against these fields as-is. "STOCK ID" is the one
+Service Items child row each service gets.
 
 The child row is priced from the linked Item -- see child_row() for the
-arithmetic.
+arithmetic. It is a snapshot: token_sync reprices from the price list or Item.
 
-Run item_seed first: every entry links to an Item that must already exist.
+Run clean_start_seed first: it loads the Items these rows link to, and clears
+the Medical Services this replaces.
 Re-running is safe: an existing title is skipped, never rewritten.
 """
 
 import frappe
 from frappe.utils import cint, flt
 
-# (title, display_name, (item_code, ...))
+# (service_with_code, item_code)
 SERVICES = (
-	('MED-C-M-001', 'MEDICAL-CAT-C-Male-New', ('M03',)),
-	('MED-C-M-004', 'MEDICAL-CAT-C-Male-Renew-Pre-typed', ('M03',)),
-	('MED-C-F-003', 'MEDICAL-CAT-C-Female-Renew', ('M03',)),
-	('MED-A-F-005', 'MEDICAL-CAT-A-Female-Renew', ('M01',)),
-	('MED-B-M-002', 'MEDICAL-CAT-B-Male-New-Pre-typed', ('M02',)),
-	('EID-R-003', 'RENEW-3YEARS', ('M06',)),
-	('MED-B-F-002', 'MEDICAL-CAT-BP-Female-New-Pre-typed', ('M06',)),
-	('MED-A-M-003', 'MEDICAL-CAT-A-Male-Renew-without-X-ray', ('M06',)),
-	('MED-A-F-001', 'MEDICAL-CAT-A-Female-New', ('M06',)),
-	('EID-R-002', 'RENEW-2YEARS', ('M06',)),
-	('DXB', 'DXB', ('M06',)),
-	('MED-A-M-005', 'MEDICAL-CAT-A-Male-Renew-X-ray', ('M06',)),
-	('TAWJEEH', 'TAWJEEH-SERVICE', ('M06',)),
-	('EID-N-002', 'NEW-2YEARS', ('M06',)),
-	('MED-C-F-001', 'MEDICAL-CAT-C-Female-New', ('M06',)),
-	('VISIT VISA', 'VISIT VISA', ('M06',)),
-	('MED-A-F-002', 'MEDICAL-CAT-A-Female-New-without-X-ray', ('M06',)),
-	('MED-A-F-006', 'MEDICAL-CAT-A-Female-Renew-Pre-typed', ('M06',)),
-	('EID-R-001', 'RENEW-1YEAR', ('M06',)),
-	('MED-B-M-003', 'MEDICAL-CAT-B-Male-Renew', ('M06',)),
-	('AOE', 'AOE', ('M06',)),
-	('MED-A-M-002', 'MEDICAL-CAT-A-Male-New-Pre-typed', ('M06',)),
-	('MED-C-M-002', 'MEDICAL-CAT-C-Male-New-Pre-typed', ('M06',)),
-	('EID-R-004', 'RENEW-5YEARS', ('M06',)),
-	('MED-B-M-004', 'MEDICAL-CAT-B-Male-Renew-Pre-typed', ('M06',)),
-	('CHANGE STATUS', 'CHANGE STATUS', ('M06',)),
-	('MED-B-F-001', 'MEDICAL-CAT-BP-Female-New', ('M06',)),
-	('ENTRY PERMIT', 'ENTRY PERMIT', ('M06',)),
-	('EID-N-005', 'NEW-10YEARS', ('M06',)),
-	('MED-C-M-003', 'MEDICAL-CAT-C-Male-Renew', ('M06',)),
-	('EID-N-003', 'NEW-3YEARS', ('M06',)),
-	('MED-B-M-001', 'MEDICAL-CAT-B-Male-New', ('M06',)),
-	('MED-BP-F-001', 'MED-BP-Female Pregnant', ('M06',)),
-	('MED-B-F-003', 'MEDICAL-CAT-BP-Female-Renew', ('M06',)),
-	('EID-N-001', 'NEW-1YEAR', ('M06',)),
-	('MED-A-M-001', 'MEDICAL-CAT-A-Male-New', ('M06',)),
-	('MED-A-F-004', 'MEDICAL-CAT-A-Female-New-Pre-typed-without-X-ray', ('M06',)),
-	('MED-A-F-003', 'MEDICAL-CAT-A-Female-New-Pre-typed', ('M06',)),
-	('EID-N-004', 'NEW-5YEARS', ('M06',)),
-	('HEALTH CARD', 'HEALTH CARD', ('M06',)),
-	('MED-A-M-004', 'MEDICAL-CAT-A-Male-Renew-Pre-typed', ('M06',)),
-	('EID-R-005', 'RENEW-10YEARS', ('M06',)),
-	('MED-B-F-004', 'MEDICAL-CAT-BP-Female-Renew-Pre-typed', ('M06',)),
-	('MED-C-F-004', 'MEDICAL-CAT-C-Female-Renew-Pre-typed', ('M06',)),
-	('MED-C-F-002', 'MEDICAL-CAT-C-Female-New-Pre-typed', ('M06',)),
+	('100-Medical Pre-Typed Female New', 'M08'),
+	('101-Medical Pre-Typed Female Renew', 'M08'),
+	('102-Medical Pre-Typed Male New', 'M08'),
+	('103-Medical Pre-Typed Male Renew', 'M08'),
+	('104-Medical A Typing Female New', 'M01'),
+	('105-Medical A Typing Female Renew', 'M01'),
+	('106-Medical A Typing Male New', 'M01'),
+	('107-Medical A Typing Male Renew', 'M01'),
+	('108-Medical B Typing  Male New', 'M02'),
+	('109-Medical B Typing Female New', 'M02'),
+	('110-Medical B Typing Female Renew', 'M02'),
+	('111-Medical B Typing Male Renew', 'M02'),
+	('112-Medical C Typing Female New', 'M03'),
+	('113-Medical C Typing Female Renew', 'M03'),
+	('114-Medical C Typing Male New', 'M02'),
+	('115-Medical C Typing Male Renew', 'M02'),
+	('116-Embassy Medical Pre-Typed', 'EMBASSY02'),
+	('117-Embassy Medical Typing', 'EMBASSY01'),
+	('118-Pre Employment Pre-Typed', 'M42'),
+	('119-Pre Employment Typing', 'M41'),
+	('120-EID 1 Year - DXB', 'EID01'),
+	('121-EID 10 Years - DXB', 'EID05'),
+	('122-EID 2 Years - DXB', 'EID02'),
+	('123-EID 5 Years - DXB', 'EID03'),
+	('124-EID Replacement -DXB', 'EID13'),
+	('125-EID Modification - DXB', 'MOD1'),
+	('Medical Group Female', 'M08'),
+	('Medical Group Male', 'M08'),
+	('Other Group Services', 'VISA18'),
 )
 
 
@@ -91,11 +78,9 @@ def run(dry_run=0):
 
 	created, existing, problems = [], [], []
 
-	for position, (title, display_name, item_codes) in enumerate(SERVICES, start=1):
-		missing = [code for code in item_codes if not frappe.db.exists("Item", code)]
-
-		if missing:
-			problems.append((position, title, f"Item(s) not found: {', '.join(missing)}"))
+	for position, (title, item_code) in enumerate(SERVICES, start=1):
+		if not frappe.db.exists("Item", item_code):
+			problems.append((position, title, f"Item not found: {item_code}"))
 			continue
 
 		if frappe.db.exists("Medical Services", title):
@@ -107,12 +92,12 @@ def run(dry_run=0):
 				{
 					"doctype": "Medical Services",
 					"title": title,
-					"display_name": display_name,
-					"services": [child_row(code) for code in item_codes],
+					"display_name": title,
+					"services": [child_row(item_code)],
 				}
 			).insert(ignore_permissions=True)
 
-		created.append((title, item_codes))
+		created.append((title, item_code))
 
 	if not dry_run:
 		frappe.db.commit()
@@ -130,8 +115,8 @@ def run(dry_run=0):
 	for title in existing:
 		print(f"    = {title} (unchanged)")
 
-	for title, codes in created:
-		print(f"    + {title}  [{', '.join(codes)}]")
+	for title, code in created:
+		print(f"    + {title}  [{code}]")
 
 	return {
 		"defined": len(SERVICES),
