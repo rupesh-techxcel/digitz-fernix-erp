@@ -9,13 +9,13 @@
  "idx": 0,
  "is_standard": "Yes",
  "letterhead": null,
- "modified": "2026-09-29 10:00:00.000000",
+ "modified": "2026-10-15 12:30:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Counter Session Summary",
  "owner": "Administrator",
  "prepared_report": 0,
- "ref_doctype": "Counter Session",
+ "ref_doctype": "Sales Invoice",
  "report_name": "Counter Session Summary",
  "report_type": "Script Report",
  "roles": [
@@ -24,6 +24,9 @@
   },
   {
    "role": "Management"
+  },
+  {
+   "role": "Cashier"
   }
  ]
 }

@@ -44,7 +44,15 @@ def get_data(filters):
 
 	A From/To range wins when both dates are given; otherwise the Today date is used.
 	"""
-	filters = filters or {}
+	filters = dict(filters or {})
+
+	# Cashier limited to own records; Administrator and System Manager are not
+	current_user = frappe.session.user
+	roles = set(frappe.get_roles(current_user))
+	is_privileged = current_user == "Administrator" or "System Manager" in roles
+
+	if "Cashier" in roles and not is_privileged:
+		filters["user"] = current_user
 
 	def where(doc, counter):
 		conditions = [f"{doc}.docstatus = 1"]

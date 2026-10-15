@@ -21,8 +21,9 @@ def get_columns():
 		{
 			"fieldname": "category",
 			"label": "Item Category",
-			"fieldtype": "Link",
-			"options": "Item Group",
+			# Data, not a Link: a Cashier cannot read Item Group, and query_report
+			# checks every Link column against the user's read rights once there are rows
+			"fieldtype": "Data",
 			"width": 300,
 		},
 		{
