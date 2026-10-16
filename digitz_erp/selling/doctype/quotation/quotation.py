@@ -371,6 +371,13 @@ def generate_sales_order(quotation):
 
 	return new_so.name
 
+def printable_mobile(doc):
+	from digitz_erp.selling.doctype.sales_invoice.sales_invoice import is_placeholder_mobile
+
+	mobile = (doc.get("customer_mobile_number") or "").strip()
+	return "" if is_placeholder_mobile(mobile) else mobile
+
+
 def pdf_file_stem(docname):
 	"""The start of a document's PDF file name: its name, made safe for a file."""
 	return str(docname).replace("/", "-").replace("\\", "-")
@@ -468,6 +475,9 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		# The amount in words in Arabic, under the English one on the invoice
 		"in_words_ar": get_arabic_amount_in_words(doc.get("rounded_total")) if doc.doctype == "Sales Invoice" else "",
 		"party_trn_no": party_trn_no,
+		# The customer's mobile, unless it is the 0000 placeholder a synced invoice
+		# can carry until the cashier enters the real one
+		"customer_mobile": printable_mobile(doc) if doc.doctype == "Sales Invoice" else "",
 		# The templates' own top padding. Header clearance now comes from the page
 		# margin below, which repeats on every page; padding only cleared page one,
 		# so the header covered the top of every page after it.

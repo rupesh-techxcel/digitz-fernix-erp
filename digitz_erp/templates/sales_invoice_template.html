@@ -132,6 +132,12 @@
       <div class="section-header">To,</div>
       <div><strong>Applicant Name</strong> <span style="direction: rtl;">اسم المتقدم</span>:
         {{ doc.customer_display_name or customer_name }}</div>
+      {% if customer_mobile %}
+      <div><strong>Mobile No</strong> <span style="direction: rtl;">رقم الهاتف</span>: {{ customer_mobile }}</div>
+      {% endif %}
+      {% if doc.customer_email %}
+      <div><strong>Email</strong> <span style="direction: rtl;">البريد الإلكتروني</span>: {{ doc.customer_email }}</div>
+      {% endif %}
       {% if doc.show_company_in_printout and doc.customer_company %}
       <div><strong>Company</strong> <span style="direction: rtl;">الشركة</span>: {{ doc.customer_company }}</div>
       {% endif %}
@@ -154,6 +160,12 @@
       <td style="font-weight: bold;">Date:</td>
       <td>{{ date }}</td>
     </tr>
+    {% if doc.customer_token %}
+    <tr>
+      <td style="font-weight: bold;">Token No <span style="direction: rtl;">رقم الدور</span>:</td>
+      <td>{{ doc.customer_token }}</td>
+    </tr>
+    {% endif %}
   </table>
 </td>
 
