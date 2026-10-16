@@ -1496,13 +1496,21 @@ frappe.provide("digitz_erp");
 
 		async on_payment_mode() {
 			const doc = this.doc;
-			const pm = doc.payment_mode ? await read_values("Payment Mode", doc.payment_mode, ["mode", "account"]) : {};
+
+			const pm = doc.payment_mode
+				? await read_values(
+					"Payment Mode",
+					doc.payment_mode,
+					["mode", "account"]
+				)
+				: {};
+
 			doc.mode = pm.mode || "";
 			doc.payment_mode_type = pm.mode || "";
 			doc.payment_account = pm.account || "";
-			if (doc.payment_mode === "Cash" || doc.payment_mode === "Card") {
-				await this.apply_charges();
-			}
+
+			// Preserve the current item charges and rates.
+			// Changing payment mode must not reload item pricing.
 			E().set_cash_balance(doc);
 		}
 
