@@ -7,3 +7,5 @@ import "./cashier_invoices.js";
 import "./cashier_board.js";
 // The console's Receipts tab: payments on credit invoices, saved as Receipt Entries
 import "./cashier_receipts.js";
+// The console's Customer Ledger tab: one customer's statement
+import "./customer_ledger.js";

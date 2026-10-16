@@ -265,18 +265,9 @@ digitz_erp.DayOpen = class DayOpen extends digitz_erp.DayOpsBase {
 	}
 };
 
-// A function, not a constant: this bundle loads before translations do.
-const day_close_movements = () => [
-	{ field: "cash_sales", label: __("Cash Sales"), sign: "+" },
-	{ field: "cash_receipts", label: __("Cash Receipts (Credit Collections)"), sign: "+" },
-	{ field: "cash_refunds", label: __("Cash Refunds"), sign: "−" },
-	{ field: "cash_paid_out", label: __("Cash Paid Out"), sign: "−" },
-];
-
 digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 	constructor(page, opts) {
 		super(page, opts, "day-close");
-		this.$approvals = $('<div class="dayops"></div>').appendTo(this.$parent);
 	}
 
 	async load() {
@@ -284,15 +275,18 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		const r = await frappe.call({ method: "digitz_erp.api.counter_session_api.get_state" });
 		this.state = r.message || {};
 
+		// A supervisor sees every counter's day side by side (render_board); a
+		// cashier counts their own till blind
+		if (this.state.is_supervisor) {
+			this.render_board();
+			return;
+		}
 		const session = this.state.session;
 		if (session && session.status === "Open") {
-			const p = await frappe.call({ method: "digitz_erp.api.counter_session_api.get_close_preview" });
-			this.preview = p.message;
 			this.render_close();
 		} else {
 			this.render_state();
 		}
-		this.render_approvals();
 	}
 
 	header(extra) {
@@ -312,7 +306,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 
 		if (s.session && s.session.status === "Closing") {
 			title = __("Waiting for supervisor approval");
-			text = __("Your count for {0} differs from the expected cash. A supervisor has to approve it before the day is closed.", [this.esc(s.session.name)]);
+			text = __("Your count for {0} is with a supervisor. They approve it before the day is closed.", [this.esc(s.session.name)]);
 			label = __("View Session");
 			action = () => frappe.set_route("Form", "Counter Session", s.session.name);
 		} else {
@@ -331,50 +325,32 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		this.$body.find(".dayops-go").on("click", action);
 	}
 
+	// A blind close, for cashiers and supervisors alike: the page asks for the
+	// count (cash, then card, bank and other modes) and never shows the day's
+	// sales or the expected cash. Supervisors check the figures afterwards.
 	render_close() {
-		const p = this.preview;
-		const docs = p.documents || {};
-
-		const movement_rows = day_close_movements().map((m) => {
-			const list = docs[m.field] || [];
-			const detail = list.map((d) => `
-				<tr class="dayops-docs" data-for="${m.field}" style="display: none;">
-					<td><a href="/app/${frappe.router.slug(d.doctype)}/${encodeURIComponent(d.name)}">${this.esc(d.name)}</a>
-						${d.posting_time ? " · " + this.esc(String(d.posting_time).slice(0, 5)) : ""}
-						${d.party ? " · " + this.esc(d.party) : ""}</td>
-					<td class="dayops-num">${this.money(d.amount)}</td>
-				</tr>`).join("");
-			return `
-				<tr class="dayops-toggle" data-toggle="${m.field}">
-					<td><span class="dayops-caret">${list.length ? "▸" : ""}</span>${m.sign} ${m.label}
-						<span class="text-muted small">(${list.length})</span></td>
-					<td class="dayops-num">${this.money(p[m.field])}</td>
-				</tr>${detail}`;
-		}).join("");
+		const session = this.state.session;
+		const modes = this.state.payment_modes || [];
 
 		this.$body.html(`${this.header(`
-				<div><div class="k">${__("Session")}</div><div class="v"><a href="/app/counter-session/${encodeURIComponent(p.name)}">${this.esc(p.name)}</a></div></div>
-				<div><div class="k">${__("Opened")}</div><div class="v">${frappe.datetime.str_to_user(p.opened_on)}</div></div>`)}
-			<div class="dayops-grid">
-				<div>
-					<div class="dayops-card">
-						<h4>${__("Cash for the Day")}</h4>
-						<table class="dayops-lines">
-							<tr><td>${__("Opening Float")}</td><td class="dayops-num">${this.money(p.opening_float)}</td></tr>
-							${movement_rows}
-							<tr><td>− ${__("Expenditure")} <span class="text-muted small">(${__("entered below")})</span></td><td class="dayops-num dayops-exp">${this.money(0)}</td></tr>
-							<tr class="total"><td>${__("Expected Cash in the Till")}</td><td class="dayops-num dayops-expected">${this.money(p.expected_cash)}</td></tr>
-						</table>
-						<p class="text-muted small" style="margin-top: 8px;">${__("Only submitted documents with a cash payment mode count. Click a line to see its documents.")}</p>
-					</div>
-				</div>
+				<div><div class="k">${__("Session")}</div><div class="v"><a href="/app/counter-session/${encodeURIComponent(session.name)}">${this.esc(session.name)}</a></div></div>
+				<div><div class="k">${__("Opened")}</div><div class="v">${frappe.datetime.str_to_user(session.opened_on)}</div></div>`)}
+			<div class="dayops-grid${modes.length ? " dayops-grid-3" : ""}">
 				<div>
 					<div class="dayops-card"><h4>${__("Count the Closing Cash")}</h4><div class="dayops-count-wrap"></div></div>
+				</div>
+				${modes.length ? `<div>
+					<div class="dayops-card">
+						<h4>${__("Card, Bank & Other Payments")}</h4>
+						<p class="text-muted small" style="margin: 0 0 8px;">${__("Enter today's total for each, from the card machine settlement or bank slips.")}</p>
+						<div class="dayops-modes"></div>
+					</div>
+				</div>` : ""}
+				<div>
 					<div class="dayops-card">
 						<h4>${__("Close")}</h4>
 						<div class="expenditure-field"></div>
 						<div class="counted-field"></div>
-						<div class="close-result"></div>
 						<div class="remarks-field"></div>
 						<button class="btn btn-primary btn-block dayops-submit" style="margin-top: 8px;">${__("Close Day")}</button>
 						<button class="btn btn-default btn-block dayops-handover" style="margin-top: 6px;">${__("Close & Hand Over")}</button>
@@ -383,23 +359,19 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				</div>
 			</div>`);
 
-		this.$body.off("click", "tr.dayops-toggle").on("click", "tr.dayops-toggle", (e) => {
-			const field = $(e.currentTarget).attr("data-toggle");
-			const $rows = this.$body.find(`tr.dayops-docs[data-for="${field}"]`);
-			if (!$rows.length) {
-				return;
-			}
-			const open = !$rows.first().is(":visible");
-			$rows.toggle(open);
-			$(e.currentTarget).find(".dayops-caret").text(open ? "▾" : "▸");
-		});
-
+		this.mode_controls = modes.map((m) => ({
+			payment_mode: m.payment_mode,
+			control: frappe.ui.form.make_control({
+				parent: this.$body.find(".dayops-modes"),
+				df: { fieldtype: "Currency", fieldname: frappe.scrub(m.payment_mode), label: m.payment_mode },
+				render_input: true,
+			}),
+		}));
 		this.expenditure = frappe.ui.form.make_control({
 			parent: this.$body.find(".expenditure-field"),
 			df: {
 				fieldtype: "Currency", fieldname: "expenditure", label: __("Expenditure"),
 				description: __("Cash paid out of the till today. Explain it in Remarks."),
-				change: () => this.update_expected(),
 			},
 			render_input: true,
 		});
@@ -408,14 +380,13 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			df: {
 				fieldtype: "Currency", fieldname: "counted_cash", label: __("Counted Cash"), reqd: 1,
 				description: __("Filled from the count, or type the total."),
-				change: () => this.show_result(),
 			},
 			render_input: true,
 		});
 		this.remarks = frappe.ui.form.make_control({
 			parent: this.$body.find(".remarks-field"),
 			df: { fieldtype: "Small Text", fieldname: "remarks", label: __("Remarks"),
-				description: __("Explain any shortage or excess for the supervisor.") },
+				description: __("Anything the supervisor should know about the count.") },
 			render_input: true,
 		});
 		this.count = new digitz_erp.CashCount(this.$body.find(".dayops-count-wrap"), this.state.denominations, (total) => {
@@ -430,32 +401,11 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		this.set_secondary(__("Refresh"), () => this.load());
 	}
 
-	// The expected cash with the expenditure being entered taken off
-	expected() {
-		return flt(this.preview.expected_cash) - flt(this.expenditure && this.expenditure.get_value());
-	}
-
-	update_expected() {
-		this.$body.find(".dayops-exp").text(this.money(flt(this.expenditure.get_value())));
-		this.$body.find(".dayops-expected").text(this.money(this.expected()));
-		this.show_result();
-	}
-
-	show_result() {
-		const $r = this.$body.find(".close-result").empty();
-		const counted = this.counted.get_value();
-		if (counted === undefined || counted === null || counted === "") {
-			return;
-		}
-		const diff = flt(counted) - this.expected();
-		if (Math.abs(diff) < 0.005) {
-			$r.html(`<div class="dayops-result ok">${__("The till matches the expected cash. The day will close.")}</div>`);
-		} else {
-			$r.html(`<div class="dayops-result ${diff < 0 ? "short" : "over"}">
-				${diff < 0 ? __("Short by {0}", [this.money(-diff)]) : __("Over by {0}", [this.money(diff)])}
-				<div style="font-weight: normal; font-size: 12px; margin-top: 4px;">${__("A supervisor will have to approve this close.")}</div>
-			</div>`);
-		}
+	// [{payment_mode, amount}] for the modes given an amount
+	payment_totals() {
+		return (this.mode_controls || [])
+			.map((m) => ({ payment_mode: m.payment_mode, amount: m.control.get_value() }))
+			.filter((m) => m.amount !== undefined && m.amount !== null && m.amount !== "");
 	}
 
 	close_day(handover) {
@@ -467,6 +417,11 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		const spent = flt(this.expenditure.get_value());
 		if (spent < 0) {
 			frappe.msgprint(__("Expenditure cannot be negative."));
+			return;
+		}
+		const totals = this.payment_totals();
+		if (totals.some((m) => flt(m.amount) < 0)) {
+			frappe.msgprint(__("Payment totals cannot be negative."));
 			return;
 		}
 		const with_spent = spent ? " " + __("Expenditure: {0}.", [this.money(spent)]) : "";
@@ -481,6 +436,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					denominations: this.count.counted(),
 					remarks: this.remarks.get_value(),
 					expenditure: flt(this.expenditure.get_value()),
+					payment_totals: totals,
 				},
 				freeze: true,
 				freeze_message: __("Closing the day..."),
@@ -505,8 +461,8 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			<div class="dayops-card dayops-state">
 				<div class="dayops-big">${closed ? __("Day closed") : __("Close sent for approval")}</div>
 				<p>${closed
-					? __("The till matched the expected cash. {0} is closed.", [this.esc(result.session)])
-					: __("The count differs by {0}. {1} will close once a supervisor approves it.", [this.money(result.difference), this.esc(result.session)])}
+					? __("{0} is closed.", [this.esc(result.session)])
+					: __("{0} will close once a supervisor approves the count.", [this.esc(result.session)])}
 				${handover ? "<br>" + __("The counter is free: the next cashier can sign in on this PC and open with your count.") : ""}</p>
 				<button class="btn ${handover ? "btn-default" : "btn-primary"} btn-sm dayops-print">${__("Print Day Close Slip")}</button>
 				${next}
@@ -514,109 +470,239 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		this.$body.find(".dayops-print").on("click", () => this.print(result.session));
 		this.$body.find(".dayops-open").on("click", () => this.go("day-open"));
 		this.$body.find(".dayops-logout").on("click", () => frappe.app.logout());
-		this.render_approvals();
 	}
 
 	print(session) {
 		digitz_erp.DayOpsBase.print_slip(session);
 	}
 
-	async render_approvals() {
-		this.$approvals.empty();
-		if (!this.state.is_supervisor) {
-			return;
-		}
-		const [open, pending] = await Promise.all([
-			frappe.call({ method: "digitz_erp.api.counter_session_api.get_open_days" }),
-			frappe.call({ method: "digitz_erp.api.counter_session_api.get_pending_approvals" }),
-		]);
-		this.$approvals.empty();
-		this.render_open_days(open.message || []);
-		this.render_pending(pending.message || []);
-	}
+	// ------------------------------------------------------- supervisor's board
+	// Every counter's day for a date, one column per session and the totals
+	// last: the system's figures next to what each cashier entered. From here a
+	// supervisor closes a day for a cashier (or their own), approves a count, and
+	// reopens a closed day to correct it. See counter_session_api.build_day_overview.
 
-	render_open_days(rows) {
-		if (!rows.length) {
-			return;
-		}
-		const $card = $(`
-			<div class="dayops-card">
-				<h4>${__("Open Days")} (${rows.length})</h4>
-				<table class="table table-sm" style="margin: 0;">
-					<thead><tr>
-						<th>${__("Session")}</th><th>${__("Counter")}</th><th>${__("Cashier")}</th><th>${__("Opened")}</th>
-						<th class="dayops-num">${__("Float")}</th><th class="dayops-num">${__("Expected Now")}</th><th></th>
-					</tr></thead>
-					<tbody>${rows.map((row) => `
-						<tr>
-							<td><a href="/app/counter-session/${encodeURIComponent(row.name)}">${this.esc(row.name)}</a></td>
-							<td>${this.esc(row.counter)}</td>
-							<td>${this.esc(row.cashier_name)}</td>
-							<td>${frappe.datetime.str_to_user(row.opened_on)}</td>
-							<td class="dayops-num">${this.money(row.opening_float)}</td>
-							<td class="dayops-num">${this.money(row.expected_cash)}</td>
-							<td class="dayops-num"><button class="btn btn-xs btn-default" data-force-close="${this.esc(row.name)}">${__("Close for Cashier")}</button></td>
-						</tr>`).join("")}
-					</tbody>
-				</table>
-				<p class="text-muted small" style="margin: 8px 0 0;">${__("For a cashier who left without closing: count their till and close the day for them, which frees the counter.")}</p>
-			</div>`).appendTo(this.$approvals);
-		$card.find("[data-force-close]").on("click", (e) => {
-			const name = $(e.currentTarget).attr("data-force-close");
-			this.supervisor_close(rows.find((x) => x.name === name));
+	async render_board(date) {
+		this.board_date = date || this.board_date || frappe.datetime.get_today();
+		const r = await frappe.call({
+			method: "digitz_erp.api.counter_session_api.get_day_overview",
+			args: { date: this.board_date },
 		});
+		const o = (this.overview = r.message);
+		const sessions = o.sessions || [];
+		const count = (status) => sessions.filter((x) => x.status === status).length;
+		const pill = (status) => `<span class="indicator-pill ${{ Open: "green", Closing: "orange", Closed: "blue" }[status] || "gray"}">${status === "Closing" ? __("Awaiting Approval") : __(status)}</span>`;
+		const time = (dt) => (dt ? moment(dt).format("hh:mm A") : "");
+
+		const head = sessions.map((x) => `
+			<th class="dcb-col">
+				<div class="dcb-counter">${this.esc(x.counter)}</div>
+				<div class="dcb-cashier">${this.esc(x.cashier_name)}</div>
+				<div><a href="/app/counter-session/${encodeURIComponent(x.name)}">${this.esc(x.name)}</a></div>
+				<div class="dcb-time">${time(x.opened_on)} → ${x.closed_on ? time(x.closed_on) : __("open")}</div>
+				${x.carried_over ? `<div class="dcb-note">${__("Opened {0}", [frappe.datetime.str_to_user(String(x.opened_on).split(" ")[0])])}</div>` : ""}
+				${x.amended_from ? `<div class="dcb-note">${__("Corrects {0}", [this.esc(x.amended_from)])}</div>` : ""}
+				<div style="margin-top: 4px;">${pill(x.status)}</div>
+			</th>`).join("");
+
+		const cell = (v, kind) => {
+			if (v === null || v === undefined) {
+				return `<td class="dayops-num text-muted">—</td>`;
+			}
+			const cls = kind === "difference" && Math.abs(v) >= 0.005 ? (v < 0 ? "is-short" : "is-over") : "";
+			return `<td class="dayops-num ${cls}">${this.money(v)}</td>`;
+		};
+		const body = (o.lines || []).map((ln) => ln.kind === "section"
+			? `<tr class="dcb-section"><td colspan="${sessions.length + 2}">${this.esc(ln.label)}</td></tr>`
+			: `<tr class="dcb-${ln.kind}"><td>${this.esc(ln.label)}</td>${ln.values.map((v) => cell(v, ln.kind)).join("")}
+				${cell(ln.total, ln.kind).replace("<td class=\"", "<td class=\"dcb-total ")}</tr>`
+		).join("");
+
+		const actions = sessions.map((x) => {
+			const b = (action, label, cls = "btn-default") =>
+				`<button class="btn btn-xs ${cls}" data-act="${action}" data-name="${this.esc(x.name)}">${label}</button>`;
+			const buttons = {
+				Open: b("close", x.is_own ? __("Close My Day") : __("Count & Close"), "btn-primary"),
+				Closing: b("approve", __("Approve"), "btn-primary") + b("edit", __("Edit")),
+				Closed: b("edit", __("Reopen & Edit")) + b("slip", __("Print Slip")),
+			}[x.status] || "";
+			return `<td class="dcb-actions">${buttons}</td>`;
+		}).join("");
+		const remarks = sessions.map((x) => `<td class="dcb-remarks" title="${this.esc(x.close_remarks)}">${this.esc(x.close_remarks)}</td>`).join("");
+
+		this.$body.html(`
+			<div class="dayops-card dcb-toolbar">
+				<div class="dcb-date"></div>
+				<div class="dcb-chips">
+					<button class="dcb-chip" data-day="${frappe.datetime.get_today()}">${__("Today")}</button>
+					<button class="dcb-chip" data-day="${frappe.datetime.add_days(frappe.datetime.get_today(), -1)}">${__("Yesterday")}</button>
+				</div>
+				<div class="dcb-summary text-muted">
+					${__("{0} days", [sessions.length])} · ${__("{0} open", [count("Open")])} · ${__("{0} awaiting approval", [count("Closing")])} · ${__("{0} closed", [count("Closed")])}
+				</div>
+				<div class="dcb-buttons">
+					<button class="btn btn-default btn-sm" data-tool="refresh">${__("Refresh")}</button>
+					${frappe.user.has_role("System Manager") ? `<button class="btn btn-default btn-sm" data-tool="excel">${__("Export to Excel")}</button>` : ""}
+					<button class="btn btn-primary btn-sm" data-tool="print">${__("Print Summary")}</button>
+				</div>
+			</div>
+			${sessions.length ? `
+			<div class="dayops-card dcb-card">
+				<div class="dcb-scroll">
+					<table class="dcb-grid">
+						<thead><tr><th></th>${head}<th class="dcb-col dcb-total">${__("Total")}</th></tr></thead>
+						<tbody>${body}</tbody>
+						<tfoot>
+							<tr><td>${__("Remarks")}</td>${remarks}<td class="dcb-total"></td></tr>
+							<tr><td></td>${actions}<td class="dcb-total"></td></tr>
+						</tfoot>
+					</table>
+				</div>
+				<p class="text-muted small" style="margin: 8px 0 0;">${__("System is what the submitted documents add up to; Entered is what the cashier counted or typed at Day Close. A day still open shows its live figures, with nothing entered yet.")}</p>
+			</div>` : `
+			<div class="dayops-card dayops-state"><div class="dayops-big">${__("No days")}</div><p>${__("No day was opened on any counter on this date.")}</p></div>`}
+		`);
+
+		this.board_date_control = frappe.ui.form.make_control({
+			parent: this.$body.find(".dcb-date"),
+			df: { fieldtype: "Date", fieldname: "date", label: __("Date"),
+				change: () => {
+					const value = this.board_date_control.get_value();
+					value && value !== this.board_date && this.render_board(value);
+				} },
+			render_input: true,
+		});
+		this.board_date_control.set_value(this.board_date);
+		this.$body.find(".dcb-chip").each((_, el) => el.classList.toggle("active", el.dataset.day === this.board_date));
+		this.$body.find("[data-day]").on("click", (e) => this.render_board($(e.currentTarget).attr("data-day")));
+		this.$body.find("[data-tool]").on("click", (e) => {
+			const tool = $(e.currentTarget).attr("data-tool");
+			if (tool === "refresh") {
+				this.render_board();
+			} else if (tool === "excel") {
+				window.open(`/api/method/digitz_erp.api.counter_session_api.export_day_overview?date=${encodeURIComponent(this.board_date)}`);
+			} else {
+				this.print_summary();
+			}
+		});
+		this.$body.find("[data-act]").on("click", (e) => {
+			const name = $(e.currentTarget).attr("data-name");
+			const x = sessions.find((row) => row.name === name);
+			const act = $(e.currentTarget).attr("data-act");
+			if (act === "slip") {
+				this.print(name);
+			} else if (act === "approve") {
+				this.approve(x);
+			} else {
+				this.count_dialog(x, act);
+			}
+		});
+
+		this.set_primary(__("Print Summary"), () => this.print_summary(), "printer");
+		this.set_secondary(__("Refresh"), () => this.render_board());
 	}
 
-	supervisor_close(row) {
+	async print_summary() {
+		const r = await frappe.call({
+			method: "digitz_erp.api.counter_session_api.get_day_summary_html",
+			args: { date: this.board_date },
+		});
+		const w = window.open("", "_blank");
+		if (!w) {
+			frappe.msgprint(__("Allow pop-ups for this site to print the summary."));
+			return;
+		}
+		w.document.open();
+		w.document.write(r.message);
+		w.document.close();
+	}
+
+	approve(x) {
+		frappe.confirm(
+			__("Approve {0}'s count (difference {1}) and close the day?", [this.esc(x.cashier_name), this.money(x.difference)]),
+			() => frappe.call({
+				method: "digitz_erp.api.counter_session_api.approve_close",
+				args: { session: x.name },
+				freeze: true,
+				callback: () => {
+					frappe.show_alert({ message: __("{0} closed", [x.name]), indicator: "green" });
+					this.changed();
+					this.render_board();
+				},
+			})
+		);
+	}
+
+	// Count a day for the cashier (act "close"), or correct a counted one ("edit":
+	// a close awaiting approval in place, a closed day by reopening it)
+	count_dialog(x, act) {
+		const editing = act === "edit";
+		const modes = this.overview.modes || [];
+		const needs_reason = editing || !x.is_own;
+		// The expected cash before any expenditure, which the dialog may change
+		const before_spent = flt(x.expected_cash) + flt(x.cash_expenditure);
 		const d = new frappe.ui.Dialog({
-			title: __("Close {0}'s day on {1}", [this.esc(row.cashier_name), this.esc(row.counter)]),
+			title: editing
+				? __("Correct {0}'s day on {1}", [this.esc(x.cashier_name), this.esc(x.counter)])
+				: __("Close {0}'s day on {1}", [this.esc(x.cashier_name), this.esc(x.counter)]),
 			size: "large",
 			fields: [
-				{
-					fieldtype: "HTML", fieldname: "summary",
-					options: `<p>${__("Expected cash in the till")}: <b class="sv-expected">${this.money(row.expected_cash)}</b>
-						<span class="text-muted">(${__("float")} ${this.money(row.opening_float)})</span></p>`,
-				},
+				{ fieldtype: "HTML", fieldname: "summary",
+					options: `<p>${__("Expected cash in the till")}: <b class="sv-expected"></b>
+						<span class="text-muted">(${__("float")} ${this.money(x.opening_float)})</span></p>` },
 				{ fieldtype: "Currency", fieldname: "expenditure", label: __("Expenditure"),
-					description: __("Cash paid out of the till that the cashier did not enter."),
-					change: () => show_result() },
+					default: editing ? x.cash_expenditure : undefined,
+					description: __("Cash paid out of the till."), change: () => show_result() },
 				{ fieldtype: "HTML", fieldname: "count_wrap" },
 				{ fieldtype: "Column Break" },
 				{ fieldtype: "Currency", fieldname: "counted_cash", label: __("Counted Cash"), reqd: 1,
-					description: __("Filled from the count, or type the total."),
-					change: () => show_result() },
+					default: editing ? x.counted_cash : undefined,
+					description: __("Filled from the count, or type the total."), change: () => show_result() },
 				{ fieldtype: "HTML", fieldname: "result" },
-				{ fieldtype: "Small Text", fieldname: "remarks", label: __("Reason"), reqd: 1,
-					description: __("Why you are closing this day for the cashier. Shown on the Day Close slip.") },
+				...modes.map((m, i) => ({
+					fieldtype: "Currency", fieldname: `mode_${i}`, label: m.payment_mode,
+					default: editing ? x.modes[m.payment_mode].entered : undefined,
+					description: __("System: {0}", [this.money(x.modes[m.payment_mode].system)]),
+				})),
+				{ fieldtype: "Small Text", fieldname: "remarks", label: editing ? __("Reason for the correction") : __("Reason"),
+					reqd: needs_reason ? 1 : 0,
+					description: editing
+						? __("Added to the day's remarks with your name. The original close stays on record.")
+						: __("Why you are closing this day for the cashier. Shown on the Day Close slip.") },
 			],
-			primary_action_label: __("Count & Close"),
+			primary_action_label: editing ? (x.status === "Closed" ? __("Reopen & Save") : __("Save & Approve")) : __("Count & Close"),
 			primary_action: (values) => {
 				frappe.call({
-					method: "digitz_erp.api.counter_session_api.supervisor_close",
+					method: editing
+						? "digitz_erp.api.counter_session_api.edit_close"
+						: "digitz_erp.api.counter_session_api.supervisor_close",
 					args: {
-						session: row.name,
+						session: x.name,
 						counted_cash: values.counted_cash,
 						denominations: count.counted(),
 						remarks: values.remarks,
 						expenditure: flt(values.expenditure),
+						payment_totals: modes
+							.map((m, i) => ({ payment_mode: m.payment_mode, amount: values[`mode_${i}`] }))
+							.filter((m) => m.amount !== undefined && m.amount !== null && m.amount !== ""),
 					},
 					freeze: true,
-					freeze_message: __("Closing the day..."),
+					freeze_message: editing ? __("Saving the correction...") : __("Closing the day..."),
 					callback: (r) => {
 						if (!r.message) {
 							return;
 						}
 						d.hide();
-						frappe.show_alert({ message: __("{0} closed. {1} is free.", [row.name, row.counter]), indicator: "green" });
+						frappe.show_alert({ message: __("{0} closed", [r.message.session]), indicator: "green" });
 						this.changed();
-						this.load();
+						this.render_board();
 					},
 				});
 			},
 		});
 
 		const show_result = () => {
-			const expected = flt(row.expected_cash) - flt(d.get_value("expenditure"));
+			const expected = before_spent - flt(d.get_value("expenditure"));
 			d.fields_dict.summary.$wrapper.find(".sv-expected").text(this.money(expected));
 			const counted = d.get_value("counted_cash");
 			const $r = d.fields_dict.result.$wrapper.empty();
@@ -628,63 +714,20 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				? `<div class="dayops-result ok">${__("Matches the expected cash.")}</div>`
 				: `<div class="dayops-result ${diff < 0 ? "short" : "over"}">
 					${diff < 0 ? __("Short by {0}", [this.money(-diff)]) : __("Over by {0}", [this.money(diff)])}
-					<div style="font-weight: normal; font-size: 12px; margin-top: 4px;">${__("Closing approves this difference in your name.")}</div>
+					<div style="font-weight: normal; font-size: 12px; margin-top: 4px;">${__("Saving approves this difference in your name.")}</div>
 				</div>`);
 		};
 
-		const count = new digitz_erp.CashCount(d.fields_dict.count_wrap.$wrapper, this.state.denominations, (total) => {
+		const count = new digitz_erp.CashCount(d.fields_dict.count_wrap.$wrapper, this.overview.denominations, (total) => {
 			if (total) {
 				d.set_value("counted_cash", total);
 			}
 		});
-		d.show();
-	}
-
-	render_pending(rows) {
-		if (!rows.length) {
-			return;
+		if (editing && x.denominations.length) {
+			count.set_counts(x.denominations);
 		}
-		$(`
-			<div class="dayops-card">
-				<h4>${__("Pending Approvals")} (${rows.length})</h4>
-				<table class="table table-sm" style="margin: 0;">
-					<thead><tr>
-						<th>${__("Session")}</th><th>${__("Counter")}</th><th>${__("Cashier")}</th><th>${__("Opened")}</th>
-						<th class="dayops-num">${__("Expected")}</th><th class="dayops-num">${__("Counted")}</th>
-						<th class="dayops-num">${__("Difference")}</th><th>${__("Remarks")}</th><th></th>
-					</tr></thead>
-					<tbody>${rows.map((row) => `
-						<tr>
-							<td><a href="/app/counter-session/${encodeURIComponent(row.name)}">${this.esc(row.name)}</a></td>
-							<td>${this.esc(row.counter)}</td>
-							<td>${this.esc(row.cashier_name)}</td>
-							<td>${frappe.datetime.str_to_user(row.opened_on)}</td>
-							<td class="dayops-num">${this.money(row.expected_cash)}</td>
-							<td class="dayops-num">${this.money(row.counted_cash)}</td>
-							<td class="dayops-num" style="color: ${row.difference < 0 ? "var(--red-600)" : "var(--orange-600)"}; font-weight: 600;">${this.money(row.difference)}</td>
-							<td>${this.esc(row.close_remarks)}</td>
-							<td class="dayops-num"><button class="btn btn-xs btn-primary" data-approve="${this.esc(row.name)}">${__("Approve & Close")}</button></td>
-						</tr>`).join("")}
-					</tbody>
-				</table>
-			</div>`).appendTo(this.$approvals);
-		this.$approvals.find("[data-approve]").on("click", (e) => {
-			const name = $(e.currentTarget).attr("data-approve");
-			const row = rows.find((x) => x.name === name);
-			frappe.confirm(
-				__("Approve a difference of {0} for {1} and close the day?", [this.money(row.difference), this.esc(row.cashier_name)]),
-				() => frappe.call({
-					method: "digitz_erp.api.counter_session_api.approve_close",
-					args: { session: name },
-					freeze: true,
-					callback: () => {
-						frappe.show_alert({ message: __("{0} closed", [name]), indicator: "green" });
-						this.changed();
-						this.load();
-					},
-				})
-			);
-		});
+		d.show();
+		show_result();
 	}
 };
 
@@ -816,18 +859,22 @@ digitz_erp.DayHistory = class DayHistory {
 	}
 
 	render_tiles(t) {
-		const diff_class = Math.abs(t.net_difference) < 0.005 ? "" : t.net_difference < 0 ? "is-short" : "is-over";
+		const diff_class = Math.abs(flt(t.net_difference)) < 0.005 ? "" : t.net_difference < 0 ? "is-short" : "is-over";
 		const tile = (label, value, cls = "") => `
 			<div class="cc-hist-tile ${cls}">
 				<div class="cc-hist-tile-label">${label}</div>
 				<div class="cc-hist-tile-value">${value}</div>
 			</div>`;
+		// A cashier is sent only their own inputs, never the day's sales (a blind close)
 		this.$el.find(".cc-hist-tiles").html(
 			tile(__("Days"), t.days) +
-			tile(__("Cash Sales"), this.money(t.cash_sales)) +
-			tile(__("Cash Receipts"), this.money(t.cash_receipts)) +
+			(this.is_supervisor
+				? tile(__("Cash Sales"), this.money(t.cash_sales)) +
+					tile(__("Cash Receipts"), this.money(t.cash_receipts))
+				: tile(__("Counted Cash"), this.money(t.counted_cash))) +
+			tile(__("Card, Bank & Other"), this.money(t.non_cash_total)) +
 			tile(__("Expenditure"), this.money(t.cash_expenditure)) +
-			tile(__("Net Difference"), this.money(t.net_difference), diff_class) +
+			(this.is_supervisor ? tile(__("Net Difference"), this.money(t.net_difference), diff_class) : "") +
 			tile(__("Open / Awaiting"), t.pending, t.pending ? "is-pending" : "")
 		);
 	}
@@ -851,6 +898,7 @@ digitz_erp.DayHistory = class DayHistory {
 		const day = (dt) => (dt ? frappe.datetime.str_to_user(String(dt).split(" ")[0]) : "");
 		const pending = (row) => row.status === "Open";
 
+		const sup = this.is_supervisor;
 		const body = rows.map((row) => {
 			// A day closed after midnight shows its closing date too
 			const closed = !row.closed_on
@@ -868,9 +916,10 @@ digitz_erp.DayHistory = class DayHistory {
 					${this.is_supervisor ? `<td>${this.esc(row.cashier_name)}</td>` : ""}
 					<td class="cc-nowrap">${time(row.opened_on)} → ${closed}</td>
 					<td class="cc-num">${this.money(row.opening_float)}</td>
-					<td class="cc-num">${amount(row.expected_cash)}</td>
+					${sup ? `<td class="cc-num">${amount(row.expected_cash)}</td>` : ""}
 					<td class="cc-num">${amount(row.counted_cash)}</td>
-					<td class="cc-num ${diff_class}">${amount(diff)}</td>
+					<td class="cc-num">${amount(row.non_cash_total)}</td>
+					${sup ? `<td class="cc-num ${diff_class}">${amount(diff)}</td>` : `<td class="cc-num">${amount(row.cash_expenditure)}</td>`}
 					<td><span class="indicator-pill ${digitz_erp.DayHistory.STATUS_COLOURS[row.status] || "gray"}">${status_label}</span></td>
 					<td class="cc-num cc-nowrap">
 						${pending(row) ? "" : `<button type="button" class="btn btn-xs btn-default" data-print="${this.esc(row.name)}">${__("Print Slip")}</button>`}
@@ -885,15 +934,19 @@ digitz_erp.DayHistory = class DayHistory {
 						<th>${__("Date")}</th><th>${__("Session")}</th><th>${__("Counter")}</th>
 						${this.is_supervisor ? `<th>${__("Cashier")}</th>` : ""}
 						<th>${__("Opened → Closed")}</th>
-						<th class="cc-num">${__("Float")}</th><th class="cc-num">${__("Expected")}</th>
-						<th class="cc-num">${__("Counted")}</th><th class="cc-num">${__("Difference")}</th>
+						<th class="cc-num">${__("Float")}</th>
+						${sup ? `<th class="cc-num">${__("Expected")}</th>` : ""}
+						<th class="cc-num">${__("Counted")}</th><th class="cc-num">${__("Card, Bank & Other")}</th>
+						<th class="cc-num">${sup ? __("Difference") : __("Expenditure")}</th>
 						<th>${__("Status")}</th><th></th>
 					</tr></thead>
 					<tbody>${body}</tbody>
 				</table>
 			</div>
 			<div class="cc-hist-foot">
-				<span class="text-muted small">${__("Expected and counted cash are worked out when a day is closed.")}</span>
+				<span class="text-muted small">${sup
+					? __("Expected and counted cash are worked out when a day is closed.")
+					: __("Your count is filled in when you close the day.")}</span>
 				${report_link}
 			</div>`);
 	}

@@ -28,21 +28,9 @@ Pick the report by the question you are asking. Most start on today's date.
 
 ## Who sees what
 
-Cashiers see only their own sales. Some reports are for System Managers only.
+Every report here is for **System Manager** and **Management** only. Cashiers cannot open them, and the workspace does not show them the report cards. A cashier never sees the day's sales figures: Day Close is a blind count.
 
-| Report | Who can open it |
-|---|---|
-| Sales Summary Report | System Manager, Cashier |
-| Service wise Sales Report | System Manager, Cashier |
-| Itemwise Sales Report | System Manager, Cashier |
-| Counter based Sales report | System Manager |
-| Sales Details Report | System Manager |
-| Item Category Wise Sales | System Manager |
-| Counter Session Summary | System Manager, Management |
-
-**Anyone with the Cashier role sees only the invoices they own**, in every sales report except Counter based Sales report. Their **User** filter is ignored. System Managers and the Administrator see everyone's sales, even if they also have the Cashier role.
-
-The workspace shows each person only the report cards they can open.
+A supervisor who also has the Cashier role still sees only the invoices they own, in every sales report except Counter based Sales report, and their **User** filter is ignored. System Managers and the Administrator see everyone's sales.
 
 An invoice belongs to whoever last saved or submitted it. Picking a job off the Sales Invoice Board makes it yours.
 

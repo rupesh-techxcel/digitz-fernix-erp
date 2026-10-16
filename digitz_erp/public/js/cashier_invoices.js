@@ -701,7 +701,7 @@ frappe.provide("digitz_erp");
 									<button type="button" class="ci-cust-toggle" aria-expanded="false">
 										${frappe.utils.icon("down", "xs")}
 										<span class="ci-strong">${__("Customer details")}</span>
-										<span class="ci-cust-summary text-muted">${__("Email, company & TRN, address, salesman, token")}</span>
+										<span class="ci-cust-summary text-muted">${__("Email, company & TRN, notes, salesman, token")}</span>
 									</button>
 									<div class="ci-cust-chips">
 										<span class="ci-chip-info ci-token" hidden></span>
@@ -765,7 +765,7 @@ frappe.provide("digitz_erp");
 			this.make_fields(".ci-fields-customer-main", ["customer", "customer_display_name", "customer_mobile_number"]);
 			this.make_fields(".ci-fields-customer", [
 				"customer_email", "customer_token", "customer_company", "tax_id",
-				["customer_address", { span: 2 }], "salesman", "medical_service",
+				["notes", { span: 2 }], "salesman", "medical_service",
 			]);
 			this.make_fields(".ci-fields-more", [
 				"edit_posting_date_and_time", "posting_date", "posting_time", "naming_series", "sales_inv_no",
@@ -948,6 +948,8 @@ frappe.provide("digitz_erp");
 			// A submitted credit sale not yet fully paid: take the payment here
 			// (public/js/cashier_receipts.js), as a Receipt Entry
 			this.can_record_payment() && buttons.push(btn("record-payment", __("Record Payment"), "btn-primary"));
+			// The customer's statement, in the console's Customer Ledger tab
+			doc.customer && buttons.push(btn("ledger", __("Ledger")));
 			// One Print menu. Print sends the PDF straight to the printer (no dialog
 			// where Chrome runs with --kiosk-printing); Preview shows it in a popup.
 			// Both save the invoice first when it has unsaved changes, so it is also
@@ -1613,6 +1615,7 @@ frappe.provide("digitz_erp");
 				"preview-receipt": () => this.preview_pdf("receipt"),
 				"print-receipt": () => this.print_direct("receipt"),
 				"record-payment": () => this.record_payment(),
+				ledger: () => frappe.set_route("cashier-console", "ledger", doc.customer),
 			};
 			handlers[name] && handlers[name]();
 		}
@@ -1751,6 +1754,7 @@ frappe.provide("digitz_erp");
 					this.host.paint(this.tab);
 					this.host.list.loaded = false;
 					frappe.show_alert({ message: action === "Submit" ? __("Submitted {0}", [this.doc.name]) : __("Saved {0}", [this.doc.name]), indicator: "green" });
+					action === "Submit" && this.doc.docstatus === 1 && this.offer_print_after_submit();
 				} catch (e) {
 					// The server's message is already shown
 				} finally {
@@ -1986,6 +1990,38 @@ frappe.provide("digitz_erp");
 			return kind === "receipt" ? index : Math.max(0, index);
 		}
 
+		// Just submitted: offer to print the invoice. Once it is sent to the printer
+		// the invoice is done at the counter: its tab closes and the cashier goes to
+		// the Sales Invoice Board for the next one. "Not now" leaves it open, as
+		// before; the Print menu is still there.
+		offer_print_after_submit() {
+			const d = new frappe.ui.Dialog({
+				title: __("Print {0}?", [esc(this.doc.name)]),
+				fields: [{
+					fieldtype: "HTML", fieldname: "note",
+					options: `<p>${__("{0} is submitted. Print the invoice now?", [esc(this.doc.name)])}</p>
+						<p class="text-muted small">${__("After printing, this invoice closes and the Sales Invoice Board opens for the next one.")}</p>`,
+				}],
+				primary_action_label: __("Print Invoice"),
+				primary_action: () => {
+					d.hide();
+					this.print_direct("invoice", () => this.done_at_counter());
+				},
+				secondary_action_label: __("Not now"),
+				secondary_action: () => d.hide(),
+			});
+			d.show();
+		}
+
+		// Close this invoice's tab and go to the Board for the next invoice
+		done_at_counter() {
+			if (this.dirty) {
+				return;
+			}
+			this.host.close(this.tab.key);
+			frappe.set_route("cashier-console", "board");
+		}
+
 		// Save before a print or preview when there are unsaved changes, so the PDF
 		// shows what is stored. true: saved now; false: nothing to save; null: the
 		// save did not go through (its message is shown), so do not print.
@@ -2012,7 +2048,7 @@ frappe.provide("digitz_erp");
 		// loads in a hidden frame and the browser's print starts on it: no dialog on
 		// a counter PC whose Chrome runs with --kiosk-printing, the usual print
 		// dialog anywhere else.
-		async print_direct(kind = "invoice") {
+		async print_direct(kind = "invoice", on_sent = null) {
 			const fresh = await this.save_for_print();
 			if (fresh === null) {
 				return;
@@ -2022,7 +2058,7 @@ frappe.provide("digitz_erp");
 				return;
 			}
 			const pdf = this.pdfs[index];
-			E().print_pdf(pdf.file_url, pdf.label, () => this.show_pdf(index));
+			E().print_pdf(pdf.file_url, pdf.label, () => this.show_pdf(index), on_sent);
 		}
 
 		// The invoice's PDFs in a popup: switch between Invoice and Receipt, print

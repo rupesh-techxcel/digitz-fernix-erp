@@ -23,8 +23,8 @@
 			{
 				"name": "day-close",
 				"title": "Closing your day",
-				"summary": "Count the till, close the day, and print the slip.",
-				"keywords": "day close expected cash count difference short over slip print"
+				"summary": "Count the till, enter card and bank totals, close the day, and print the slip.",
+				"keywords": "day close blind count cash card bank payment mode difference slip print"
 			},
 			{
 				"name": "returns-expenses",

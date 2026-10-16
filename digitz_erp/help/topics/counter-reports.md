@@ -6,7 +6,8 @@ This is printed from Day Close after closing, or from any Counter Session with *
 
 - the counter, PC, cashier, and opening and closing times;
 - the previous close and the opening float;
-- each cash movement, the expected cash, the counted cash and the difference;
+- the counted cash, the expenditure and the card, bank and other totals;
+- for a supervisor only: each cash movement, the expected cash and the difference. A cashier's slip leaves these out;
 - the opening and closing note-by-note counts;
 - remarks, who closed the day if a supervisor did, and who approved a difference;
 - signature lines for the cashier and supervisor.

@@ -5,6 +5,8 @@ import frappe
 
 def execute(filters=None):
 	columns, data = [], []
+	filters = frappe._dict(filters or {})
+	restrict_to_customer(filters)
  	 
 	summary_view = filters.get('summary_view') 
 	data = get_data(filters)
@@ -25,6 +27,20 @@ def execute(filters=None):
   
 	return columns, data
 
+def restrict_to_customer(filters):
+	"""A cashier sees one customer's ledger and nothing else: never an account
+	(the cash or sales accounts would show the day's takings) or a supplier.
+	Supervisors and System Managers are not limited."""
+	from digitz_erp.api.counter_api import is_supervisor
+
+	if "Cashier" not in frappe.get_roles() or is_supervisor():
+		return
+	if not filters.get("customer"):
+		frappe.throw("Select a customer.")
+	filters.account = None
+	filters.supplier = None
+
+
 def get_data(filters):
    
 	data = []
@@ -35,10 +51,10 @@ def get_data(filters):
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE account = '{account}' and party='{supplier}' and pi.posting_date < '{from_date}'
-		""".format(account = filters.get('account'), supplier=filters.get('supplier'), from_date = filters.get('from_date'))
+			WHERE account = %(account)s and party=%(supplier)s and pi.posting_date < %(from_date)s
+		"""
 
-		opening_data = frappe.db.sql(sql, as_dict = True)
+		opening_data = frappe.db.sql(sql, filters, as_dict = True)
 
 		if opening_data and opening_data[0].difference:
 			opening_balance = opening_data[0].difference
@@ -61,17 +77,17 @@ def get_data(filters):
 			voucher_type, voucher_no, posting_date,account,party, remarks, debit_amount, credit_amount		
 			FROM 
 			`tabGL Posting` pi		
-			WHERE pi.account = '{account}' and party='{supplier}' and  pi.posting_date BETWEEN '{from_date}' and '{to_date}'	ORDER BY pi.posting_date""".format(account = filters.get('account'), supplier=filters.get('supplier'), from_date=filters.get('from_date'), to_date=filters.get('to_date')), as_dict=True)
+			WHERE pi.account = %(account)s and party=%(supplier)s and  pi.posting_date BETWEEN %(from_date)s and %(to_date)s	ORDER BY pi.posting_date""", filters, as_dict=True)
 
 		data.extend(trans_data)	
 
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE account = '{account}' and party='{supplier}' and pi.posting_date <= '{to_date}'
-		""".format(account = filters.get('account'), supplier = filters.get('supplier'), to_date = filters.get('to_date'))
+			WHERE account = %(account)s and party=%(supplier)s and pi.posting_date <= %(to_date)s
+		"""
 
-		closing_data = frappe.db.sql(sql, as_dict = True)
+		closing_data = frappe.db.sql(sql, filters, as_dict = True)
 		if closing_data and closing_data[0].difference:
 			closing_balance = closing_data[0].difference
 			dr_or_cr = "Dr" if closing_balance > 0 else "Cr"
@@ -94,10 +110,10 @@ def get_data(filters):
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE account = '{account}' and party='{customer}' and pi.posting_date < '{from_date}'
-		""".format(account = filters.get('account'), customer=filters.get('customer'), from_date = filters.get('from_date'))
+			WHERE account = %(account)s and party=%(customer)s and pi.posting_date < %(from_date)s
+		"""
 
-		opening_data = frappe.db.sql(sql, as_dict = True)
+		opening_data = frappe.db.sql(sql, filters, as_dict = True)
 
 		if opening_data and opening_data[0].difference:
 			opening_balance = opening_data[0].difference
@@ -121,17 +137,17 @@ def get_data(filters):
 			voucher_type, voucher_no, posting_date,account,party, remarks, debit_amount, credit_amount		
 			FROM 
 			`tabGL Posting` pi		
-			WHERE pi.account = '{account}' and party='{customer}' and  pi.posting_date BETWEEN '{from_date}' and '{to_date}'	ORDER BY pi.posting_date""".format(account = filters.get('account'), customer=filters.get('customer'), from_date=filters.get('from_date'), to_date=filters.get('to_date')), as_dict=True)
+			WHERE pi.account = %(account)s and party=%(customer)s and  pi.posting_date BETWEEN %(from_date)s and %(to_date)s	ORDER BY pi.posting_date""", filters, as_dict=True)
 
 		data.extend(trans_data)	
 
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE account = '{account}' and party='{customer}' and pi.posting_date <= '{to_date}'
-		""".format(account = filters.get('account'), customer = filters.get('customer'), to_date = filters.get('to_date'))
+			WHERE account = %(account)s and party=%(customer)s and pi.posting_date <= %(to_date)s
+		"""
 
-		closing_data = frappe.db.sql(sql, as_dict = True)
+		closing_data = frappe.db.sql(sql, filters, as_dict = True)
 		if closing_data and closing_data[0].difference:
 			closing_balance = closing_data[0].difference
 			dr_or_cr = "Dr" if closing_balance > 0 else "Cr"
@@ -155,10 +171,10 @@ def get_data(filters):
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE party='{supplier}' and pi.posting_date < '{from_date}'
-		""".format(supplier=filters.get('supplier'), from_date = filters.get('from_date'))
+			WHERE party=%(supplier)s and pi.posting_date < %(from_date)s
+		"""
 
-		opening_data = frappe.db.sql(sql, as_dict = True)
+		opening_data = frappe.db.sql(sql, filters, as_dict = True)
 
 		if opening_data and opening_data[0].difference:
 			opening_balance = opening_data[0].difference
@@ -182,17 +198,17 @@ def get_data(filters):
 			voucher_type, voucher_no, posting_date,account,party, remarks, debit_amount, credit_amount		
 			FROM 
 			`tabGL Posting` pi		
-			WHERE party='{supplier}' and  pi.posting_date BETWEEN '{from_date}' and '{to_date}'	ORDER BY pi.posting_date""".format(supplier=filters.get('supplier'), from_date=filters.get('from_date'), to_date=filters.get('to_date')), as_dict=True)
+			WHERE party=%(supplier)s and  pi.posting_date BETWEEN %(from_date)s and %(to_date)s	ORDER BY pi.posting_date""", filters, as_dict=True)
 
 		data.extend(trans_data)	
 
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE party='{supplier}' and pi.posting_date <= '{to_date}'
-		""".format(supplier = filters.get('supplier'), to_date = filters.get('to_date'))
+			WHERE party=%(supplier)s and pi.posting_date <= %(to_date)s
+		"""
 
-		closing_data = frappe.db.sql(sql, as_dict = True)
+		closing_data = frappe.db.sql(sql, filters, as_dict = True)
 		if closing_data and closing_data[0].difference:
 			closing_balance = closing_data[0].difference
 			dr_or_cr = "Dr" if closing_balance > 0 else "Cr"
@@ -216,10 +232,10 @@ def get_data(filters):
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE party='{customer}' and pi.posting_date < '{from_date}'
-		""".format(customer=filters.get('customer'), from_date = filters.get('from_date'))
+			WHERE party=%(customer)s and pi.posting_date < %(from_date)s
+		"""
 
-		opening_data = frappe.db.sql(sql, as_dict = True)
+		opening_data = frappe.db.sql(sql, filters, as_dict = True)
 
 		if opening_data and opening_data[0].difference:
 			opening_balance = opening_data[0].difference
@@ -243,17 +259,17 @@ def get_data(filters):
 			voucher_type, voucher_no, posting_date,account,party, remarks, debit_amount, credit_amount		
 			FROM 
 			`tabGL Posting` pi		
-			WHERE party='{customer}' and  pi.posting_date BETWEEN '{from_date}' and '{to_date}'	ORDER BY pi.posting_date""".format(customer=filters.get('customer'), from_date=filters.get('from_date'), to_date=filters.get('to_date')), as_dict=True)
+			WHERE party=%(customer)s and  pi.posting_date BETWEEN %(from_date)s and %(to_date)s	ORDER BY pi.posting_date""", filters, as_dict=True)
 
 		data.extend(trans_data)	
 
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE party='{customer}' and pi.posting_date <= '{to_date}'
-		""".format(customer = filters.get('customer'), to_date = filters.get('to_date'))
+			WHERE party=%(customer)s and pi.posting_date <= %(to_date)s
+		"""
 
-		closing_data = frappe.db.sql(sql, as_dict = True)
+		closing_data = frappe.db.sql(sql, filters, as_dict = True)
 		if closing_data and closing_data[0].difference:
 			closing_balance = closing_data[0].difference
 			dr_or_cr = "Dr" if closing_balance > 0 else "Cr"
@@ -276,12 +292,12 @@ def get_data(filters):
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE account = '{account}' and pi.posting_date < '{from_date}'
-		""".format(account = filters.get('account'), from_date = filters.get('from_date'))
+			WHERE account = %(account)s and pi.posting_date < %(from_date)s
+		"""
 
 		#print(sql)
 
-		opening_data = frappe.db.sql(sql, as_dict = True)
+		opening_data = frappe.db.sql(sql, filters, as_dict = True)
 
 		#print("opening_data")
 		#print(opening_data)
@@ -308,17 +324,17 @@ def get_data(filters):
 			voucher_type, voucher_no, posting_date,account,party, remarks, debit_amount, credit_amount		
 			FROM 
 			`tabGL Posting` pi		
-			WHERE pi.account = '{account}' and  pi.posting_date BETWEEN '{from_date}' and '{to_date}'	ORDER BY pi.posting_date""".format(account = filters.get('account'), from_date=filters.get('from_date'), to_date=filters.get('to_date')), as_dict=True)
+			WHERE pi.account = %(account)s and  pi.posting_date BETWEEN %(from_date)s and %(to_date)s	ORDER BY pi.posting_date""", filters, as_dict=True)
 
 		data.extend(trans_data)	
 
 		sql = """
 			SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 			FROM `tabGL Posting` pi
-			WHERE account = '{account}' and pi.posting_date <= '{to_date}'
-		""".format(account = filters.get('account'), to_date = filters.get('to_date'))
+			WHERE account = %(account)s and pi.posting_date <= %(to_date)s
+		"""
 
-		closing_data = frappe.db.sql(sql, as_dict = True)
+		closing_data = frappe.db.sql(sql, filters, as_dict = True)
 		if closing_data and closing_data[0].difference:
 			closing_balance = closing_data[0].difference
 			dr_or_cr = "Dr" if closing_balance > 0 else "Cr"
@@ -344,10 +360,10 @@ def get_data(filters):
 	# 	sql = """
 	# 		SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 	# 		FROM `tabGL Posting` pi
-	# 		WHERE pi.posting_date < '{from_date}'
-	# 	""".format(from_date = filters.get('from_date'))
+	# 		WHERE pi.posting_date < %(from_date)s
+	# 	"""
 
-	# 	opening_data = frappe.db.sql(sql, as_dict = True)
+	# 	opening_data = frappe.db.sql(sql, filters, as_dict = True)
 
 	# 	if opening_data and opening_data[0].difference:
 	# 		opening_balance = opening_data[0].difference
@@ -371,17 +387,17 @@ def get_data(filters):
 	# 		voucher_type, voucher_no, posting_date,account,party, remarks, debit_amount, credit_amount		
 	# 		FROM 
 	# 		`tabGL Posting` pi		
-	# 		WHERE pi.posting_date BETWEEN '{from_date}' and '{to_date}'	ORDER BY pi.posting_date""".format(from_date=filters.get('from_date'), to_date=filters.get('to_date')), as_dict=True)
+	# 		WHERE pi.posting_date BETWEEN %(from_date)s and %(to_date)s	ORDER BY pi.posting_date""", filters, as_dict=True)
 
 	# 	data.extend(trans_data)	
 
 	# 	sql = """
 	# 		SELECT SUM(debit_amount) - SUM(credit_amount) AS difference
 	# 		FROM `tabGL Posting` pi
-	# 		WHERE pi.posting_date <= '{to_date}'
-	# 	""".format(to_date = filters.get('to_date'))
+	# 		WHERE pi.posting_date <= %(to_date)s
+	# 	"""
 
-	# 	closing_data = frappe.db.sql(sql, as_dict = True)
+	# 	closing_data = frappe.db.sql(sql, filters, as_dict = True)
 	# 	if closing_data and closing_data[0].difference:
 	# 		closing_balance = closing_data[0].difference
 	# 		dr_or_cr = "Dr" if closing_balance > 0 else "Cr"

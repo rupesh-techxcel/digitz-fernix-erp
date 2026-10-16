@@ -39,8 +39,9 @@ MAX_COUNTER_SLOTS = len(COUNTER_COLORS)
 
 @frappe.whitelist()
 def get_live_dashboard():
-	"""Everything the Medical Center dashboard shows, for today."""
-	frappe.only_for(("System Manager", "Management", CASHIER_ROLE))
+	"""Everything the Medical Center dashboard shows, for today. Supervisors
+	only: a cashier never sees the day's takings or till cash."""
+	frappe.only_for(("System Manager", "Management"))
 
 	online = get_online_users()
 	counters = get_counters(online)

@@ -5,11 +5,13 @@
 // the route (/app/cashier-console/receipts/<name>), so links, reloads and the
 // back button land on it.
 //
-// A receipt here collects payment on a customer's credit Sales Invoices: pick
-// the customer, the payment mode, then how much goes to each invoice (in full
-// or in part). It is saved as an ordinary Receipt Entry, shaped exactly as the
-// Receipt Entry form and its allocation popup make one -- one Customer line of
-// type Sales Invoice and one Receipt Allocation row per invoice paid -- and is
+// A receipt here collects payment from a customer: pick the customer, the payment
+// mode, then how much goes to each of their credit Sales Invoices (in full or in
+// part), and any amount not for an invoice (on account, an advance). It is saved
+// as an ordinary Receipt Entry, shaped exactly as the Receipt Entry form and its
+// allocation popup make one -- a Customer line of type Sales Invoice with one
+// Receipt Allocation row per invoice paid, and a Customer line of type On Account
+// for the rest (the server wants a line either fully allocated or not at all) -- and is
 // saved and submitted through the same server calls as the form, so the
 // server's validations, postings, the counter session and the invoice receipt
 // printouts all work as for any receipt. A receipt of any other shape (other
@@ -32,21 +34,28 @@ frappe.provide("digitz_erp");
 	const round2 = (v) => flt(v, 2);
 	const storage_key = () => `digitz_cashier_receipts:${frappe.session.user}`;
 
-	// One Customer line paying Sales Invoices, as the console makes it. A receipt
-	// made in the form with anything else opens read-only.
+	// One customer's receipt as the console makes it: a Sales Invoice line, an On
+	// Account line, or one of each. A receipt made in the form with anything else
+	// opens read-only.
 	function fits_console(doc) {
 		const details = doc.receipt_entry_details || [];
 		if (doc.__islocal && !details.length) {
 			return true;
 		}
+		const types = details.map((d) => d.reference_type);
+		const customer = details[0] && details[0].customer;
 		return (
-			details.length === 1 &&
-			details[0].receipt_type === "Customer" &&
-			details[0].reference_type === "Sales Invoice" &&
-			!!details[0].customer &&
-			(doc.receipt_allocation || []).every((a) => a.reference_type === "Sales Invoice" && a.customer === details[0].customer)
+			details.length >= 1 && details.length <= 2 &&
+			!!customer &&
+			details.every((d) => d.receipt_type === "Customer" && d.customer === customer) &&
+			types.every((t) => t === "Sales Invoice" || t === "On Account") &&
+			new Set(types).size === types.length &&
+			(doc.receipt_allocation || []).every((a) => a.reference_type === "Sales Invoice" && a.customer === customer)
 		);
 	}
+
+	// The On Account line: money received with no invoice
+	const on_account_line = (doc) => (doc.receipt_entry_details || []).find((d) => d.reference_type === "On Account");
 
 	// ======================================================= quick payment
 
@@ -621,6 +630,7 @@ frappe.provide("digitz_erp");
 			this.customer = null;
 			this.mode = null; // the payment mode's Mode: Cash, Bank, Card, Other
 			this.rows = []; // pending invoices (get_console_receivables), each with `paying`
+			this.on_account = 0; // received with no invoice: an advance on the customer's account
 			this.rows_loading = false;
 		}
 
@@ -646,6 +656,7 @@ frappe.provide("digitz_erp");
 			const doc = this.doc;
 			const line = (doc.receipt_entry_details || [])[0];
 			this.customer = line ? line.customer : null;
+			this.on_account = round2((on_account_line(doc) || {}).amount);
 			if (doc.payment_mode) {
 				const r = await frappe.db.get_value("Payment Mode", doc.payment_mode, "mode");
 				this.mode = (r.message || {}).mode || doc.mode;
@@ -713,6 +724,11 @@ frappe.provide("digitz_erp");
 
 		total_paying() {
 			return round2(this.rows.reduce((sum, row) => sum + flt(row.paying), 0));
+		}
+
+		// Everything received: the invoices paid and the amount on account
+		total_received() {
+			return round2(this.total_paying() + flt(this.on_account));
 		}
 
 		total_balance() {
@@ -846,7 +862,10 @@ frappe.provide("digitz_erp");
 				<input type="text" inputmode="decimal" class="ci-input cr-received-input" id="cr-received-${esc(this.tab.key)}"
 					placeholder="0.00" title="${__("Fills the invoices oldest first")}">
 				<button type="button" class="btn btn-default btn-xs" data-action="pay-all">${__("Pay all")}</button>
-				<button type="button" class="btn btn-default btn-xs" data-action="clear">${__("Clear")}</button>`);
+				<button type="button" class="btn btn-default btn-xs" data-action="clear">${__("Clear")}</button>
+				<label class="cr-received-label" for="cr-on-account-${esc(this.tab.key)}"
+					title="${__("Received without an invoice: kept on the customer's account as an advance")}">${__("On account (no invoice)")}</label>
+				<input type="text" inputmode="decimal" class="ci-input cr-on-account-input" id="cr-on-account-${esc(this.tab.key)}" placeholder="0.00">`);
 		}
 
 		render_rows() {
@@ -867,7 +886,7 @@ frappe.provide("digitz_erp");
 				return;
 			}
 			if (!this.rows.length) {
-				$wrap.html(`<div class="cr-empty text-muted">${__("{0} has no unpaid credit invoices.", [esc(this.customer)])}</div>`);
+				$wrap.html(`<div class="cr-empty text-muted">${__("{0} has no unpaid credit invoices. Enter the amount received: it is kept on their account (On account).", [esc(this.customer)])}</div>`);
 				return;
 			}
 
@@ -902,8 +921,12 @@ frappe.provide("digitz_erp");
 		// A submitted, cancelled or form-made receipt: what it allocated, from the document
 		saved_rows_html() {
 			const allocations = (this.doc.receipt_allocation || []).filter((a) => flt(a.paying_amount) > 0);
+			const on_account = flt((on_account_line(this.doc) || {}).amount);
+			const on_account_note = on_account
+				? `<div class="cr-empty text-muted">${__("{0} received on account, with no invoice.", [money(on_account)])}</div>`
+				: "";
 			if (!allocations.length) {
-				return `<div class="cr-empty text-muted">${__("This receipt pays no invoices.")}</div>`;
+				return on_account_note || `<div class="cr-empty text-muted">${__("This receipt pays no invoices.")}</div>`;
 			}
 			const can_open = (a) => a.reference_type === "Sales Invoice" && this.doc.docstatus === 1;
 			return `
@@ -926,7 +949,7 @@ frappe.provide("digitz_erp");
 							</tr>`).join("")}
 						</tbody>
 					</table>
-				</div>`;
+				</div>${on_account_note}`;
 		}
 
 		bind() {
@@ -940,22 +963,27 @@ frappe.provide("digitz_erp");
 				frappe.set_route("cashier-console", "invoices", $(e.currentTarget).attr("data-open-invoice"));
 			});
 
+			// What the invoices do not take is kept on account
 			this.$el.on("change", ".cr-received-input", (e) => {
-				const value = flt(e.currentTarget.value);
-				const left = this.spread(value);
-				left > 0 && frappe.show_alert({
-					message: __("{0} is more than the invoices' balance. Only {1} is allocated.", [money(value), money(value - left)]),
-					indicator: "orange",
+				const value = Math.max(0, flt(e.currentTarget.value));
+				this.on_account = this.spread(value);
+				this.on_account > 0 && frappe.show_alert({
+					message: __("{0} goes to the invoices; {1} is kept on account.", [money(value - this.on_account), money(this.on_account)]),
+					indicator: "blue",
 				});
 				this.mark_dirty();
 			});
-			this.$el.on("keydown", ".cr-received-input, .cr-pay", (e) => {
+			this.$el.on("change", ".cr-on-account-input", (e) => {
+				this.on_account = Math.max(0, round2(e.currentTarget.value));
+				this.mark_dirty();
+			});
+			this.$el.on("keydown", ".cr-received-input, .cr-pay, .cr-on-account-input", (e) => {
 				if (e.key === "Enter") {
 					e.preventDefault();
 					e.currentTarget.blur();
 				}
 			});
-			this.$el.on("focus", ".cr-received-input, .cr-pay", (e) => e.currentTarget.select());
+			this.$el.on("focus", ".cr-received-input, .cr-pay, .cr-on-account-input", (e) => e.currentTarget.select());
 
 			this.$el.on("change", ".cr-pay", (e) => {
 				const row = this.rows[cint(e.currentTarget.dataset.row)];
@@ -991,6 +1019,7 @@ frappe.provide("digitz_erp");
 			}
 			this.customer = customer;
 			this.rows = [];
+			this.on_account = 0;
 			this.dirty = true;
 			await this.load_rows();
 			this.render_rows();
@@ -1066,6 +1095,8 @@ frappe.provide("digitz_erp");
 				buttons.push(btn("save", __("Save"), saved && !this.dirty ? "btn-default" : "btn-primary", "check"));
 				saved && !this.dirty && buttons.push(btn("submit", __("Submit"), "btn-primary"));
 			}
+			// The customer's statement, in the console's Customer Ledger tab
+			this.customer && buttons.push(btn("ledger", __("Ledger")));
 			if (saved) {
 				buttons.push(`
 					<div class="btn-group">
@@ -1109,22 +1140,27 @@ frappe.provide("digitz_erp");
 			});
 			const full = this.rows.length && this.rows.every((row) => round2(row.paying) === round2(row.balance_amount));
 			this.$el.find(".cr-check-all").prop("checked", !!full);
+			const $on_account = this.$el.find(".cr-on-account-input");
+			!$on_account.is(":focus") && $on_account.val(flt(this.on_account) ? format_number(this.on_account, null, 2) : "");
 		}
 
 		refresh_totals() {
 			const editable = this.is_editable();
-			const total = editable ? this.total_paying() : flt(this.doc.amount);
+			const total = editable ? this.total_received() : flt(this.doc.amount);
 			this.$el.find(".ci-total-value").text(money(total));
 
 			const sums = [];
 			if (editable) {
 				const paying = this.rows.filter((row) => flt(row.paying) > 0).length;
 				sums.push([__("Invoices paid"), paying ? `${paying} / ${this.rows.length}` : "-"]);
+				flt(this.on_account) && sums.push([__("On account (no invoice)"), money(this.on_account)]);
 				sums.push([__("Customer's balance"), money(this.total_balance())]);
-				this.rows.length && sums.push([__("Left after this receipt"), money(this.total_balance() - total)]);
+				this.rows.length && sums.push([__("Left after this receipt"), money(this.total_balance() - this.total_paying())]);
 			} else {
 				const line = (this.doc.receipt_entry_details || [])[0];
 				line && line.customer && sums.push([__("Customer"), esc(line.customer)]);
+				const on_account = flt((on_account_line(this.doc) || {}).amount);
+				on_account && sums.push([__("On account (no invoice)"), money(on_account)]);
 			}
 			this.doc.payment_mode && sums.push([__("Payment Mode"), esc(this.doc.payment_mode)]);
 			this.$el.find(".ci-sums").html(sums.map(([l, v]) => `<div class="ci-sum"><span>${l}</span><span>${v}</span></div>`).join(""));
@@ -1157,11 +1193,13 @@ frappe.provide("digitz_erp");
 				},
 				clear: () => {
 					this.rows.forEach((row) => (row.paying = 0));
+					this.on_account = 0;
 					this.$el.find(".cr-received-input").val("");
 					this.mark_dirty();
 				},
 				reload: () => this.reload(),
 				form: () => frappe.set_route("Form", DOCTYPE, this.doc.name),
+				ledger: () => frappe.set_route("cashier-console", "ledger", this.customer),
 			}[name] || (() => {}))();
 		}
 
@@ -1192,18 +1230,23 @@ frappe.provide("digitz_erp");
 			if (over) {
 				return fail(__("{0}: at most {1} is left to pay.", [esc(over.reference_name), money(over.balance_amount)]));
 			}
-			if (this.total_paying() <= 0) {
-				return fail(__("Enter the amount paid against at least one invoice."));
+			if (flt(this.on_account) < 0) {
+				return fail(__("The amount on account cannot be negative."));
+			}
+			if (this.total_received() <= 0) {
+				return fail(__("Enter the amount received: against the invoices, on account, or both."));
 			}
 			return true;
 		}
 
-		// The receipt as the Receipt Entry form and its allocation popup make it:
-		// one Customer line of type Sales Invoice for the total, and one allocation
-		// per invoice paid
+		// The receipt as the Receipt Entry form and its allocation popup make it: a
+		// Customer line of type Sales Invoice for what the invoices take, with one
+		// allocation per invoice paid, and a Customer line of type On Account for
+		// the rest. Each line is fully allocated or not at all, as the server checks.
 		build_doc() {
 			const doc = this.doc;
-			const total = this.total_paying();
+			const paying = this.total_paying();
+			const on_account = round2(this.on_account);
 			const defaults = this.host.defaults || {};
 
 			if (doc.__islocal) {
@@ -1212,26 +1255,31 @@ frappe.provide("digitz_erp");
 			}
 			doc.company = doc.company || defaults.company;
 			doc.warehouse = doc.warehouse || defaults.warehouse;
-			doc.amount = total;
-			doc.allocated_amount = total;
+			doc.amount = round2(paying + on_account);
+			doc.allocated_amount = paying;
 			doc.mode = this.mode;
 
-			let line = (doc.receipt_entry_details || [])[0];
-			if (!line) {
-				line = frappe.model.add_child(doc, DETAIL_DOCTYPE, "receipt_entry_details");
-			}
-			Object.assign(line, {
-				receipt_type: "Customer",
-				reference_type: "Sales Invoice",
-				customer: this.customer,
-				account: line.account || defaults.receivable_account,
-				reference_no: doc.reference_no,
-				reference_date: doc.reference_date,
-				project: doc.project || null,
-				amount: total,
-				allocated_amount: total,
-			});
-			doc.receipt_entry_details = [line];
+			const existing = doc.receipt_entry_details || [];
+			const line_for = (reference_type, amount, allocated) => {
+				const line = existing.find((d) => d.reference_type === reference_type)
+					|| frappe.model.add_child(doc, DETAIL_DOCTYPE, "receipt_entry_details");
+				return Object.assign(line, {
+					receipt_type: "Customer",
+					reference_type,
+					customer: this.customer,
+					account: line.account || defaults.receivable_account,
+					reference_no: doc.reference_no,
+					reference_date: doc.reference_date,
+					project: doc.project || null,
+					amount,
+					allocated_amount: allocated,
+				});
+			};
+			const lines = [];
+			paying > 0 && lines.push(line_for("Sales Invoice", paying, paying));
+			on_account > 0 && lines.push(line_for("On Account", on_account, 0));
+			lines.forEach((line, i) => (line.idx = i + 1));
+			doc.receipt_entry_details = lines;
 
 			doc.receipt_allocation = [];
 			this.rows.filter((row) => flt(row.paying) > 0).forEach((row) => {
@@ -1302,8 +1350,11 @@ frappe.provide("digitz_erp");
 			};
 
 			if (action === "Submit") {
-				frappe.confirm(__("Submit {0} for {1}? The invoices are then paid and the receipt cannot be changed.",
-					[esc(doc.name), money(doc.amount)]), run);
+				const on_account = flt((on_account_line(doc) || {}).amount);
+				frappe.confirm(
+					__("Submit {0} for {1}? The receipt cannot be changed after this.", [esc(doc.name), money(doc.amount)])
+					+ (on_account ? " " + __("{0} is kept on the customer's account, with no invoice.", [money(on_account)]) : ""),
+					run);
 			} else {
 				await run();
 			}

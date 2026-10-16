@@ -62,6 +62,7 @@
   "counter_device",
   "more_details_section",
   "customer_address",
+  "notes",
   "tax_id",
   "default_cost_center",
   "ship_to_location",
@@ -391,6 +392,11 @@
    "fieldname": "customer_address",
    "fieldtype": "Small Text",
    "label": "Address"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Data",
+   "label": "Notes"
   },
   {
    "fieldname": "salesman",
@@ -894,7 +900,7 @@
    "table_fieldname": "receipt_allocation"
   }
  ],
- "modified": "2026-10-09 12:00:00.000000",
+ "modified": "2026-10-16 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Sales Invoice",

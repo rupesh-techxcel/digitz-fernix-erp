@@ -8,7 +8,7 @@ Four roles run the Medical Center. Give each person only the ones they need.
 
 | Role | For | In short |
 |---|---|---|
-| **Cashier** | Counter staff | Opens and closes their day, bills today's invoices, takes payment, collects credit payments, adds customers. Never cancels, never changes prices or masters. |
+| **Cashier** | Counter staff | Opens and closes their day, bills today's invoices, takes payment, collects credit payments, adds and edits customers and items, sees a customer's ledger. Never cancels or deletes, never changes prices or other masters. |
 | **Cashier Approver** | A billing lead | Sees every counter's invoices and can cancel, amend and delete them. Give it **with** Cashier: on its own it reaches nothing but invoices. |
 | **Management** | Supervisors | Approves cash differences and counter PCs, closes days for others, manages price lists. |
 | **System Manager** | Setup and oversight | Manages customers, items, prices, services, counters, settings and users. Reads every invoice but does not change them. |

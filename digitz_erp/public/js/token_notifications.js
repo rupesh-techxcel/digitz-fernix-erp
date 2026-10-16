@@ -102,7 +102,7 @@ digitz_erp.token_notifications = {
 
 	// ------------------------------------------------------------ manual sync
 
-	// Shared by the Sales Invoice Board (page and console tab) and the Medical Center Dashboard, which
+	// Shared by the Sales Invoice Board page and the Medical Center Dashboard, which
 	// both carry a "Sync Now" button. The server runs the sync inline and hands
 	// back a report, so the popup can say what actually happened.
 	run_sync_now(on_done) {

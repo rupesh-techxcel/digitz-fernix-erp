@@ -2,7 +2,7 @@
 //
 // One page for the cashier's whole day. The tabs along the top follow the shift
 // from start to finish: Day Open, then the work (Sales Invoice Board, Sales
-// Invoices, Receipts), then Day Close and Day History. The active tab lives in
+// Invoices, Receipts, Customer Ledger), then Day Close and Day History. The active tab lives in
 // the route (/app/cashier-console/<tab>), so reloads, links and the browser's
 // back button all land on the right tab.
 //
@@ -46,6 +46,7 @@ digitz_erp.CashierConsole = class CashierConsole {
 		board: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>`,
 		invoices: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>`,
 		receipts: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.6"/><path d="M6 10v5M18 10v5"/></svg>`,
+		ledger: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 21.5A2.5 2.5 0 0 1 6.5 19H20v3H6.5"/><path d="M8 7h8M8 11h6"/></svg>`,
 		"day-close": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>`,
 		"day-history": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>`,
 		user: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>`,
@@ -118,6 +119,23 @@ digitz_erp.CashierConsole = class CashierConsole {
 			},
 			on_reselect(view) {
 				view.refresh();
+			},
+		},
+		{
+			key: "ledger",
+			group: "work",
+			label: __("Customer Ledger"),
+			hint: __("Statement"),
+			// One customer's statement (public/js/customer_ledger.js); the invoice and
+			// receipt editors open it on their customer
+			render($pane) {
+				return new digitz_erp.CustomerLedger($pane);
+			},
+			on_route(view, sub) {
+				view.route(sub);
+			},
+			on_reselect(view) {
+				view.load();
 			},
 		},
 		{

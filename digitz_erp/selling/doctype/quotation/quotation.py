@@ -371,6 +371,11 @@ def generate_sales_order(quotation):
 
 	return new_so.name
 
+def pdf_file_stem(docname):
+	"""The start of a document's PDF file name: its name, made safe for a file."""
+	return str(docname).replace("/", "-").replace("\\", "-")
+
+
 def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_override=None):
 	"""Render `doc` to a PDF and attach it.
 
@@ -559,7 +564,9 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	output_stream = io.BytesIO()
 	output_pdf.write(output_stream)
 
-	file_name = f"{doc.name}-{file_suffix}.pdf"
+	# A name like INV/450000 has a slash, which a file name cannot hold
+	file_stem = pdf_file_stem(doc.name)
+	file_name = f"{file_stem}-{file_suffix}.pdf"
 
 	# Match on the file name, not just the document: an invoice and its receipt
 	# are both attached to the same record, and deleting "the first attachment"
@@ -570,7 +577,7 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		filters={
 			"attached_to_doctype": doc.doctype,
 			"attached_to_name": doc.name,
-			"file_name": ["like", f"{doc.name}-{file_suffix}%"],
+			"file_name": ["like", f"{file_stem}-{file_suffix}%"],
 		},
 		pluck="name",
 	)

@@ -801,8 +801,9 @@ frappe.provide("digitz_erp.si_engine");
 	// Send a PDF straight to the printer: it loads in a hidden frame and the
 	// browser's print starts on it -- no dialog on a counter PC whose Chrome runs
 	// with --kiosk-printing, the usual print dialog anywhere else. `on_fail` runs
-	// if the browser will not print the frame (it then shows the PDF instead).
-	engine.print_pdf = function (file_url, label, on_fail) {
+	// if the browser will not print the frame (it then shows the PDF instead);
+	// `on_sent` once the print has been handed to the browser.
+	engine.print_pdf = function (file_url, label, on_fail, on_sent) {
 		$(".ci-print-frame").remove();
 		const frame = $(`<iframe class="ci-print-frame" title="${frappe.utils.escape_html(label || "")}"
 			style="position: fixed; right: 0; bottom: 0; width: 1px; height: 1px; border: 0; opacity: 0;"></iframe>`)
@@ -814,6 +815,7 @@ frappe.provide("digitz_erp.si_engine");
 					frame.contentWindow.focus();
 					frame.contentWindow.print();
 					frappe.show_alert({ message: __("Sent {0} to the printer", [label]), indicator: "green" });
+					on_sent && on_sent();
 				} catch (e) {
 					on_fail ? on_fail() : window.open(file_url, "_blank");
 				}

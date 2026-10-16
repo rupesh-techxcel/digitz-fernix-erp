@@ -53,21 +53,3 @@ def get_medical_service_logs_permission_query(user):
     # Restrict Cashier to their own records (safe escaping)
     return f"`tabMedical Service Logs`.owner = {frappe.db.escape(user)}"
 
-def item_has_permission(doc,user):
-    """Restrict Reception role from creating Items"""
-    roles = frappe.get_roles(user)
-    
-    print("roles")
-    print(roles)
-    
-    if "Administrator" in roles:
-        print("Administrator")
-        return True
-
-    # if user has cashier role and is trying to create
-    if "Cashier" in roles:
-        # check if doc is new
-        if doc.is_new():
-            return False  # No permission to create
-        
-    return True  # default allow

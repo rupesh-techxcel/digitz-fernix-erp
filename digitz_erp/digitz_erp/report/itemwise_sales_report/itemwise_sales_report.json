@@ -10,7 +10,7 @@
  "idx": 0,
  "is_standard": "Yes",
  "letterhead": null,
- "modified": "2025-09-02 15:24:17.201101",
+ "modified": "2026-10-16 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Itemwise Sales Report",
@@ -24,7 +24,7 @@
    "role": "System Manager"
   },
   {
-   "role": "Cashier"
+   "role": "Management"
   }
  ],
  "timeout": 0

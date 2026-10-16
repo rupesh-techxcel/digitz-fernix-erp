@@ -27,11 +27,12 @@
   "column_break_mv",
   "cash_refunds",
   "cash_paid_out",
-  "cash_expenditure",
   "expected_cash",
   "closing_section",
   "denominations",
+  "payment_mode_totals",
   "counted_cash",
+  "cash_expenditure",
   "difference",
   "column_break_close",
   "close_remarks",
@@ -110,19 +111,22 @@
    "description": "Submitted documents raised in this session with a cash payment mode. Recalculated when the day is closed.",
    "fieldname": "movements_section",
    "fieldtype": "Section Break",
-   "label": "Cash Movements"
+   "label": "Cash Movements",
+   "permlevel": 1
   },
   {
    "fieldname": "cash_sales",
    "fieldtype": "Currency",
    "label": "Cash Sales",
-   "read_only": 1
+   "read_only": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "cash_receipts",
    "fieldtype": "Currency",
    "label": "Cash Receipts (Credit Collections)",
-   "read_only": 1
+   "read_only": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "column_break_mv",
@@ -132,20 +136,15 @@
    "fieldname": "cash_refunds",
    "fieldtype": "Currency",
    "label": "Cash Refunds",
-   "read_only": 1
+   "read_only": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "cash_paid_out",
    "fieldtype": "Currency",
    "label": "Cash Paid Out",
-   "read_only": 1
-  },
-  {
-   "description": "Cash paid out of the till, entered by the cashier at Day Close. Not posted to the accounts.",
-   "fieldname": "cash_expenditure",
-   "fieldtype": "Currency",
-   "label": "Expenditure",
-   "allow_on_submit": 0
+   "read_only": 1,
+   "permlevel": 1
   },
   {
    "bold": 1,
@@ -153,7 +152,8 @@
    "fieldname": "expected_cash",
    "fieldtype": "Currency",
    "label": "Expected Cash",
-   "read_only": 1
+   "read_only": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "closing_section",
@@ -167,6 +167,13 @@
    "options": "Cash Denomination Count"
   },
   {
+   "description": "Card, bank and other non-cash takings the cashier entered at Day Close.",
+   "fieldname": "payment_mode_totals",
+   "fieldtype": "Table",
+   "label": "Non-Cash Payment Totals",
+   "options": "Counter Session Payment Total"
+  },
+  {
    "bold": 1,
    "description": "The cash in the till at close. Filled from the Cash Count when one is entered.",
    "fieldname": "counted_cash",
@@ -174,12 +181,20 @@
    "label": "Counted Cash"
   },
   {
+   "description": "Cash paid out of the till, entered by the cashier at Day Close. Not posted to the accounts.",
+   "fieldname": "cash_expenditure",
+   "fieldtype": "Currency",
+   "label": "Expenditure",
+   "allow_on_submit": 0
+  },
+  {
    "bold": 1,
    "description": "Counted Cash - Expected Cash. Negative is a shortage.",
    "fieldname": "difference",
    "fieldtype": "Currency",
    "label": "Difference",
-   "read_only": 1
+   "read_only": 1,
+   "permlevel": 1
   },
   {
    "fieldname": "column_break_close",
@@ -247,7 +262,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-08 15:00:00.000000",
+ "modified": "2026-10-16 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Counter Session",
@@ -281,6 +296,16 @@
    "print": 1,
    "read": 1,
    "role": "Cashier"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager"
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "Management"
   }
  ],
  "search_fields": "counter,cashier,status",

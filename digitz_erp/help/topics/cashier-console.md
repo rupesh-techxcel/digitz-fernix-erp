@@ -6,7 +6,7 @@ The **Cashier Console** is the cashier's whole day on one page. Open it from the
 
 Today's draft invoices raised from patients' tokens, for every counter. Pick one and bill it.
 
-Tokens from reception become draft Sales Invoices on the server, about once a minute. The Board lists **today's** drafts, newest first, whoever's token raised them. It updates by itself, and **Sync Now** fetches new tokens at once.
+Tokens from reception become draft Sales Invoices on the server, about once a minute. The Board lists **today's** drafts, newest first, whoever's token raised them. It updates by itself.
 
 - **Search** by invoice number, customer, the customer's company or token number.
 - **Open Invoice** (or click the row) opens it in the **Sales Invoices** tab.

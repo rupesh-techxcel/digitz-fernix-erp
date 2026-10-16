@@ -4,9 +4,9 @@
 """What the Cashier role may do, enforced on every install and migrate.
 
 A cashier works the counter: opens and closes the day, bills and prints invoices,
-collects payments on credit invoices (Receipt Entry) and adds customers. They
-never manage items, prices or masters, and never cancel, amend or delete an
-invoice or a receipt.
+collects payments on credit invoices (Receipt Entry), and adds and edits customers
+and items. They never manage prices or other masters, and never cancel, amend or
+delete an invoice, a receipt, a customer or an item.
 
 The permissions ship two ways: as rows in each doctype's own JSON, and as Custom
 DocPerm fixtures (Sales Invoice, Customer, ...). But once a site has a Custom
@@ -18,6 +18,10 @@ rights are kept.
 
 Only the Cashier row is touched, and only the flags listed: other flags and other
 roles are left as the site has them.
+
+A fresh install gets every rule (apply, from after_sync). A migrate only grants
+the customer and item rights (apply_on_migrate): a live site keeps whatever its
+Role Permission Manager says for everything else, and nothing is taken away.
 
 Check a site with: bench --site <site> execute digitz_erp.api.cashier_permissions.report
 """
@@ -36,14 +40,14 @@ RULES = {
 		"read": 1, "select": 1, "write": 1, "create": 1, "submit": 1, "print": 1, "report": 1,
 		"cancel": 0, "amend": 0, "delete": 0,
 	},
-	"Customer": {"read": 1, "select": 1, "create": 1, "delete": 0},
+	"Customer": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 0},
 	# Collections on credit invoices, from the console's Receipts tab
 	"Receipt Entry": {
 		"read": 1, "select": 1, "write": 1, "create": 1, "submit": 1, "print": 1, "report": 1,
 		"cancel": 0, "amend": 0, "delete": 0,
 	},
 	"Counter Session": {"read": 1, "print": 1, "write": 0, "create": 0, "delete": 0, "cancel": 0},
-	"Item": {**LOOKUP, **NO_CHANGES},
+	"Item": {**LOOKUP, "create": 1, "write": 1, "delete": 0, "submit": 0, "cancel": 0, "amend": 0},
 	"Item Price": {"write": 0, "create": 0, "delete": 0},
 	"Price List": {"select": 1, "write": 0, "create": 0, "delete": 0},
 	"Payment Mode": {**LOOKUP, **NO_CHANGES},
@@ -56,6 +60,16 @@ RULES = {
 	"Medical Services": {**LOOKUP, **NO_CHANGES},
 	"Medical Service Logs": {**LOOKUP, **NO_CHANGES},
 	"Global Settings": {"read": 1, "write": 0},
+	# Picked in the Customer and Item forms a cashier fills in. Grant only: any
+	# other right a site has given the Cashier on these is left as it is
+	"Customer Group": LOOKUP,
+	"Area": LOOKUP,
+	"Country": LOOKUP,
+	"Currency": LOOKUP,
+	"Item Group": LOOKUP,
+	"Item Subgroup": LOOKUP,
+	"Brand": LOOKUP,
+	"Asset Category": LOOKUP,
 	# Picked in the invoice (Salesman, Cost Center), never opened: Employee is HR data
 	"Employee": {"select": 1, "read": 0, "write": 0, "create": 0, "delete": 0},
 	"Cost Center": {"select": 1, "write": 0, "create": 0, "delete": 0},
@@ -106,9 +120,46 @@ def ensure_cashier_permissions():
 		print("Cashier permissions corrected:\n  " + "\n  ".join(changed))
 
 
+# What a migrate adds on a live site: the customer and item rights, and the
+# masters picked in those forms. Grant only.
+MIGRATE_GRANTS = (
+	"Customer", "Item", "Customer Group", "Area", "Country", "Currency",
+	"Item Group", "Item Subgroup", "Brand", "Asset Category",
+)
+
+
+def grant_cashier_permissions(doctypes):
+	"""Give the Cashier the rights RULES grants on `doctypes`. Never removes one:
+	a flag RULES sets to 0 is left as the site has it."""
+	changed = []
+	for doctype in doctypes:
+		grants = {flag: 1 for flag, value in RULES[doctype].items() if value}
+		if not frappe.db.exists("DocType", doctype) or not grants:
+			continue
+		found = cashier_row(doctype)
+		if not found:
+			add_permission(doctype, ROLE, 0)
+			found = cashier_row(doctype)
+		table, name, row = found
+		updates = {flag: 1 for flag in grants if not row.get(flag)}
+		if updates:
+			frappe.db.set_value(table, name, updates, update_modified=False)
+			changed.append(f"{doctype}: {updates}")
+
+	if changed:
+		frappe.clear_cache()
+		print("Cashier permissions granted:\n  " + "\n  ".join(changed))
+
+
 def apply():
-	"""after_migrate, and after_sync on install: runs once the fixtures are in."""
+	"""after_sync, on a fresh install: every rule, once the fixtures are in."""
 	ensure_cashier_permissions()
+
+
+def apply_on_migrate():
+	"""after_migrate: only the customer and item grants (see MIGRATE_GRANTS)."""
+	if frappe.db.exists("Role", ROLE):
+		grant_cashier_permissions(MIGRATE_GRANTS)
 
 
 @frappe.whitelist()

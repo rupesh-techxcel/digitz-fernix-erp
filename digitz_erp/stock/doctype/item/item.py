@@ -48,25 +48,6 @@ class Item(Document):
 			if ledger["unit"] != base_unit:
 				frappe.throw("Cannot change base unit as it's being used in stock ledgers.")
     
-	def before_save(self):
-		if self.is_new():
-			return
-
-		# Administrator holds every role in Frappe, Cashier included, so a bare
-		# role check locks the superuser out of the item master it owns. The
-		# companion hook, medical_services.item_has_permission, already makes
-		# this exemption; this method was missing it.
-		if frappe.session.user == "Administrator":
-			return
-
-		# A save by the system on the user's behalf, not an edit: the customer's
-		# latest rate recorded when a Cashier submits an invoice
-		# (item_price_api.update_customer_item_price)
-		if self.flags.ignore_permissions:
-			return
-
-		if "Cashier" in frappe.get_roles(frappe.session.user):
-			frappe.throw("You are not allowed to edit Items.")
 	def before_validate(self):
 		
 		base_unit_exists = False
@@ -185,7 +166,8 @@ class Item(Document):
 
 				if(item_price_to_update.rate != self.standard_buying_price):
 					item_price_to_update.rate = self.standard_buying_price
-					item_price_to_update.save()
+					# A cashier may edit the item but has no rights on Item Price
+					item_price_to_update.save(ignore_permissions=True)
 					frappe.msgprint(f"Price list,'Standard Buying' updated for the item, {self.item_code}", alert= True)
 
 				# #print("item_price_to_update")

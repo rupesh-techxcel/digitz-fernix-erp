@@ -39,6 +39,39 @@ CASH_MOVEMENTS = (
 TOLERANCE = 0.005
 
 
+def get_takings_by_mode(sessions):
+	"""{session: {payment mode: net amount}} of the non-cash documents saved in
+	`sessions` -- what the card machine and bank should show for each day.
+
+	`sessions` maps the name to report under to the name the documents carry
+	(the original session, for a corrected copy; see CounterSession.source_session).
+	Signs and credit sales are treated as in CASH_MOVEMENTS.
+	"""
+	takings = {name: {} for name in sessions}
+	if not sessions:
+		return takings
+	reported_as = {}
+	for name, source in sessions.items():
+		reported_as.setdefault(source, []).append(name)
+
+	for _field, doctype, amount_expr, sign, skip_credit in CASH_MOVEMENTS:
+		credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
+		rows = frappe.db.sql(
+			f"""
+			SELECT d.counter_session, d.payment_mode, SUM({amount_expr})
+			FROM `tab{doctype}` d
+			INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
+			WHERE d.counter_session IN %(sources)s AND d.docstatus = 1 AND pm.mode != 'Cash' {credit}
+			GROUP BY d.counter_session, d.payment_mode
+			""",
+			{"sources": list(reported_as)},
+		)
+		for source, mode, amount in rows:
+			for name in reported_as[source]:
+				takings[name][mode] = takings[name].get(mode, 0) + sign * flt(amount)
+	return takings
+
+
 class CounterSession(Document):
 	def validate(self):
 		if self.is_new() and self.amended_from:
@@ -90,10 +123,21 @@ class CounterSession(Document):
 		if self.denominations and total:
 			self.counted_cash = total
 
+	def source_session(self):
+		"""The session the day's documents carry. A corrected close is an amended
+		copy under a new name, but the invoices still name the original."""
+		name = self.name
+		amended_from = self.amended_from
+		while amended_from:
+			name = amended_from
+			amended_from = frappe.db.get_value("Counter Session", name, "amended_from")
+		return name
+
 	def calculate_cash(self):
 		"""Sum the submitted cash documents of this session and, less the
 		expenditure entered at Day Close, the expected cash."""
 		expected = flt(self.opening_float)
+		source = self.source_session()
 
 		for field, doctype, amount_expr, sign, skip_credit in CASH_MOVEMENTS:
 			amount = 0
@@ -106,7 +150,7 @@ class CounterSession(Document):
 					INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
 					WHERE d.counter_session = %s AND d.docstatus = 1 AND pm.mode = 'Cash' {credit}
 					""",
-					(self.name,),
+					(source,),
 				)[0][0])
 			self.set(field, amount)
 			expected += sign * amount

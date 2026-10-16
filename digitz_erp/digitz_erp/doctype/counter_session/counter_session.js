@@ -27,10 +27,14 @@ frappe.ui.form.on("Counter Session", {
 			return;
 		}
 
+		// The difference is a level-1 field: cashiers do not see it (a blind close)
+		const sees_figures = !!(frm.perm[1] && frm.perm[1].read);
+		const difference = format_currency(frm.doc.difference, frappe.boot.sysdefaults.currency);
 		frm.dashboard.set_headline(
-			__("The counted cash differs from the expected cash by {0}. Waiting for a supervisor.",
-				[format_currency(frm.doc.difference, frappe.boot.sysdefaults.currency)]),
-			flt(frm.doc.difference) < 0 ? "red" : "orange"
+			sees_figures
+				? __("The counted cash differs from the expected cash by {0}. Waiting for a supervisor.", [difference])
+				: __("The count is waiting for a supervisor's approval."),
+			sees_figures && flt(frm.doc.difference) < 0 ? "red" : "orange"
 		);
 
 		frappe.call({ method: "digitz_erp.api.counter_session_api.get_state" }).then((r) => {
@@ -39,8 +43,9 @@ frappe.ui.form.on("Counter Session", {
 			}
 			frm.add_custom_button(__("Approve & Close"), () => {
 				frappe.confirm(
-					__("Approve a difference of {0} and close this day?",
-						[format_currency(frm.doc.difference, frappe.boot.sysdefaults.currency)]),
+					sees_figures
+						? __("Approve a difference of {0} and close this day?", [difference])
+						: __("Approve this count and close the day?"),
 					() => frappe.call({
 						method: "digitz_erp.api.counter_session_api.approve_close",
 						args: { session: frm.doc.name },

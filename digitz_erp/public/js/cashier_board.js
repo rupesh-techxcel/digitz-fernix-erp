@@ -8,7 +8,8 @@
 // The standalone Sales Invoice Board page (digitz_erp/page/sales_invoice_board)
 // does the same and now sends console users here. Token fetching, customer
 // creation and invoice creation all live on the server (digitz_erp/api/
-// token_sync.py, a cron job every minute). This view only renders and reacts:
+// token_sync.py, a cron job every minute), so the board has no Sync Now button
+// of its own. This view only renders and reacts:
 // it refreshes when the server says something changed, with a slow timer as a
 // safety net in case the socket drops, and only while the tab is on screen.
 //
@@ -46,9 +47,6 @@ digitz_erp.CashierBoard = class CashierBoard {
 						${frappe.utils.icon("search", "sm")}
 						<input type="search" class="form-control" placeholder="${__("Search invoice no, customer, company or token")}" aria-label="${__("Search the board")}">
 					</div>
-					<button type="button" class="btn btn-primary btn-sm cb-sync">
-						${frappe.utils.icon("refresh", "sm")} ${__("Sync Now")}
-					</button>
 					<button type="button" class="btn btn-default btn-sm cb-reload">${__("Reload")}</button>
 					<span class="ci-list-count text-muted cb-status"></span>
 				</div>
@@ -62,7 +60,6 @@ digitz_erp.CashierBoard = class CashierBoard {
 	}
 
 	bind_events() {
-		this.$el.on("click", ".cb-sync", () => this.sync_now());
 		this.$el.on("click", ".cb-reload", () => this.refresh());
 		this.$el.on("input", ".ci-search input", (e) => {
 			this.search = e.currentTarget.value.trim();
@@ -147,10 +144,6 @@ digitz_erp.CashierBoard = class CashierBoard {
 				}
 			},
 		});
-	}
-
-	sync_now() {
-		digitz_erp.token_notifications.run_sync_now(() => this.refresh());
 	}
 
 	set_status(text) {

@@ -498,7 +498,10 @@ digitz_erp.dayops_styles = function () {
 .dayops-head .k { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
 .dayops-head .v { font-size: 15px; font-weight: 600; }
 .dayops-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 900px) { .dayops-grid { grid-template-columns: 1fr; } }
+/* Day Close: count, card & bank, close side by side so it fits without scrolling */
+.dayops-grid.dayops-grid-3 { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 1200px) { .dayops-grid.dayops-grid-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 900px) { .dayops-grid, .dayops-grid.dayops-grid-3 { grid-template-columns: 1fr; } }
 .dayops-card { border: 1px solid var(--border-color); border-radius: var(--border-radius-lg, 10px);
 	background: var(--card-bg, var(--fg-color)); padding: 16px 18px; margin-bottom: 16px; }
 .dayops-card h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin: 0 0 12px; }
@@ -511,14 +514,43 @@ digitz_erp.dayops_styles = function () {
 .dayops-lines { width: 100%; }
 .dayops-lines td { padding: 7px 4px; border-bottom: 1px solid var(--border-color); }
 .dayops-lines tr.total td { font-weight: 700; font-size: 15px; border-bottom: none; border-top: 2px solid var(--text-color); }
-.dayops-lines .dayops-toggle { cursor: pointer; color: var(--text-color); }
-.dayops-lines .dayops-caret { display: inline-block; width: 14px; color: var(--text-muted); }
 .dayops-docs td { font-size: 12px; color: var(--text-muted); padding: 3px 4px 3px 22px; border-bottom: none; }
 .dayops-big { font-size: 24px; font-weight: 700; }
 .dayops-result { padding: 12px 14px; border-radius: var(--border-radius, 6px); margin-top: 10px; font-weight: 600; }
 .dayops-result.ok { background: var(--green-50, #ecfdf5); color: var(--green-700, #15803d); }
 .dayops-result.short { background: var(--red-50, #fef2f2); color: var(--red-700, #b91c1c); }
 .dayops-result.over { background: var(--orange-50, #fff7ed); color: var(--orange-700, #c2410c); }
+/* Supervisor's Day Close: every counter's day side by side */
+.dcb-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
+.dcb-toolbar .dcb-date { width: 170px; }
+.dcb-toolbar .dcb-date .frappe-control { margin-bottom: 0; }
+.dcb-chips { display: flex; gap: 6px; padding-bottom: 4px; }
+.dcb-chip { border: 1px solid var(--border-color); background: var(--control-bg); color: var(--text-color); border-radius: 999px; padding: 3px 12px; font-size: 12px; }
+.dcb-chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.dcb-summary { font-size: 12px; padding-bottom: 6px; }
+.dcb-buttons { margin-left: auto; display: flex; gap: 6px; padding-bottom: 2px; }
+.dcb-card { padding: 0; overflow: hidden; }
+.dcb-card > p { padding: 0 16px 12px; }
+.dcb-scroll { overflow-x: auto; }
+.dcb-grid { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 13px; }
+.dcb-grid th, .dcb-grid td { padding: 6px 12px; border-bottom: 1px solid var(--border-color); }
+.dcb-grid th:first-child, .dcb-grid td:first-child { position: sticky; left: 0; z-index: 1; background: var(--card-bg, var(--fg-color));
+	white-space: nowrap; min-width: 230px; border-right: 1px solid var(--border-color); }
+.dcb-grid thead th { vertical-align: top; text-align: right; font-weight: normal; background: var(--subtle-fg, var(--fg-color)); }
+.dcb-col { min-width: 150px; }
+.dcb-counter { font-weight: 700; font-size: 14px; }
+.dcb-cashier { font-weight: 600; }
+.dcb-time, .dcb-note { font-size: 11px; color: var(--text-muted); }
+.dcb-note { color: var(--orange-600, #c2410c); }
+.dcb-section td { background: var(--subtle-fg, var(--gray-50)); font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+	color: var(--text-muted); font-weight: 600; padding-top: 10px; }
+.dcb-strong td, .dcb-difference td { font-weight: 700; }
+.dcb-grid td.is-short { color: var(--red-600, #dc2626); }
+.dcb-grid td.is-over { color: var(--orange-600, #ea580c); }
+.dcb-grid .dcb-total { background: var(--subtle-accent, var(--gray-100)); font-weight: 700; border-left: 1px solid var(--border-color); }
+.dcb-remarks { font-size: 12px; color: var(--text-muted); max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.dcb-actions { text-align: right; white-space: nowrap; }
+.dcb-actions .btn + .btn { margin-left: 4px; }
 .dayops-state { text-align: center; padding: 48px 20px; }
 .dayops-state .dayops-big { margin-bottom: 8px; }
 .dayops-state p { color: var(--text-muted); max-width: 520px; margin: 0 auto 16px; }

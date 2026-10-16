@@ -61,7 +61,9 @@ fixtures = ["Custom Field", "Custom DocPerm",
                 {"doctype": "Custom DocPerm", "filters": [["role", "in", ["Cashier", "Cashier Approver"]]]},
                 # Ships the Medical Center workspace navigator with the app, so a
                 # fresh install gets it too (install_app calls sync_fixtures).
-                {"doctype": "Custom HTML Block", "filters": [["name", "in", ["Medical Center Navigator"]]]}]
+                {"doctype": "Custom HTML Block", "filters": [["name", "in", ["Medical Center Navigator"]]]},
+                # The email Sales Invoice sends to the customer on submit
+                {"doctype": "Email Template", "filters": [["name", "in", ["Sales Invoice Submission"]]]}]
 # Home Pages
 # ----------
 
@@ -89,6 +91,13 @@ on_login = "digitz_erp.notifications.send_notification.login_notification"
 #	"methods": "digitz_erp.utils.jinja_methods",
 #	"filters": "digitz_erp.utils.jinja_filters"
 # }
+jinja = {
+	# The Day Close Slip prints the day's figures for supervisors only
+	"methods": [
+		"digitz_erp.api.counter_api.is_supervisor",
+		"digitz_erp.api.counter_session_api.get_slip_payment_rows",
+	],
+}
 
 # Installation
 # ------------
@@ -101,9 +110,9 @@ after_install = "digitz_erp.api.install_api.after_install"
 after_migrate = [
 	"digitz_erp.api.bundled_files.ensure_bundled_files",
 	"digitz_erp.api.token_simulator.update_token_url_after_migrate",
-	# Keeps the Cashier role's rights as the counter needs them, even on a site
-	# whose permissions were edited in Role Permission Manager
-	"digitz_erp.api.cashier_permissions.apply",
+	# Adds the Cashier's customer and item rights; never takes one away, so a
+	# live site keeps what its Role Permission Manager says for the rest
+	"digitz_erp.api.cashier_permissions.apply_on_migrate",
 	# Hides the roles the Medical Center never assigns (none still held by a user)
 	"digitz_erp.api.role_visibility.apply",
 ]
@@ -141,9 +150,7 @@ permission_query_conditions = {
 #	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
 # }
 #
-has_permission = {
-	"Item": "digitz_erp.api.medical_services.item_has_permission",
-}
+# Cashiers add and edit Items and Customers (api/cashier_permissions.py RULES)
 
 # DocType Class
 # ---------------

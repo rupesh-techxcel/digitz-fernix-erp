@@ -1,0 +1,88 @@
+{#- Day Close Summary: every counter's day for a date, side by side (counter_session_api.get_day_summary_html) -#}
+{%- macro money(v) -%}{% if v is none %}—{% else %}{{ frappe.utils.fmt_money(v, currency=currency) }}{% endif %}{%- endmacro -%}
+{%- macro diff_class(v) -%}{% if v is not none and v < -0.005 %}short{% elif v is not none and v > 0.005 %}over{% endif %}{%- endmacro -%}
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Day Close Summary {{ frappe.utils.formatdate(o.date) }}</title>
+<style>
+	@page { size: A4 landscape; margin: 10mm; }
+	body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin: 0; }
+	.dcs-title { text-align: center; font-size: 17px; font-weight: bold; background: #f2f2f2; padding: 7px; margin-bottom: 8px; }
+	.dcs-title span { display: block; font-size: 12px; direction: rtl; }
+	.dcs-meta { display: flex; justify-content: space-between; margin-bottom: 8px; }
+	table.grid { width: 100%; border-collapse: collapse; }
+	.grid th, .grid td { border: 1px solid #999; padding: 4px 6px; }
+	.grid th { background: #eaeaea; text-align: right; vertical-align: top; }
+	.grid th:first-child, .grid td:first-child { text-align: left; white-space: nowrap; }
+	.grid td { text-align: right; white-space: nowrap; }
+	.grid th small { display: block; font-weight: normal; color: #444; }
+	.grid tr.section td { background: #f6f6f6; font-weight: bold; text-align: left; }
+	.grid tr.strong td, .grid tr.difference td { font-weight: bold; }
+	.grid td.short { color: #c00; }
+	.grid td.over { color: #b45309; }
+	.grid .total { background: #f2f2f2; font-weight: bold; }
+	.remarks { margin-top: 8px; }
+	.remarks p { margin: 2px 0; }
+	.sign { width: 100%; margin-top: 36px; border-collapse: collapse; }
+	.sign td { width: 33%; text-align: center; padding-top: 4px; }
+	.sign td::before { content: ""; display: block; border-top: 1px solid #000; margin: 0 30px 4px; }
+	.empty { text-align: center; padding: 40px; color: #555; }
+</style>
+</head>
+<body onload="window.print()">
+	<div class="dcs-title">DAY CLOSE SUMMARY<span>ملخص إغلاق اليوم</span></div>
+	<div class="dcs-meta">
+		<div><b>{{ company or "" }}</b></div>
+		<div><b>Date:</b> {{ frappe.utils.formatdate(o.date) }}</div>
+		<div><b>Printed:</b> {{ frappe.utils.format_datetime(printed_on) }} by {{ printed_by }}</div>
+	</div>
+
+	{% if not o.sessions %}
+	<div class="empty">No day was opened on any counter on this date.</div>
+	{% else %}
+	<table class="grid">
+		<thead>
+			<tr>
+				<th></th>
+				{% for s in o.sessions %}
+				<th>{{ s.counter }}<small>{{ s.cashier_name }}</small><small>{{ s.name }} · {{ s.status }}</small></th>
+				{% endfor %}
+				<th class="total">Total</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for ln in o.lines %}
+			{% if ln.kind == "section" %}
+			<tr class="section"><td colspan="{{ o.sessions|length + 2 }}">{{ ln.label }}</td></tr>
+			{% else %}
+			<tr class="{{ ln.kind }}">
+				<td>{{ ln.label }}</td>
+				{% for v in ln["values"] %}
+				<td class="{{ diff_class(v) if ln.kind == 'difference' else '' }}">{{ money(v) }}</td>
+				{% endfor %}
+				<td class="total {{ diff_class(ln.total) if ln.kind == 'difference' else '' }}">{{ money(ln.total) }}</td>
+			</tr>
+			{% endif %}
+			{% endfor %}
+		</tbody>
+	</table>
+
+	<div class="remarks">
+		{% for s in o.sessions %}
+		{% if s.close_remarks or s.approved_by_name or s.amended_from %}
+		<p><b>{{ s.counter }} · {{ s.cashier_name }} ({{ s.name }}):</b>
+			{% if s.close_remarks %}<span style="white-space: pre-line;">{{ s.close_remarks | e }}</span>{% endif %}
+			{% if s.amended_from %} Corrects {{ s.amended_from }}.{% endif %}
+			{% if s.approved_by_name %} Approved by {{ s.approved_by_name }}.{% endif %}</p>
+		{% endif %}
+		{% endfor %}
+	</div>
+	{% endif %}
+
+	<table class="sign">
+		<tr><td>Prepared by</td><td>Checked by</td><td>Approved by</td></tr>
+	</table>
+</body>
+</html>

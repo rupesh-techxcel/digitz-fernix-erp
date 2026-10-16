@@ -23,7 +23,7 @@ from digitz_erp.api.counter_session_api import restrict_cashier_to_today, stamp_
 from digitz_erp.accounts.doctype.gl_posting.gl_posting import get_party_balance
 from digitz_erp.api.settings_api import get_customer_terms
 from digitz_erp.api.items_api import get_item_uoms 
-from digitz_erp.selling.doctype.quotation.quotation import generate_custom_invoice_pdf   
+from digitz_erp.selling.doctype.quotation.quotation import generate_custom_invoice_pdf, pdf_file_stem
 from frappe.utils import today, getdate
 
 # Put on an invoice that needs a mobile number but has none yet -- a token that
@@ -105,7 +105,7 @@ class SalesInvoice(Document):
         else:
             for name in frappe.get_all("File", pluck="name", filters={
                     "attached_to_doctype": self.doctype, "attached_to_name": self.name,
-                    "file_name": ["like", f"{self.name}-receipt%"]}):
+                    "file_name": ["like", f"{pdf_file_stem(self.name)}-receipt%"]}):
                 frappe.get_doc("File", name).delete(ignore_permissions=True)
 
         return files
@@ -1492,13 +1492,14 @@ class SalesInvoice(Document):
                 frappe.log_error(f"No email found for customer {self.customer}", "Sales Invoice Email")
                 return
             
-            email_templates = frappe.get_list("Email Template")
-            if not email_templates:
-                frappe.msgprint("Please create email template before submitting.")
+            template_name = "Sales Invoice Submission"
+            if not frappe.db.exists("Email Template", template_name):
+                frappe.msgprint(f"Please create the email template '{template_name}' to email invoices on submit.")
                 return
-            email_template = frappe.get_last_doc("Email Template")
+            email_template = frappe.get_doc("Email Template", template_name)
             subject = frappe.render_template(email_template.subject, {"doc": self})
-            message = frappe.render_template(email_template.response, {"doc": self})
+            # response_ is response_html when use_html is ticked, else response
+            message = frappe.render_template(email_template.response_, {"doc": self})
            
             # Send the email with already-attached files
             frappe.sendmail(

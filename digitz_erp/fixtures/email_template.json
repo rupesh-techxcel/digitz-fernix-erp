@@ -1,0 +1,12 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Email Template",
+  "modified": "2026-10-16 12:30:00.000000",
+  "name": "Sales Invoice Submission",
+  "subject": "Invoice {{ doc.name }} from {{ doc.company }}",
+  "response": null,
+  "use_html": 1,
+  "response_html": "<p>Dear {{ doc.customer_name or doc.customer }},</p>\n\n<p>Thank you for choosing {{ doc.company }}. Your invoice has been issued. The details are below:</p>\n\n<table cellpadding=\"6\" style=\"border-collapse:collapse;border:1px solid #ddd;\">\n  <tr><td><b>Invoice No</b></td><td>{{ doc.name }}</td></tr>\n  <tr><td><b>Date</b></td><td>{{ doc.get_formatted(\"posting_date\") }}</td></tr>\n  {% if doc.medical_service %}<tr><td><b>Service</b></td><td>{{ doc.medical_service }}</td></tr>{% endif %}\n  <tr><td><b>VAT</b></td><td>{{ doc.get_formatted(\"tax_total\") }}</td></tr>\n  <tr><td><b>Total (incl. VAT)</b></td><td><b>{{ doc.get_formatted(\"rounded_total\") if doc.rounded_total else doc.get_formatted(\"net_total\") }}</b></td></tr>\n  {% if doc.paid_amount %}<tr><td><b>Amount Paid</b></td><td>{{ doc.get_formatted(\"paid_amount\") }}</td></tr>{% endif %}\n</table>\n\n{% if doc.in_words %}<p><i>{{ doc.in_words }}</i></p>{% endif %}\n\n<p>Any documents attached to this invoice are included with this email.</p>\n\n<p>If you have any questions about this invoice, please reply to this email or contact us.</p>\n\n<p>Regards,<br>{{ doc.company }}</p>\n"
+ }
+]

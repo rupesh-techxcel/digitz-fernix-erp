@@ -2104,8 +2104,14 @@ tr.is-open .ci-open-mark {
 	color: var(--cc-muted);
 }
 
-.cr-received .cr-received-input {
+.cr-received .cr-received-input,
+.cr-received .cr-on-account-input {
 	width: 130px;
+}
+
+/* On account: set apart from the invoice controls before it */
+.cr-received label[for^="cr-on-account-"] {
+	margin-left: 12px;
 }
 
 .cr-table .ci-input {
@@ -2153,3 +2159,8 @@ tr.is-open .ci-open-mark {
 	flex-basis: 100%;
 	font-weight: 600;
 }
+
+/* Customer Ledger tab (public/js/customer_ledger.js): Day History's layout */
+.cl-ledger .cl-customer { min-width: 240px; }
+.cl-ledger .cl-buttons { display: flex; gap: 6px; margin-left: auto; align-self: flex-end; }
+.cl-ledger .cl-summary td { font-weight: 600; background: var(--subtle-fg); }
