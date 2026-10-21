@@ -390,6 +390,12 @@ digitz_erp.CashierConsole = class CashierConsole {
 		return state && state.counter && !state.session ? "day-open" : digitz_erp.CashierConsole.DEFAULT_TAB;
 	}
 
+	// The tab's view closed what its route pointed at (an invoice printed and
+	// done): going back to the tab lands on its list, not on the closed record
+	forget_sub_route(key) {
+		this.sub_routes[key] = [];
+	}
+
 	go_to(key) {
 		if (key !== this.active) {
 			// Back to where that tab was left (e.g. the invoice that was open)

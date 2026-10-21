@@ -153,3 +153,100 @@ def get_sales_invoice_permission_query(user):
 
     # Otherwise, restrict to only their own records
     return f"`tabSales Invoice`.owner = {frappe.db.escape(user)}"
+
+
+# ------------------------------------------------------------ cashier correction
+# A cashier corrects a submitted credit invoice, of any date, by taking it back
+# to draft under the same number, editing it and submitting it again. Only where
+# that is clean: a credit sale (no cash in any till) with no payment, return, stock
+# or project tied to it. Anything else is for a supervisor (Cancel / Amend, or
+# Revert To Draft). A corrected invoice keeps its date when submitted again,
+# however old (is_under_correction, counter_session_api.restrict_cashier_posting_date).
+
+CORRECTION_COMMENT = "Taken back to draft for correction"
+
+
+def correction_date(doc):
+    """The posting date a cashier's correction of `doc` keeps, or None when `doc`
+    is not a draft taken back for correction."""
+    if doc.is_new() or doc.docstatus != 0:
+        return None
+    if not frappe.db.exists("Comment", {"reference_doctype": doc.doctype, "reference_name": doc.name,
+            "comment_type": "Comment", "content": ("like", f"{CORRECTION_COMMENT}%")}):
+        return None
+    return frappe.db.get_value(doc.doctype, doc.name, "posting_date")
+
+
+def correction_blocked_reason(doc):
+    """Why `doc` cannot be corrected by a cashier, or None when it can."""
+    from frappe.utils import flt
+
+    from digitz_erp.api.receipt_entry_api import get_allocations_for_sales_invoice
+
+    name = doc.name
+    if doc.docstatus != 1:
+        return f"{name} is not submitted. Only a submitted invoice is corrected this way; a draft can be edited as it is."
+    if not doc.credit_sale:
+        return (f"{name} is a cash sale. Only credit sale invoices can be corrected: a cash sale's money is "
+                "already in the till and the day's count. Ask a supervisor.")
+
+    receipts = sorted({a.receipt_no for a in get_allocations_for_sales_invoice(name, "") if a.get("receipt_no")})
+    if receipts or flt(doc.paid_amount) > 0:
+        return (f"A payment is recorded against {name}" + (f" ({', '.join(receipts)})" if receipts else "")
+                + ". Ask a supervisor to correct it.")
+
+    returns = frappe.get_all("Sales Return Invoices", filters={"sales_invoice": name, "docstatus": ("<", 2)}, pluck="parent")
+    if returns:
+        return f"{name} has a Sales Return ({', '.join(sorted(set(returns)))}). Ask a supervisor to correct it."
+
+    if doc.update_stock or doc.tab_sales or frappe.db.exists("Stock Ledger", {"voucher": "Sales Invoice", "voucher_no": name}):
+        return f"{name} updated stock. Ask a supervisor to correct it."
+
+    if doc.project or doc.sales_order or doc.for_advance_payment or doc.get("delivery_notes"):
+        return f"{name} is linked to a project, sales order or delivery note. Ask a supervisor to correct it."
+
+    return None
+
+
+@frappe.whitelist()
+def correct_sales_invoice(docname, check_only=0):
+    """The cashier's Correct: a submitted credit invoice, of any date, goes back
+    to draft under the same number. With check_only, only says whether it may
+    (the reason is thrown when not)."""
+    from frappe.utils import cint
+
+    from digitz_erp.api.bank_reconciliation_api import cancel_bank_reconciliation
+    from digitz_erp.api.gl_posting_api import update_accounts_for_doc_type
+    from digitz_erp.selling.doctype.sales_invoice.sales_invoice import get_utilized_credit
+
+    if "Cashier" not in frappe.get_roles():
+        frappe.throw("Correct is the cashier's option. A supervisor uses Revert To Draft or Cancel / Amend.",
+                     frappe.PermissionError)
+
+    doc = frappe.get_doc("Sales Invoice", docname)
+    doc.check_permission("write")
+    reason = correction_blocked_reason(doc)
+    if reason:
+        frappe.throw(reason, title="Cannot Correct This Invoice")
+    if cint(check_only):
+        return {"ok": True}
+
+    # Undo what submitting posted: its GL Postings (and the account balances built
+    # from them), any bank reconciliation row and its posting-status record
+    frappe.db.delete("GL Posting", {"voucher_type": "Sales Invoice", "voucher_no": doc.name})
+    cancel_bank_reconciliation("Sales Invoice", doc.name)
+    frappe.db.delete("Document Posting Status", {"document_type": "Sales Invoice", "document_name": doc.name})
+
+    # Back to draft, the child rows with it, so it saves and submits as any draft
+    for df in doc.meta.get_table_fields():
+        frappe.db.sql(f"UPDATE `tab{df.options}` SET docstatus = 0 WHERE parenttype = %s AND parent = %s",
+                      ("Sales Invoice", doc.name))
+    frappe.db.set_value("Sales Invoice", doc.name, "docstatus", 0, update_modified=False)
+    update_accounts_for_doc_type("Sales Invoice", doc.name)
+
+    # A draft is not a debt: the customer's used credit drops by this invoice
+    frappe.db.set_value("Customer", doc.customer, "utilized_credit", get_utilized_credit(doc.customer),
+                        update_modified=False)
+
+    doc.add_comment("Comment", f"{CORRECTION_COMMENT} by {frappe.utils.get_fullname(frappe.session.user)}.")
+    return {"ok": True, "name": doc.name}

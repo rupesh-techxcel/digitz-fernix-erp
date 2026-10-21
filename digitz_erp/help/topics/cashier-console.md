@@ -13,7 +13,7 @@ Tokens from reception become draft Sales Invoices on the server, about once a mi
 - An invoice leaves the Board when it is submitted.
 - The number on the tab counts today's drafts still to be billed.
 
-Drafts from earlier days are not on the Board: a cashier cannot bill them (see *Today's invoices only* below). A supervisor finds them in the **Sales Invoice** list, filtered to Draft.
+Drafts from earlier days are not on the Board, which is today's queue (see *Invoice dates* below). A supervisor finds them in the **Sales Invoice** list, filtered to Draft.
 
 ## The Sales Invoices tab
 
@@ -79,13 +79,22 @@ The keys that work right now are listed in a strip under the invoice's header.
 
 On a Mac, use ⌘ in place of Ctrl.
 
-## Today's invoices only
+## Invoice dates
 
-A cashier saves and submits only invoices dated today, on their counter's PC, after opening the day.
+A cashier bills on their counter's PC, after opening the day, and dates an invoice today or **up to 10 days back**.
 
 - Billing is blocked until you open the day on a registered counter PC. See [Opening your day](#day-open).
-- An invoice dated another day opens read-only, and its date cannot be changed. Saving it shows *Not Today's Invoice*. Ask a supervisor to handle it.
-- Supervisors (System Manager, Management, or a Cashier marked **Is Supervisor**) are not held to either rule.
+- To bill a past date, tick **Edit Posting Date and Time** under **More Details**, then set the date and time. A future date, or one more than 10 days back, is refused (*Future Date* / *Date Too Far Back*).
+- A draft dated more than 10 days back opens read-only. Ask a supervisor to handle it.
+- Supervisors (System Manager, Management, or a Cashier marked **Is Supervisor**) are not held to these rules.
+
+## Correcting a submitted invoice
+
+**Correct** on a submitted invoice takes it back to draft under the same number, so you can fix it and submit it again. It keeps its date, however old. It works only when all of these hold; otherwise a message says why, and a supervisor handles it:
+
+- it is a **credit sale** (a cash sale's money is already in the till);
+- no payment is recorded against it, and it has no Sales Return;
+- it did not update stock and is not linked to a project, sales order or delivery note.
 
 ## Billing an invoice makes it yours
 

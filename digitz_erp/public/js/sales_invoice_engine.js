@@ -464,6 +464,29 @@ frappe.provide("digitz_erp.si_engine");
 	// whether rates include tax, update stock, the price-list update flag and the
 	// terms. Returns {allow_edit_sales_invoice_no, hidden_fields} for the screen, or
 	// null when no default company is set.
+	// Company > Do not apply round off in Sales Invoice: the invoice is never
+	// rounded, so Apply Round off is cleared on a draft (calculate() then gives
+	// round off 0 and the net total as the rounded total). Returns whether the
+	// company has it on. The server enforces it too (apply_company_round_off_rule).
+	engine.no_round_off = {};
+	engine.apply_company_round_off = async function (doc) {
+		if (!doc.company || cint(doc.docstatus) !== 0) {
+			return false;
+		}
+		if (!(doc.company in engine.no_round_off)) {
+			const r = await frappe.call({
+				method: "frappe.client.get_value",
+				args: { doctype: "Company", filters: { name: doc.company }, fieldname: "do_not_apply_round_off_in_si" },
+			});
+			engine.no_round_off[doc.company] = cint((r.message || {}).do_not_apply_round_off_in_si);
+		}
+		if (engine.no_round_off[doc.company]) {
+			doc.is_round_off = 0;
+			return true;
+		}
+		return false;
+	};
+
 	engine.company_defaults = async function (doc) {
 		const r = await frappe.call({
 			method: "frappe.client.get_value",
@@ -497,6 +520,7 @@ frappe.provide("digitz_erp.si_engine");
 
 		doc.warehouse = company_data.default_warehouse;
 		doc.rate_includes_tax = company_data.rate_includes_tax;
+		await engine.apply_company_round_off(doc);
 		doc.update_stock = company_data.update_stock_in_sales_invoice;
 		doc.auto_save_delivery_note = false;
 

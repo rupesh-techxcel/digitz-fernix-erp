@@ -316,6 +316,13 @@
 </div>
 {% endif %}
 
+<!-- Notes entered on the invoice (the Cashier Console's Notes field) -->
+{% if doc.notes and doc.notes.strip() %}
+<div style="margin-top: 12px; font-size: 12px;">
+  <strong>Notes</strong> <span style="direction: rtl;">ملاحظات</span>: {{ doc.notes | e }}
+</div>
+{% endif %}
+
 <!-- Disclaimer -->
 <div style="margin-top: 12px; font-size: 11px; line-height: 1.5;">
   <div>Disclaimer :</div>

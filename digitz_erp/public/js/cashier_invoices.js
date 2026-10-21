@@ -51,16 +51,35 @@ frappe.provide("digitz_erp");
 		control.$input && control.$input.is("textarea") && control.$input.css("height", "72px");
 	}
 
-	// A cashier who is not a supervisor works on today's invoices only (the
-	// server's counter_session_api.restrict_cashier_to_today): one dated another
-	// day opens read-only, and the posting date cannot be changed
+	// A cashier who is not a supervisor dates invoices today or up to a few days
+	// back, never ahead (the server's counter_session_api.restrict_cashier_posting_date).
+	// A draft dated outside that window opens read-only.
 	function today_only() {
 		const state = digitz_erp.counter_state;
 		return state ? !!state.must_open_day : frappe.user.has_role("Cashier") && !frappe.user.has_role("System Manager");
 	}
 
+	// The cashier's window: [earliest, today], as "YYYY-MM-DD"
+	function cashier_window() {
+		const today = frappe.datetime.get_today();
+		const days = cint((digitz_erp.counter_state || {}).backdate_days) || 10;
+		return [frappe.datetime.add_days(today, -days), today, days];
+	}
+
+	function outside_window(date) {
+		const [earliest, today] = cashier_window();
+		return !!date && (date < earliest || date > today);
+	}
+
+	// A submitted invoice taken back to correct keeps its own date, however old
+	// (sales_invoice_api.correction_date)
+	function keeps_correction_date(doc) {
+		const kept = doc.__onload && doc.__onload.correction_date;
+		return !!kept && kept === doc.posting_date;
+	}
+
 	function other_day(doc) {
-		return !doc.__islocal && doc.docstatus === 0 && !!doc.posting_date && doc.posting_date !== frappe.datetime.get_today();
+		return !doc.__islocal && doc.docstatus === 0 && outside_window(doc.posting_date) && !keeps_correction_date(doc);
 	}
 
 	function linked_to(doc) {
@@ -164,6 +183,20 @@ frappe.provide("digitz_erp");
 					return false;
 				},
 				description: __("Cashier Console: Save Sales Invoice"),
+				page: this.page,
+				ignore_inputs: true,
+			});
+			frappe.ui.keys.add_shortcut({
+				shortcut: "shift+ctrl+s",
+				action: () => {
+					const editor = this.active_editor();
+					if (editor && this.is_visible() && editor.is_editable()) {
+						editor.save_and_submit();
+						return true;
+					}
+					return false;
+				},
+				description: __("Cashier Console: Save & Submit Sales Invoice"),
 				page: this.page,
 				ignore_inputs: true,
 			});
@@ -283,8 +316,12 @@ frappe.provide("digitz_erp");
 				if (!doc) {
 					throw new Error("not found");
 				}
+				// A draft saved with a round off, for a company that has round off
+				// turned off: shown (and saved) without it
+				const unrounded = (await E().apply_company_round_off(doc)) && flt(doc.round_off) !== 0;
 				tab.editor = new digitz_erp.InvoiceEditor(this, tab, doc);
 				tab.editor.render();
+				unrounded && tab.editor.recalc();
 			} catch (e) {
 				tab.$view.html(`<div class="ci-loading">${__("Could not open {0}. It may have been deleted or you may not have access.", [esc(tab.key)])}</div>`);
 			} finally {
@@ -357,7 +394,8 @@ frappe.provide("digitz_erp");
 			tab.$tab.attr("title", doc && doc.customer_display_name ? `${tab.$tab.find(".ci-stab-label").text()} · ${doc.customer_display_name}` : "");
 		}
 
-		close(key) {
+		// opts.route false: leave the route alone (the caller is navigating away)
+		close(key, opts = {}) {
 			const tab = this.tabs.find((t) => t.key === key);
 			if (!tab) {
 				return;
@@ -375,7 +413,7 @@ frappe.provide("digitz_erp");
 				this.persist();
 				if (this.active === key) {
 					const next = this.tabs[i] || this.tabs[i - 1];
-					this.replace_route(next ? next.key : "list");
+					opts.route === false ? this.show("list") : this.replace_route(next ? next.key : "list");
 				}
 			};
 			if (tab.editor && tab.editor.dirty) {
@@ -942,9 +980,16 @@ frappe.provide("digitz_erp");
 			const menu = [];
 
 			if (this.is_editable()) {
-				buttons.push(btn("save", __("Save"), saved && !this.dirty ? "btn-default" : "btn-primary", "check"));
-				saved && !this.dirty && buttons.push(btn("submit", __("Submit"), "btn-primary"));
+				// Saved and unchanged: Submit. Otherwise Save & Submit does both at once
+				const clean = saved && !this.dirty;
+				buttons.push(btn("save", __("Save"), "btn-default", "check"));
+				buttons.push(clean
+					? btn("submit", __("Submit"), "btn-primary")
+					: btn("save-submit", __("Save & Submit"), "btn-primary"));
 			}
+			// A cashier's correction of a submitted invoice: allowed for a credit sale
+			// (any date); the server says why when it is not
+			saved && doc.docstatus === 1 && today_only() && buttons.push(btn("correct", __("Correct")));
 			// A submitted credit sale not yet fully paid: take the payment here
 			// (public/js/cashier_receipts.js), as a Receipt Entry
 			this.can_record_payment() && buttons.push(btn("record-payment", __("Record Payment"), "btn-primary"));
@@ -995,7 +1040,7 @@ frappe.provide("digitz_erp");
 			this.$el.find(".ci-actions").html(buttons.join(""));
 
 			const shortcuts = [["Alt+N", __("New Invoice")]];
-			this.is_editable() && shortcuts.push(["Ctrl+S", __("Save")], ["Alt+P", __("Payment")]);
+			this.is_editable() && shortcuts.push(["Ctrl+S", __("Save")], ["Ctrl+Shift+S", __("Save & Submit")], ["Alt+P", __("Payment")]);
 			can_print && shortcuts.push(["Ctrl+P", __("Print Invoice")]);
 			shortcuts.push(["?", __("All Shortcuts")]);
 			this.$el.find(".ci-shortcuts-slot").html(E().shortcuts_html(shortcuts));
@@ -1016,11 +1061,10 @@ frappe.provide("digitz_erp");
 				received_amount: cash,
 				reason_for_unfilled_invoice: !doc.invoice_fullfilled,
 			};
-			const cashier = today_only();
 			const read_only = {
-				edit_posting_date_and_time: cashier,
-				posting_date: cashier || !cint(doc.edit_posting_date_and_time),
-				posting_time: cashier || !cint(doc.edit_posting_date_and_time),
+				// A cashier may date an invoice back too (within the window check() and the server hold)
+				posting_date: !cint(doc.edit_posting_date_and_time),
+				posting_time: !cint(doc.edit_posting_date_and_time),
 				customer_company: !this.walk_in,
 				tax_id: !this.walk_in,
 				naming_series: !doc.__islocal,
@@ -1100,7 +1144,7 @@ frappe.provide("digitz_erp");
 				banners.push(["red", __("This invoice is cancelled. Amend it to make a corrected copy."), "amend", __("Amend")]);
 			}
 			if (today_only() && other_day(doc)) {
-				banners.push(["orange", __("This draft is dated {0}. A cashier can save and submit only today's invoices: ask a supervisor to handle it.", [frappe.datetime.str_to_user(doc.posting_date)])]);
+				banners.push(["orange", __("This draft is dated {0}. A cashier can date an invoice at most {1} days back: ask a supervisor to handle it.", [frappe.datetime.str_to_user(doc.posting_date), cashier_window()[2]])]);
 			}
 			this.$el.find(".ci-banners").html(banners.map(([tone, text, action, label]) => `
 				<div class="ci-banner ci-banner-${tone}">
@@ -1456,7 +1500,7 @@ frappe.provide("digitz_erp");
 			}
 			const c = await read_values("Customer", doc.customer,
 				["customer_name", "full_address", "salesman", "credit_days", "address_line_1", "address_line_2", "area_name",
-					"country", "default_price_list", "mobile_no"]);
+					"country", "default_price_list", "mobile_no", "phone", "email_id"]);
 
 			// fetch_from / add_fetch on the form
 			Object.assign(doc, {
@@ -1465,10 +1509,21 @@ frappe.provide("digitz_erp");
 				area_name: c.area_name, country: c.country,
 			});
 
-			// An invoice raised from a token carries the patient's own name and mobile
+			// The customer's contact: Mobile No, else Phone, and Email Id. An invoice
+			// raised from a token carries the patient's own name and mobile, so there
+			// only what the token left empty (or the 0000 placeholder) is filled
+			const mobile = c.mobile_no || c.phone || "";
 			if (!doc.customer_token) {
 				doc.customer_display_name = doc.customer_name;
-				doc.customer_mobile_number = c.mobile_no || "";
+				doc.customer_mobile_number = mobile;
+				doc.customer_email = c.email_id || "";
+			} else {
+				if (mobile && (!doc.customer_mobile_number || E().is_placeholder_mobile(doc.customer_mobile_number))) {
+					doc.customer_mobile_number = mobile;
+				}
+				if (c.email_id && !doc.customer_email) {
+					doc.customer_email = c.email_id;
+				}
 			}
 
 			const [details, balance, terms] = await Promise.all([
@@ -1608,10 +1663,12 @@ frappe.provide("digitz_erp");
 			const handlers = {
 				save: () => this.save("Save"),
 				submit: () => this.save("Submit"),
+				"save-submit": () => this.save_and_submit(),
 				cancel: () => this.cancel(),
 				amend: () => this.amend(),
 				delete: () => this.delete(),
 				revert: () => this.revert_to_draft(),
+				correct: () => this.correct(),
 				reload: () => (this.dirty
 					? frappe.confirm(__("Discard your unsaved changes and reload?"), () => this.reload())
 					: this.reload()),
@@ -1645,11 +1702,24 @@ frappe.provide("digitz_erp");
 		}
 
 		// What the form checks before it saves or submits
-		check(action) {
+		// `resume`: what to run once the Payment popup fills a missing payment field
+		check(action, resume) {
 			const doc = this.doc;
 
 			if (doc.tab_sales) {
 				frappe.msgprint(__("Cannot change Sales Invoice created from a Tab Sales. Do it from the correspodning Tab Sale"));
+				return false;
+			}
+			if (today_only() && outside_window(doc.posting_date) && !keeps_correction_date(doc)) {
+				const [earliest, today, days] = cashier_window();
+				frappe.msgprint({
+					title: __("Date Not Allowed"),
+					indicator: "orange",
+					message: doc.posting_date > today
+						? __("An invoice cannot be dated after today.")
+						: __("A cashier can date an invoice at most {0} days back (from {1}).", [days, frappe.datetime.str_to_user(earliest)]),
+				});
+				this.focus_field("posting_date");
 				return false;
 			}
 			if (!cint(doc.credit_sale) && !doc.payment_account) {
@@ -1660,10 +1730,12 @@ frappe.provide("digitz_erp");
 			}
 
 			const missing = [];
+			const missing_fields = [];
 			let first_payment_field = null;
 			const need = (fieldname, ok) => {
 				if (!ok) {
 					missing.push(frappe.meta.get_label(DOCTYPE, fieldname));
+					missing_fields.push(fieldname);
 					PAYMENT_FIELDS.includes(fieldname) && (first_payment_field ||= fieldname);
 				}
 			};
@@ -1677,6 +1749,12 @@ frappe.provide("digitz_erp");
 			}
 			if (this.host.mobile_mandatory) {
 				need("customer_mobile_number", doc.customer_mobile_number);
+			}
+			// Only payment fields missing (e.g. Received Amount): no alert, the Payment
+			// popup opens on the field, and Done carries on with the save or submit
+			if (missing.length && missing_fields.every((f) => PAYMENT_FIELDS.includes(f))) {
+				this.open_payment_dialog(first_payment_field, resume);
+				return false;
 			}
 			if (missing.length) {
 				frappe.msgprint({
@@ -1717,7 +1795,24 @@ frappe.provide("digitz_erp");
 			}
 		}
 
-		async save(action) {
+		// Save & Submit (Ctrl+Shift+S): save the changes, then submit as Submit does
+		// (its confirmation included). Stops if the save does not go through.
+		async save_and_submit() {
+			if (this.saving || !this.is_editable()) {
+				return;
+			}
+			if (this.dirty || this.doc.__islocal) {
+				await this.save("Save", () => this.save_and_submit());
+				if (this.dirty || this.doc.__islocal || this.doc.docstatus !== 0) {
+					return;
+				}
+			}
+			await this.save("Submit");
+		}
+
+		// `resume`: run after the Payment popup fills a missing payment field
+		// (default: this save again)
+		async save(action, resume) {
 			if (this.saving || !this.is_editable()) {
 				return;
 			}
@@ -1731,7 +1826,7 @@ frappe.provide("digitz_erp");
 				// A copied invoice must not carry delivery note allocations
 				delete doc.delivery_notes;
 			}
-			if (!this.check(action)) {
+			if (!this.check(action, resume || (() => this.save(action)))) {
 				this.render_rows();
 				this.refresh();
 				return;
@@ -1755,7 +1850,12 @@ frappe.provide("digitz_erp");
 					if (saved.name !== old_name) {
 						frappe.model.remove_from_locals(DOCTYPE, old_name);
 					}
+					// Saving does not run the server's onload: keep a correction's kept date
+					const kept = doc.__onload && doc.__onload.correction_date;
 					this.doc = frappe.get_doc(DOCTYPE, saved.name) || saved;
+					if (kept && this.doc.docstatus === 0) {
+						this.doc.__onload = Object.assign({}, this.doc.__onload, { correction_date: kept });
+					}
 					this.dirty = false;
 					this.render();
 					old_key !== this.doc.name && this.host.renamed(this.tab, old_key);
@@ -1813,6 +1913,30 @@ frappe.provide("digitz_erp");
 			});
 		}
 
+		// Correct (cashiers): ask the server whether this invoice may be corrected,
+		// then take it back to draft under the same number for editing
+		async correct() {
+			const method = "digitz_erp.api.sales_invoice_api.correct_sales_invoice";
+			try {
+				await frappe.xcall(method, { docname: this.doc.name, check_only: 1 });
+			} catch (e) {
+				return; // the reason it cannot be corrected is shown
+			}
+			frappe.confirm(
+				__("Take {0} back to draft to correct it? It keeps its number. Edit it, then submit it again.", [esc(this.doc.name)]),
+				async () => {
+					try {
+						await frappe.xcall(method, { docname: this.doc.name });
+					} catch (e) {
+						return;
+					}
+					frappe.show_alert({ message: __("{0} is a draft again: correct it and submit.", [this.doc.name]), indicator: "green" });
+					this.host.list.loaded = false;
+					await this.reload();
+				}
+			);
+		}
+
 		revert_to_draft() {
 			frappe.confirm(__("This will delete GL Posting rows for this voucher and reset the document to Draft. Do you want to continue?"), () => {
 				frappe.call({
@@ -1836,7 +1960,9 @@ frappe.provide("digitz_erp");
 		// goes straight into the invoice through on_change, exactly as typing in the
 		// card does (default payment mode, account, change to return, credit
 		// schedule), so the card behind always shows the same values.
-		open_payment_dialog(focus) {
+		// `on_done`: run when Done is clicked (not when the popup is closed), after
+		// the popup's values are in the invoice: the save or submit it was opened for
+		open_payment_dialog(focus, on_done) {
 			if (!this.is_editable()) {
 				return;
 			}
@@ -1876,8 +2002,34 @@ frappe.provide("digitz_erp");
 				size: "large",
 				fields,
 				primary_action_label: __("Done"),
-				primary_action: () => d.hide(),
+				primary_action: async () => {
+					await take_values();
+					d.hide();
+					on_done && on_done();
+				},
+				// Straight on to Save & Submit from the payment (its confirmation included)
+				secondary_action_label: __("Save & Submit"),
+				secondary_action: async () => {
+					await take_values();
+					d.hide();
+					this.save_and_submit();
+				},
 			});
+
+			// A value just typed may not have reached the invoice yet (its change event
+			// comes on blur): take the popup's values before going on
+			const take_values = async () => {
+				for (const fieldname of FIELDS) {
+					if (!d.fields_dict[fieldname]) {
+						continue;
+					}
+					const value = d.get_value(fieldname);
+					if ((doc[fieldname] ?? "") !== (value ?? "") && !(d.fields_dict[fieldname].df.fieldtype === "Check" && cint(doc[fieldname]) === cint(value))) {
+						doc[fieldname] = value;
+						await this.on_change(fieldname);
+					}
+				}
+			};
 			// The console's colours, for the schedule table
 			d.$wrapper.addClass("ci-pay-dialog");
 			this.$schedule = d.fields_dict.schedule.$wrapper.addClass("ci-schedule");
@@ -2021,12 +2173,17 @@ frappe.provide("digitz_erp");
 			d.show();
 		}
 
-		// Close this invoice's tab and go to the Board for the next invoice
+		// Close this invoice's tab and go to the Board for the next invoice. One
+		// route change only: Frappe shows a page asynchronously, so a route to the
+		// list straight before the Board is never seen by the console, which would
+		// then bring the closed invoice back when Sales Invoices is clicked.
 		done_at_counter() {
 			if (this.dirty) {
 				return;
 			}
-			this.host.close(this.tab.key);
+			this.host.close(this.tab.key, { route: false });
+			const cc = frappe.pages["cashier-console"] && frappe.pages["cashier-console"].cashier_console;
+			cc && cc.forget_sub_route("invoices");
 			frappe.set_route("cashier-console", "board");
 		}
 

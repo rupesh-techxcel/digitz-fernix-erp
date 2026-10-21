@@ -19,7 +19,7 @@ from digitz_erp.api.sales_order_api import check_and_update_sales_order_status,u
 from digitz_erp.api.settings_api import add_seconds_to_time
 from frappe import _
 from frappe.utils import cint, flt, fmt_money
-from digitz_erp.api.counter_session_api import restrict_cashier_to_today, stamp_counter_session
+from digitz_erp.api.counter_session_api import restrict_cashier_posting_date, stamp_counter_session
 from digitz_erp.accounts.doctype.gl_posting.gl_posting import get_party_balance
 from digitz_erp.api.settings_api import get_customer_terms
 from digitz_erp.api.items_api import get_item_uoms 
@@ -69,7 +69,16 @@ def get_sales_payment_defaults(customer=None, company=None):
 
 
 class SalesInvoice(Document):
-    
+
+    def onload(self):
+        # A draft taken back for correction keeps its date (the Cashier Console
+        # then lets a cashier edit it however old it is)
+        from digitz_erp.api.sales_invoice_api import correction_date
+
+        kept = correction_date(self)
+        if kept:
+            self.set_onload("correction_date", str(kept))
+
     def Voucher_In_The_Same_Time(self):
         possible_invalid= frappe.db.count('Sales Invoice', {'posting_date': ['=', self.posting_date], 'posting_time':['=', self.posting_time]})
         return possible_invalid
@@ -111,6 +120,7 @@ class SalesInvoice(Document):
         return files
     def before_validate(self):
         self.company = frappe.get_last_doc("Company").name
+        self.apply_company_round_off_rule()
         self.set_customer_company_and_trn()
         self.set_cash_balance()
         self.set_counter()
@@ -240,10 +250,20 @@ class SalesInvoice(Document):
             frappe.throw(("An advance payment invoice already exists for the project '{0}'. Please review and update the existing invoice instead.").format(doc.project),
             title=("Duplicate Advance Payment"))
 
+    def apply_company_round_off_rule(self):
+        """Company > Do not apply round off in Sales Invoice: the invoice is never
+        rounded, whatever its Apply Round off says. Round off is 0 and the rounded
+        total is the net total, so no round off is posted to the GL."""
+        if self.docstatus == 2 or not frappe.db.get_value("Company", self.company, "do_not_apply_round_off_in_si"):
+            return
+        self.is_round_off = 0
+        self.round_off = 0
+        self.rounded_total = flt(self.net_total)
+
     def validate(self):
         
         # A cashier saves and submits only today's invoices
-        restrict_cashier_to_today(self)
+        restrict_cashier_posting_date(self)
         self.validate_customer_mobile_number()
         self.validate_received_amount()
         self.validate_line_amounts()
@@ -1463,6 +1483,11 @@ class SalesInvoice(Document):
             # Get all attached files for this Sales Invoice
             if not self.customer_email:
                 return
+            # No outgoing mail set up: nothing to send with. Frappe would pop up
+            # "Please setup default outgoing Email Account" on every submit, over
+            # the console's print prompt
+            if not frappe.db.exists("Email Account", {"enable_outgoing": 1, "default_outgoing": 1}):
+                return
             attachments = frappe.get_all(
                 "File",
                 filters={"attached_to_doctype": "Sales Invoice", "attached_to_name": self.name},
@@ -2012,6 +2037,9 @@ class SalesInvoice(Document):
                     self.rounded_total = round(self.net_total)
                 else:
                     self.rounded_total = round(self.net_total)
+            else:
+                # Apply Round off unticked: the net total as it is
+                self.rounded_total = self.net_total
 
         # Simulated frontend callback: update_total_big_display(frm);
         self.update_total_big_display()

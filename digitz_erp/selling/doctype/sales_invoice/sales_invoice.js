@@ -14,6 +14,17 @@ frappe.ui.form.on('Sales Invoice', {
 		});
 	},
 	 refresh: function (frm) {
+		 // Company > Do not apply round off in Sales Invoice: Apply Round off is
+		 // off and cannot be ticked (the shared engine, and the server, hold it)
+		 if (frm.doc.docstatus === 0 && frm.doc.company) {
+			 digitz_erp.si_engine.apply_company_round_off(frm.doc).then((off) => {
+				 frm.set_df_property("is_round_off", "read_only", off ? 1 : 0);
+				 if (off && flt(frm.doc.round_off) !== 0) {
+					 frm.trigger("is_round_off");
+				 }
+				 frm.refresh_field("is_round_off");
+			 });
+		 }
 		 create_custom_buttons(frm);
 		 add_print_buttons(frm);
 		 show_shortcuts(frm);

@@ -1322,9 +1322,9 @@ def get_board_invoices(limit=100, search=None):
 		"Sales Invoice",
 		fields=["name", "customer", "customer_display_name", "customer_company", "customer_token",
 			"medical_service", "posting_date", "rounded_total"],
-		# Today's drafts only. The board is the queue of invoices still to be
-		# taken, and a cashier bills today's invoices only
-		# (counter_session_api.restrict_cashier_to_today).
+		# Today's drafts only: the board is the queue of invoices still to be taken
+		# today. A cashier may still date one up to some days back
+		# (counter_session_api.restrict_cashier_posting_date).
 		filters={"docstatus": 0, "posting_date": today()},
 		or_filters=or_filters,
 		order_by="creation desc",

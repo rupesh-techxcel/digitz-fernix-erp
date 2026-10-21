@@ -27,9 +27,13 @@ You have no open day on this counter. Click the badge and open the day. See [Ope
 
 If you **do** have an open day, it is on a **different counter**. Close that one first.
 
-## "Not Today's Invoice": *… is dated … A cashier can save and submit only today's invoices*
+## "Date Too Far Back" / "Future Date"
 
-Cashiers bill only invoices dated today. An invoice from another day opens read-only in the Cashier Console, and its date cannot be changed. Ask a supervisor to handle it. See [Supervisor tasks](#supervisor-tasks).
+A cashier dates an invoice today or up to 10 days back. An invoice dated earlier than that opens read-only in the Cashier Console; ask a supervisor to handle it. A future date is never allowed. See [Supervisor tasks](#supervisor-tasks).
+
+## "Cannot Correct This Invoice"
+
+**Correct** works only on a submitted credit sale with no payment, return, stock or project tied to it. The message names the reason. Ask a supervisor for anything else.
 
 ## A draft from yesterday is not on the Sales Invoice Board
 

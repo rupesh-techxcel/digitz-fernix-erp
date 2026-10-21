@@ -25,8 +25,8 @@ digitz_erp.CashierBoard = class CashierBoard {
 	static LIMIT = 100;
 
 	// `on_count(n)` gets the number of today's drafts after each refresh (the
-	// console's tab badge). Only today's are listed: a cashier cannot bill older
-	// ones (counter_session_api.restrict_cashier_to_today).
+	// console's tab badge). Only today's are listed: the board is today's queue
+	// (counter_session_api.restrict_cashier_posting_date limits back-dating).
 	constructor($parent, opts = {}) {
 		this.on_count = opts.on_count;
 		this.running = false;

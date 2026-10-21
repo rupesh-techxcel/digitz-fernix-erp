@@ -91,27 +91,58 @@ def stamp_counter_session(doc):
 	)
 
 
-def restrict_cashier_to_today(doc):
-	"""A cashier (not a supervisor) works on today's documents only.
+# How far back a cashier may date a Sales Invoice, or correct a submitted one
+CASHIER_BACKDATE_DAYS = 10
 
-	Called from Sales Invoice validate, so on every save and submit: a cashier
-	may not save or submit an invoice dated another day -- neither one already
-	saved with another date (an old draft) nor one they date back or forward.
-	Such an invoice is for a supervisor. Nothing is required of background work
+
+def cashier_date_window():
+	"""(earliest, latest) posting date a cashier may use: today and the days before it."""
+	today = getdate(nowdate())
+	return add_days(today, -CASHIER_BACKDATE_DAYS), today
+
+
+def restrict_cashier_posting_date(doc):
+	"""A cashier (not a supervisor) dates an invoice today or up to
+	CASHIER_BACKDATE_DAYS back, never in the future -- except an invoice being
+	corrected, which keeps the date it was submitted with.
+
+	Called from Sales Invoice validate, so on every save and submit. Both the date
+	saved before (an old draft) and the one being saved must be in the window:
+	anything older is for a supervisor. Nothing is required of background work
 	(the token sync), which has no request.
 	"""
 	if not getattr(frappe.local, "request", None) or not must_have_open_day():
 		return
 
-	today = getdate(nowdate())
-	saved_date = None if doc.is_new() else frappe.db.get_value(doc.doctype, doc.name, "posting_date")
+	# A submitted invoice the cashier took back to correct keeps its own date,
+	# however old (sales_invoice_api.correct_sales_invoice)
+	from digitz_erp.api.sales_invoice_api import correction_date
+
+	kept = correction_date(doc)
+	if kept and getdate(kept) == getdate(doc.posting_date):
+		return
+
+	earliest, today = cashier_date_window()
+	# A correction moved to another date is held to the window by its new date only
+	saved_date = None if doc.is_new() or kept else frappe.db.get_value(doc.doctype, doc.name, "posting_date")
+	label = "This invoice" if doc.is_new() else doc.name
 
 	for posting_date in (saved_date, doc.posting_date):
-		if posting_date and getdate(posting_date) != today:
+		if not posting_date:
+			continue
+		posting_date = getdate(posting_date)
+		if posting_date > today:
 			frappe.throw(
-				f"{doc.name} is dated {frappe.utils.formatdate(posting_date)}. A cashier can save and submit "
-				"only today's invoices. Ask a supervisor to handle this one.",
-				title="Not Today's Invoice",
+				f"{label} is dated {frappe.utils.formatdate(posting_date)}, in the future. "
+				"A cashier cannot date an invoice after today.",
+				title="Future Date",
+			)
+		if posting_date < earliest:
+			frappe.throw(
+				f"{label} is dated {frappe.utils.formatdate(posting_date)}. A cashier can date an invoice "
+				f"at most {CASHIER_BACKDATE_DAYS} days back (from {frappe.utils.formatdate(earliest)}). "
+				"Ask a supervisor to handle this one.",
+				title="Date Too Far Back",
 			)
 
 
@@ -178,6 +209,8 @@ def get_state():
 		"is_cashier": "Cashier" in frappe.get_roles(),
 		"counters": frappe.get_all("Counter", filters={"enabled": 1}, pluck="name", order_by="name") if supervisor else [],
 		"denominations": DENOMINATIONS,
+		# How far back a cashier may date or correct an invoice (restrict_cashier_posting_date)
+		"backdate_days": CASHIER_BACKDATE_DAYS,
 		# The non-cash modes Day Close asks a total for (card slips, bank transfers...)
 		"payment_modes": get_non_cash_payment_modes(),
 		"user_full_name": frappe.utils.get_fullname(frappe.session.user),

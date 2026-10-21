@@ -27,7 +27,7 @@ To make a cashier a shift lead without the Management role, tick **Is Supervisor
 
 These hold for anyone with Cashier who is not a supervisor.
 
-- **Today only.** They save and submit only invoices dated today.
+- **Dates.** They date invoices today or up to 10 days back, and correct (back to draft) submitted credit invoices of any date.
 - **Open day, registered PC.** Billing is blocked until they open the day on a registered counter PC.
 - **One session.** Signing in on another PC signs them out of the first.
 - **Their own list.** The Sales Invoice list and the token logs show only what they own. The **Sales Invoice Board** shows every counter's drafts for today, and billing one makes it theirs.
