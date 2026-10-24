@@ -1,7 +1,8 @@
 # Copyright (c) 2026, Rupesh P and contributors
 # For license information, please see license.txt
 
-"""Wipe sales transactions and the item master, then load the new service list.
+"""Wipe sales transactions and the item master, then load the new service list
+and the Medical Services built on it.
 
 Run manually; this is deliberately not a patch, so `bench migrate` never
 triggers it. It deletes data for good, so take a backup first:
@@ -27,24 +28,27 @@ meant to end up empty):
 	  points at an invoice.
 	Medical Services (with their Service Items rows), Medical Service Logs
 	  and Test Token (the token simulator's tokens, which link to a service)
-	  -- all. Medical Services is reloaded by its own seed afterwards.
+	  -- all.
 	Item Price -- every row, Standard Selling and Standard Buying included.
 	Price List -- all but Standard Selling and Standard Buying. A Customer or
 	  Supplier defaulting to a removed list is moved to the standard one.
 	Item (with child rows), Stock Balance, Item Subgroup, Item Group -- all.
 
-Then ITEM_GROUPS and ITEMS below are created. The rows are held here rather
-than read from a spreadsheet, so this runs on a server that has no copy of the
-file. They were taken from "Service List For ERP - Updated (1).xlsx", one
-tuple per sheet row, with whitespace in the text trimmed and collapsed:
+Then ITEM_GROUPS and ITEMS below are created, and Medical Services is
+reloaded from medical_service_seed.SERVICES, all in the same transaction. The
+rows are held here rather than read from a spreadsheet, so this runs on a
+server that has no copy of the file. They were taken from the first sheet of
+"Service List For ERP -22.10.2026 -  FINAL.xlsx", one tuple per sheet row,
+with whitespace in the text trimmed and collapsed:
 
-	(item_code, item_name, item_group, gov, service_charge, typing_charges,
-	 transaction_charges, tax, base_unit)
+	(item_code, item_name, item_name_arabic, item_group, gov, service_charge,
+	 typing_charges, transaction_charges)
 
-The sheet's "Standard Selling Rate" column is not carried: Item.on_update sets
-standard_selling_price, and creates the undated Standard Selling Item Price,
-as the sum of the four charges -- and for every row in the sheet that sum
-equals the rate it gives.
+Every item gets TAX and BASE_UNIT. The sheet's "Standard Selling Rate" column
+is not carried: Item.on_update sets standard_selling_price, and creates the
+undated Standard Selling Item Price, as the sum of the four charges. That sum
+equals the sheet's rate on every row but VISA 69, where the charges add up to
+100.01 against a rate of 100.
 
 Safety: after the wipe, every Link and Dynamic Link field in the database is
 checked for rows still pointing at a removed record (say, a Quotation or a
@@ -54,6 +58,8 @@ they are listed.
 
 import frappe
 from frappe.utils import cint, flt
+
+from digitz_erp.seeds import medical_service_seed
 
 KEEP_PRICE_LISTS = ("Standard Selling", "Standard Buying")
 
@@ -69,7 +75,6 @@ ITEM_GROUPS = {
 	'DXB - Residence Visa': 'DXBRV',
 	'E Channel Services': 'ECH',
 	'Embassy Service - Normal': 'EMBN',
-	'Embassy Service Pre typed': 'EMBPT',
 	'Emirates ID AOE': 'EIDAOE',
 	'Emirates ID Golden Visa': 'EIDGV',
 	'GOLDEN VISA': 'GV',
@@ -81,136 +86,155 @@ ITEM_GROUPS = {
 	'OTHER SERVICES': 'OTH',
 	'Sales Emirates ID': 'SEID',
 	'Sales Medical': 'SMED',
-	'MEDICAL SERVICE FEE': 'MSF',
 	'AOE - Labor Services - Tasheel': 'AOETAS',
 	'DXB - Labor Services - Tasheel': 'DXBTAS',
+	'Tadbeer Services': 'TADB',
+	'Tasheel': 'TSH',
+	'Embassy Service Pre typed': 'EMBPT',
+	'MEDICAL SERVICE FEE': 'MSF',
 }
 
-# (item_code, item_name, item_group, gov, service_charge, typing_charges,
-#  transaction_charges, tax, base_unit)
+# Every item gets the same tax and unit
+TAX = "UAE VAT - 5%"
+BASE_UNIT = "PCS"
+
+# (item_code, item_name, item_name_arabic, item_group, gov, service_charge,
+#  typing_charges, transaction_charges)
 ITEMS = (
-	('VISA35', 'AOE Visa Modification', 'AOE - Residence Visa', 100.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA09', 'Cancellation Sponsor AOE', 'AOE - Residence Visa', 202.84, 0.0, 40.0, 7.16, 'UAE VAT - 5%', 'PCS'),
-	('VISA53', 'Data Modification AOE', 'AOE - Residence Visa', 202.84, 0.0, 40.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA08', 'Entry Permit Sponsor AOE', 'AOE - Residence Visa', 353.91, 0.0, 40.0, 6.09, 'UAE VAT - 5%', 'PCS'),
-	('VISA15', 'Residence Sponsor Visa AOE 1 Year', 'AOE - Residence Visa', 353.91, 0.0, 40.0, 9.66, 'UAE VAT - 5%', 'PCS'),
-	('VISA25', 'AOE Sponsor File Opening', 'AOE - Residence Visa', 353.91, 0.0, 40.0, 6.09, 'UAE VAT - 5%', 'PCS'),
-	('VISA12', 'Residence Sponsor Visa AOE 2 Years', 'AOE - Residence Visa', 454.62, 0.0, 40.0, 8.24, 'UAE VAT - 5%', 'PCS'),
-	('VISA55', 'Sudanese Sharjah Visa & EID', 'AOE - Residence Visa', 555.34, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA07', 'Change Status AOE', 'AOE - Residence Visa', 656.05, 0.0, 40.0, 3.95, 'UAE VAT - 5%', 'PCS'),
-	('VISA36', 'Residence Sponsor Visa AOE 5 Years', 'AOE - Residence Visa', 761.66, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA21', 'Other Third Party Charges AOE', 'AOE - Residence Visa', 3050.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA14', 'Residence Cancellation DXB Inside', 'DXB - Residence Visa', 88.45, 0.0, 41.0, 80.55, 'UAE VAT - 5%', 'PCS'),
-	('VISA59', 'Data Modification DXB', 'DXB - Residence Visa', 100.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA57', 'Residence Cancellation DXB Outside', 'DXB - Residence Visa', 191.6, 0.0, 41.0, 77.4, 'UAE VAT - 5%', 'PCS'),
-	('VISA23', 'Sponsor File Opening DXB', 'DXB - Residence Visa', 206.3, 0.0, 41.0, 52.7, 'UAE VAT - 5%', 'PCS'),
-	('VISA18', 'Residence Visa DXB Sponsor New/Renewal 1 Year', 'DXB - Residence Visa', 316.41, 0.0, 41.0, 72.59, 'UAE VAT - 5%', 'PCS'),
-	('VISA52', 'Entry Permit Outside Country DXB', 'DXB - Residence Visa', 346.32, 0.0, 41.0, 132.68, 'UAE VAT - 5%', 'PCS'),
-	('VISA03', 'Residence Visa DXB Sponsor New/Renewal 2 Years', 'DXB - Residence Visa', 419.56, 0.0, 41.0, 69.44, 'UAE VAT - 5%', 'PCS'),
-	('VISA10', 'Change Status DXB', 'DXB - Residence Visa', 666.0, 0.0, 34.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA24', 'Entry Permit Inside Country DXB', 'DXB - Residence Visa', 1016.8, 0.0, 41.0, 102.2, 'UAE VAT - 5%', 'PCS'),
-	('VISA62', 'Other Third Party Charges DXB', 'DXB - Residence Visa', 3150.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA11', 'DXB Transaction Charge', 'DXB - Residence Visa', 0.0, 0.0, 80.55, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT26', 'E Channel Renewal', 'E Channel Services', 1159.62, 0.0, 40.38, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('EMBASSY01', 'Embassy Medical', 'Embassy Service - Normal', 261.86, 50.0, 38.14, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('EMBASSY02', 'Embassy Service Pre-Typed', 'Embassy Service Pre typed', 0.0, 50.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA16', 'Emirates ID AOE 1 Year', 'Emirates ID AOE', 201.43, 0.0, 35.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA13', 'Emirates ID AOE 2 Years', 'Emirates ID AOE', 302.14, 0.0, 35.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA31', 'Emirates ID AOE 5 Years', 'Emirates ID AOE', 654.55, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('EID05', 'Golden Emirates ID DXB 10 Years (NEW RENEW)', 'Emirates ID Golden Visa', 1150.0, 0.0, 35.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA28', 'Golden Visa AOE', 'Emirates ID Golden Visa', 1260.34, 600.0, 40.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA29', 'Golden Visa DXB', 'Emirates ID Golden Visa', 2500.0, 600.0, 40.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA33', 'Golden Visa AOE EID 10 Years', 'Emirates ID Golden Visa', 3150.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA34', 'Golden Visa - AOE - Service Fee', 'Emirates ID Golden Visa', 0.0, 0.0, 0.0, 400.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA32', 'Golden Visa AOE Candidate Application', 'GOLDEN VISA', 60.0, 0.0, 100.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT11', 'Health Card UAE Citizens and GCC', 'Health Card', 30.21, 0.0, 29.79, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('M202', 'Drivers Health Card', 'Health Card', 110.0, 0.0, 50.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT010', 'Health Card Fee', 'Health Card', 115.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT09', 'Health Card Expatriate', 'Health Card', 115.82, 0.0, 44.18, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('H203', 'Food Handlers Health Card', 'Health Card', 161.14, 0.0, 38.86, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('H204', 'Beauticians & Related Services SPA Workers Health Card', 'Health Card', 260.0, 0.0, 60.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT16', 'License Update Immigration', 'Immigration and MOFA Services', 18.09, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT18', 'Foreign Affairs Attestation Normal', 'Immigration and MOFA Services', 151.07, 0.0, 48.93, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT12', 'Humanitarian Form', 'Immigration and MOFA Services', 152.48, 0.0, 47.52, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT20', 'Foreign Affairs Attestation Urgent', 'Immigration and MOFA Services', 302.0, 0.0, 102.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS021', 'IOL Ins. Fee', 'Insurance', 126.0, 0.0, 24.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS019', 'DXB Health Ins.', 'Insurance', 189.0, 0.0, 26.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS020', 'AOE Health Ins.', 'Insurance', 357.95, 0.0, 147.05, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('Labour', 'Labour Services', 'Labor Services - Tasheel', 18.09, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OLLabour', 'Offer letter Contract Electronic preapproval work permit (Package) Labour', 'Labor Services - Tasheel', 50.36, 0.0, 249.64, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS032', 'UPDATE INFORMATION', 'Labor Services - Tasheel', 51.77, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('PREApproval', 'Submit pre approval work permit', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS005', 'Establishment Card Data Establishment Card ReNew', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS015', 'Renewal Work Permit', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS024', 'Temporary Closure With Absconding', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS014', 'New Work Permit', 'Labor Services - Tasheel', 138.79, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS001', 'Request Initial Approval', 'Labor Services - Tasheel', 152.48, 0.0, 47.52, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS011', 'Update Establishment', 'Labor Services - Tasheel', 253.2, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OfferLetter', 'Offer letter Contract Electronic preapproval work permit (Package) Service', 'Labor Services - Tasheel', 278.77, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS073', 'Driving License Service', 'Labor Services - Tasheel', 322.0, 0.0, 28.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS003', 'Establishment Card Data Modification', 'Labor Services - Tasheel', 523.46, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS004', 'Establishment Card Data Establishment Card New', 'Labor Services - Tasheel', 555.34, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS023', 'Fees Payment (Second Visit 2/3)', 'Labor Services - Tasheel', 1208.57, 0.0, 75.43, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS0027', 'Labor fees (cat 3)', 'Labor Services - Tasheel', 3474.63, 0.0, 65.37, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('RenewLabour', 'Submit renew labour card', 'Labor Services - Tasheel', 3550.7, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAW001', 'Tawjeeh New', 'Labor Services - Tawjeeh', 152.28, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAW002', 'Tawjeeh Renew', 'Labor Services - Tawjeeh', 1360.85, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA54', 'Data Modification - Others', 'OTHER SERVICES', 100.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('MOD1', 'Emirates ID Modification DXB', 'Sales Emirates ID', 100.0, 0.0, 35.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA63', 'Visa Modification DXB', 'Sales Emirates ID', 100.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('EID01', 'Emirates ID 1 Year New / Renew', 'Sales Emirates ID', 253.2, 0.0, 31.8, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('EID02', 'Emirates ID 2 Year New / Renew', 'Sales Emirates ID', 353.91, 0.0, 31.09, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('EID12', 'Emirates ID Replacement Fee AOE', 'Sales Emirates ID', 454.62, 0.0, 30.38, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('EID13', 'Emirates ID Replacement Fee DXB', 'Sales Emirates ID', 454.62, 0.0, 30.38, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('EID03', 'Emirates ID 5 Year New / Renew', 'Sales Emirates ID', 535.91, 0.0, 34.09, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('M04', 'Vaccination Card', 'Sales Medical', 50.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('M05', 'Pregnancy Test', 'Sales Medical', 50.36, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('M01', 'Medical Category A', 'Sales Medical', 261.86, 50.0, 38.14, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('M41', 'Pre-Employment Medical', 'Sales Medical', 266.89, 50.0, 8.11, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('M42', 'Pre-employment Pre-typed', 'Sales Medical', 0.0, 50.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('M02', 'Medical Category B', 'Sales Medical', 312.22, 50.0, 37.78, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('M03', 'Medical Category C', 'Sales Medical', 362.57, 50.0, 37.43, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('M08', 'Medical Service', 'MEDICAL SERVICE FEE', 0.0, 50.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT1', 'Photograph', 'OTHER SERVICES', 0.0, 30.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT2', 'RTA License', 'OTHER SERVICES', 322.0, 0.0, 28.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('OT3', 'Business Setup - Freezone', 'OTHER SERVICES', 5000.0, 1000.0, 0.0, 200.0, 'UAE VAT - 5%', 'PCS'),
-	('OT4', 'Business Setup - Main Land', 'OTHER SERVICES', 5000.0, 1000.0, 0.0, 200.0, 'UAE VAT - 5%', 'PCS'),
-	('OT5', 'Ejari Service', 'OTHER SERVICES', 500.0, 0.0, 200.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VIP1', 'HOME VIP Service', 'MEDICAL SERVICE FEE', 0.0, 200.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VIP2', 'Medical Service Fee - Urgent - 04 Hours', 'MEDICAL SERVICE FEE', 0.0, 400.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VIP3', 'Medical Service Fee - Fast Track - 24 Hours', 'MEDICAL SERVICE FEE', 0.0, 150.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VIP4', 'Medical Service Fee - Urgent - 08 Hours', 'MEDICAL SERVICE FEE', 0.0, 300.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS037', 'Noqodi Charges', 'Labor Services - Tasheel', 0.0, 3.15, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS038', 'Typing Temporary Pre-Approval for Work Permit Application', 'Labor Services - Tasheel', 50.36, 0.0, 59.64, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS039', 'Lost Soft Token - Establishments Govt. Fee', 'Labor Services - Tasheel', 595.0, 0.0, 110.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS040', 'Renew Electronic Work Permit', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS041', 'Pre Approval for Work Permit Payment Fees', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS042', 'Instant Quota Modify', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS043', 'Provide Information about Workload for Quota Requests', 'Labor Services - Tasheel', 409.25, 0.0, 65.75, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS044', 'New Pro Card', 'Labor Services - Tasheel', 372.5, 0.0, 77.5, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS045', 'Renew Pro Card', 'Labor Services - Tasheel', 422.5, 0.0, 77.5, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS046', 'Cancel PRO', 'Labor Services - Tasheel', 222.5, 0.0, 67.5, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS047', 'Renew Verify Contract Workpermit Service', 'Labor Services - Tasheel', 3474.63, 0.0, 65.37, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS048', 'Golden Visa Pre Approval for Work Permit', 'Labor Services - Tasheel', 50.36, 0.0, 110.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS049', 'Relative Work Contract', 'Labor Services - Tasheel', 50.36, 0.0, 110.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS050', 'Entry Permit Company Visa AOE', 'AOE - Labor Services - Tasheel', 353.91, 0.0, 41.09, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS051', 'Change Status Company Visa AOE', 'AOE - Labor Services - Tasheel', 656.05, 0.0, 43.95, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS052', 'Residence Company Visa AOE 2 Years', 'AOE - Labor Services - Tasheel', 454.62, 0.0, 35.0, 3.24, 'UAE VAT - 5%', 'PCS'),
-	('TAS053', 'Emirates ID AOE Company Visa 2 Years', 'AOE - Labor Services - Tasheel', 302.14, 0.0, 30.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS054', 'Cancellation Company Visa AOE', 'AOE - Labor Services - Tasheel', 202.84, 0.0, 42.16, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS055', 'Entry Permit Company Visa Inside Country DXB', 'DXB - Labor Services - Tasheel', 1022.5, 0.0, 112.5, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS056', 'Entry Permit Company Visa Outside Country DXB', 'DXB - Labor Services - Tasheel', 387.5, 0.0, 112.5, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS057', 'Change Status Company Visa DXB', 'DXB - Labor Services - Tasheel', 572.5, 0.0, 112.5, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS058', 'Residence Cancellation Company Visa Inside DXB', 'DXB - Labor Services - Tasheel', 122.5, 0.0, 77.5, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS059', 'Residence Cancellation Company Visa Outside DXB', 'DXB - Labor Services - Tasheel', 222.5, 0.0, 102.5, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('TAS060', 'Residence Company Visa DXB New/Renewal 2 Years', 'DXB - Labor Services - Tasheel', 443.5, 0.0, 96.5, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA40', 'Secuiity Deposit - AOE', 'AOE - Residence Visa', 0.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA41', 'Secuiity Deposit - DXB', 'DXB - Residence Visa', 0.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA42', 'Visa Fine - DXB', 'DXB - Residence Visa', 0.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA43', 'Visa Fine - AOE', 'AOE - Residence Visa', 0.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA44', 'Emirates ID Fine - DXB', 'DXB - Residence Visa', 0.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA45', 'Emirates ID Fine - AOE', 'AOE - Residence Visa', 0.0, 0.0, 0.0, 0.0, 'UAE VAT - 5%', 'PCS'),
-	('VISA46', 'Company Fine', 'DXB - Labor Services - Tasheel', 0.0, 0.0, 0.0, 0.0, '', ''),
+	('VISA35', 'AOE Visa Modification', 'تعديل بيانات الإقامة - الإمارات الشمالية', 'AOE - Residence Visa', 100.0, 0.0, 0.0, 0.0),
+	('VISA09', 'Cancellation Sponsor AOE', 'إلغاء الإقامة - الإمارات الشمالية', 'AOE - Residence Visa', 202.84, 0.0, 40.0, 7.16),
+	('VISA53', 'Data Modification AOE', 'تعديل بيانات - الإمارات الشمالية', 'AOE - Residence Visa', 202.84, 0.0, 40.0, 0.0),
+	('VISA08', 'Entry Permit Sponsor AOE', 'إذن دخول - الإمارات الشمالية', 'AOE - Residence Visa', 353.91, 0.0, 40.0, 6.09),
+	('VISA15', 'Residence Sponsor Visa AOE 1 Year', 'اقامة - سنة - الإمارات الشمالية', 'AOE - Residence Visa', 353.91, 0.0, 40.0, 9.66),
+	('VISA25', 'AOE Sponsor File Opening', 'فتح ملف كفيل - الإمارات الشمالية', 'AOE - Residence Visa', 353.91, 0.0, 40.0, 6.09),
+	('VISA12', 'Residence Sponsor Visa AOE 2 Years', 'اقامة - سنتان - الإمارات الشمالية', 'AOE - Residence Visa', 454.62, 0.0, 40.0, 8.24),
+	('VISA55', 'Sudanese Sharjah Visa & EID', 'اقامة و هوية إماراتية - السودانيين - الإمارات الشمالية', 'AOE - Residence Visa', 555.34, 0.0, 0.0, 0.0),
+	('VISA07', 'Change Status AOE', 'تعديل وضع - الإمارات الشمالية', 'AOE - Residence Visa', 656.05, 0.0, 40.0, 3.95),
+	('VISA36', 'Residence Sponsor Visa AOE 5 Years', 'اقامة - خمس سنوات - الامارات الشمالية', 'AOE - Residence Visa', 761.66, 0.0, 0.0, 0.0),
+	('VISA21', 'Other Third Party Charges AOE', 'رسوم الطرف الثالث الاخرى - الإمارات الشمالية', 'AOE - Residence Visa', 3050.0, 0.0, 0.0, 0.0),
+	('VISA14', 'Residence Cancellation DXB Inside', 'إلغاء الإقامة - داخل الدولة - دبي', 'DXB - Residence Visa', 88.45, 0.0, 41.0, 80.55),
+	('VISA59', 'Data Modification DXB', 'تعديل بيانات - دبي', 'DXB - Residence Visa', 100.0, 0.0, 0.0, 0.0),
+	('VISA57', 'Residence Cancellation DXB Outside', 'الغاء الاقامة - خارج الدولة - دبي', 'DXB - Residence Visa', 191.6, 0.0, 41.0, 77.4),
+	('VISA23', 'Sponsor File Opening DXB', 'فتح ملف كفيل - دبي', 'DXB - Residence Visa', 206.3, 0.0, 41.0, 52.7),
+	('VISA18', 'Residence Sponsor Visa DXB 1 Year', 'اقامة - سنة - دبي', 'DXB - Residence Visa', 316.41, 0.0, 41.0, 72.59),
+	('VISA52', 'Entry Permit Outside Country DXB', 'إذن دخول - خارج الدولة - دبي', 'DXB - Residence Visa', 346.32, 0.0, 41.0, 132.68),
+	('VISA03', 'Residence Visa DXB Sponsor New/Renewal 2 Years', 'اقامة - سنتان - دبي - جديد/تجديد', 'DXB - Residence Visa', 419.56, 0.0, 41.0, 69.44),
+	('VISA10', 'Change Status DXB', 'تعديل وضع - دبي', 'DXB - Residence Visa', 666.0, 0.0, 34.0, 0.0),
+	('VISA24', 'Entry Permit Inside Country DXB', 'إذن دخول - داخل الدولة - دبي', 'DXB - Residence Visa', 1016.8, 0.0, 41.0, 102.2),
+	('VISA62', 'Other Third Party Charges DXB', 'رسوم الطرف الثالث الاخرى - دبي', 'DXB - Residence Visa', 3150.0, 0.0, 0.0, 0.0),
+	('VISA11', 'DXB Transaction Charge', 'رسوم المعاملات - دبي', 'DXB - Residence Visa', 0.0, 0.0, 80.55, 0.0),
+	('OT26', 'E Channel Renewal', 'تجديد القناة الرقمية', 'E Channel Services', 1159.62, 0.0, 40.38, 0.0),
+	('EMBASSY01', 'Embassy Service Medical', 'الفحص الطبي للسفارات', 'Embassy Service - Normal', 261.86, 0.0, 88.14, 0.0),
+	('VISA16', 'Emirates ID AOE 1 Year', 'الهوية الإماراتية - سنة - الإمارات الشمالية', 'Emirates ID AOE', 201.43, 0.0, 35.0, 0.0),
+	('VISA13', 'Emirates ID AOE 2 Years', 'الهوية الإماراتية - سنتان - الإمارات الشمالية', 'Emirates ID AOE', 302.14, 0.0, 35.0, 0.0),
+	('VISA31', 'Emirates ID AOE 5 Years', 'الهوية الإماراتية - خمس سنوات - الامارات الشمالية', 'Emirates ID AOE', 654.55, 0.0, 0.0, 0.0),
+	('EID05', 'Golden Emirates ID DXB 10 Years (NEW RENEW)', 'الهوية الإماراتية - الذهبية - عشر سنوات - دبي', 'Emirates ID Golden Visa', 1150.0, 0.0, 35.0, 0.0),
+	('VISA28', 'Golden Visa AOE', 'الاقامة الذهبية - الإمارات الشمالية', 'Emirates ID Golden Visa', 1260.34, 600.0, 40.0, 0.0),
+	('VISA29', 'Golden Visa DXB', 'الاقامة الذهبية - دبي', 'Emirates ID Golden Visa', 2500.0, 600.0, 40.0, 0.0),
+	('VISA33', 'Golden Visa AOE EID 10 Years', 'الهوية الإماراتية - الذهبية - عشر سنوات - الامارات الشمالية', 'Emirates ID Golden Visa', 3150.0, 0.0, 0.0, 0.0),
+	('VISA34', 'Golden Visa - AOE - Service Fee', 'الاقامة الذهبية - مصاريف الخدمة - الإمارات الشمالية', 'Emirates ID Golden Visa', 0.0, 0.0, 0.0, 400.0),
+	('VISA32', 'Golden Visa AOE Candidate Application', 'الاقامة الذهبية - طلب ترشيح - الإمارات الشمالية', 'GOLDEN VISA', 60.0, 0.0, 100.0, 0.0),
+	('OT11', 'Health Card UAE Citizens and GCC', 'البطاقة الصحية - المواطنين ودول مجلس التعاون الخليجي', 'Health Card', 30.21, 0.0, 29.79, 0.0),
+	('M202', 'Drivers Health Card', 'البطاقة الصحية للسائقين', 'Health Card', 110.0, 0.0, 50.0, 0.0),
+	('OT09', 'Health Card Expatriate', 'البطاقة الصحية - للوافدين', 'Health Card', 115.82, 0.0, 44.18, 0.0),
+	('203', 'Food Handlers Health Card', 'البطاقة الصحية لمقدمى الطعام', 'Health Card', 161.14, 0.0, 38.86, 0.0),
+	('204', 'Beauticians & Related Services SPA Workers Health Card', 'البطاقة الصحية للعاملين بخدمات التجميل', 'Health Card', 260.0, 0.0, 60.0, 0.0),
+	('OT16', 'License Update Immigration', 'تحديث الرخصة - الجوازات', 'Immigration and MOFA Services', 18.09, 0.0, 0.0, 0.0),
+	('OT18', 'Foreign Affairs Attestation Normal', 'تصديق وزارة الخارجية - عادي', 'Immigration and MOFA Services', 151.07, 48.93, 0.0, 0.0),
+	('OT12', 'Humanitarian Form', 'طلب حالة إنسانية', 'Immigration and MOFA Services', 152.48, 0.0, 47.52, 0.0),
+	('OT20', 'Foreign Affairs Attestation Urgent', 'تصديق وزارة الخارجية - مستعجل', 'Immigration and MOFA Services', 302.0, 102.0, 0.0, 0.0),
+	('TAS021', 'IOL Ins. Fee', 'تأمين التعطل عن العمل', 'Insurance', 126.0, 0.0, 24.0, 0.0),
+	('TAS019', 'DXB Health Ins.', 'التأمين الصحي - دبي', 'Insurance', 189.0, 0.0, 26.0, 0.0),
+	('TAS020', 'AOE Health Ins.', 'التأمين الصحي - الإمارات الشمالية', 'Insurance', 357.95, 0.0, 147.05, 0.0),
+	('Labour', 'Labour Services', 'خدمات العمالة', 'Labor Services - Tasheel', 18.09, 0.0, 0.0, 0.0),
+	('OLLabour', 'Offer letter Contract Electronic preapproval work permit (Package) Labour', 'باقة خدمات العمالة - خطاب التوظيف و العقد و الموافقة المبدئية لتصريح العمل', 'Labor Services - Tasheel', 50.36, 249.64, 0.0, 0.0),
+	('TAS032', 'UPDATE INFORMATION', 'تحديث بيانات', 'Labor Services - Tasheel', 51.77, 0.0, 0.0, 0.0),
+	('PREApproval', 'Submit pre approval work permit', 'طلب الموافقة المبدئية لتصريح العمل', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0),
+	('TAS005', 'Establishment Card Data Establishment Card ReNew', 'تجديد بطاقة المنشأة', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0),
+	('TAS015', 'Renewal Work Permit', 'تجديد تصريح العمل', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0),
+	('TAS024', 'Temporary Closure With Absconding', 'الإغلاق المؤقت للملف - تسجيل هروب', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0),
+	('TAS014', 'New Work Permit', 'تصريح عمل جديد', 'Labor Services - Tasheel', 138.79, 0.0, 0.0, 0.0),
+	('TAS001', 'Request Initial Approval', 'طلب الموافقة المبدئية', 'Labor Services - Tasheel', 152.48, 0.0, 47.52, 0.0),
+	('TAS011', 'Update Establishment', 'تحديث بطاقة المنشأة', 'Labor Services - Tasheel', 253.2, 0.0, 0.0, 0.0),
+	('OfferLetter', 'Offer letter Contract Electronic preapproval work permit (Package) Service', 'باقة خدمات - خطاب التوظيف و العقد و الموافقة المبدئية لتصريح العمل', 'Labor Services - Tasheel', 278.77, 0.0, 0.0, 0.0),
+	('TAS073', 'Driving License Service', 'خدمة رخصة القيادة', 'Labor Services - Tasheel', 322.0, 0.0, 28.0, 0.0),
+	('TAS003', 'Establishment Card Data Modification', 'تعديل بيانات بطاقة المنشأة', 'Labor Services - Tasheel', 523.46, 0.0, 0.0, 0.0),
+	('TAS004', 'Establishment Card Data Establishment Card New', 'إصدار بطاقة المنشأة - جديد', 'Labor Services - Tasheel', 555.34, 0.0, 0.0, 0.0),
+	('TAS023', 'Fees Payment (Second Visit 2/3)', 'مصاريف الزيارة الثانية/الثالثة', 'Labor Services - Tasheel', 1208.57, 0.0, 75.43, 0.0),
+	('TAS027', 'Labor fees (cat 3)', 'مصاريف العمالة - الفئة الثالثة', 'Labor Services - Tasheel', 3474.63, 0.0, 65.37, 0.0),
+	('RenewLabour', 'Submit renew labour card', 'تجديد بطاقة العمل', 'Labor Services - Tasheel', 3550.7, 0.0, 0.0, 0.0),
+	('TAW001', 'Tawjeeh New', 'توجيه - جديد', 'Labor Services - Tawjeeh', 152.28, 0.0, 0.0, 0.0),
+	('TAW002', 'Tawjeeh Renew', 'توجيه - تجديد', 'Labor Services - Tawjeeh', 1360.85, 0.0, 0.0, 0.0),
+	('VISA54', 'Data Modification - Others', 'تعديل بيانات - أخرى', 'OTHER SERVICES', 100.0, 0.0, 0.0, 0.0),
+	('MOD1', 'Emirates ID Modification DXB', 'تعديل بيانات الهوية الإماراتية - دبي', 'Sales Emirates ID', 100.0, 0.0, 0.0, 0.0),
+	('VISA63', 'Visa Modification DXB', 'تعديل بيانات الإقامة - دبي', 'Sales Emirates ID', 100.0, 0.0, 0.0, 0.0),
+	('EID01', 'Emirates ID 1 Year New / Renew', 'الهوية الإماراتية - سنة - جديد/تجديد - دبي', 'Sales Emirates ID', 253.2, 0.0, 31.8, 0.0),
+	('EID02', 'Emirates ID 2 Year New / Renew', 'الهوية الإماراتية - سنتان - جديد/تجديد - دبي', 'Sales Emirates ID', 353.91, 0.0, 31.09, 0.0),
+	('EID12', 'Emirates ID Replacement Fee AOE', 'الهوية الإماراتية - بدل فاقد - الإمارات الشمالية', 'Sales Emirates ID', 454.62, 0.0, 30.38, 0.0),
+	('EID13', 'Emirates ID Replacement Fee DXB', 'الهوية الإماراتية - بدل فاقد - دبي', 'Sales Emirates ID', 454.62, 0.0, 30.38, 0.0),
+	('EID03', 'Emirates ID 5 Year New / Renew', 'الهوية الإماراتية - خمس سنوات - جديد/تجديد', 'Sales Emirates ID', 535.91, 0.0, 0.0, 0.0),
+	('M04', 'Vaccination Card', 'بطاقة التطعيم', 'Sales Medical', 50.0, 0.0, 0.0, 0.0),
+	('M05', 'Pregnancy Test', 'فحص الحمل', 'Sales Medical', 50.36, 0.0, 0.0, 0.0),
+	('M01', 'Medical Category A', 'الفحص الطبي - الفئة "A"', 'Sales Medical', 261.86, 50.0, 38.14, 0.0),
+	('M41', 'Pre Employment . Fee', 'الفحص الطبي - ما قبل العمل', 'Sales Medical', 266.89, 50.0, 8.11, 0.0),
+	('M02', 'Medical Category B', 'الفحص الطبي - الفئة "B"', 'Sales Medical', 312.22, 50.0, 37.78, 0.0),
+	('M03', 'Medical Category C', 'الفحص الطبي - الفئة "C"', 'Sales Medical', 362.57, 50.0, 37.43, 0.0),
+	('M08', 'Medical Service', 'الفحص الطبي - رسوم الخدمة', 'Sales Medical', 0.0, 50.0, 0.0, 0.0),
+	('TAS017', 'Noqodi Charges', 'نقودى', 'Labor Services - Tasheel', 0.0, 3.15, 0.0, 0.0),
+	('TAS016', 'Typing Temporary Pre-Approval for Work Permit Application', 'طباعة الموافقة المبدئية لتصريح العمل المؤقت', 'Labor Services - Tasheel', 50.36, 0.0, 59.64, 0.0),
+	('TAS013', 'Lost Soft Token - Establishments Govt. Fee', 'بدل فاقد للسوفت توكن - منشآت - المصاريف الحكومية', 'Labor Services - Tasheel', 595.0, 0.0, 110.0, 0.0),
+	('TAS039', 'Renew Electronic Work Permit', 'تجديد تصريح العمل الالكترونى', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0),
+	('TAS040', 'Pre Approval for Work Permit Payment Fees', 'الموافقة المبدئية لدفع تصريح العمل', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0),
+	('TAS041', 'Instant Quota Modify', 'تعديل حصة تصاريح العمل', 'Labor Services - Tasheel', 76.14, 0.0, 0.0, 0.0),
+	('TAS042', 'Provide Information about Workload for Quota Requests', 'طلب تقدير حجم العمل', 'Labor Services - Tasheel', 409.25, 0.0, 65.75, 0.0),
+	('TAS043', 'New Pro Card', 'إصدار بطاقة مندوب علاقات عامة', 'Labor Services - Tasheel', 372.5, 0.0, 77.5, 0.0),
+	('TAS044', 'Renew Pro Card', 'تجديد بطاقة مندوب علاقات عامة', 'Labor Services - Tasheel', 422.5, 0.0, 77.5, 0.0),
+	('TAS045', 'Cancel Pro Card', 'إلغاء بطاقة مندوب علاقات عامة', 'Labor Services - Tasheel', 222.5, 0.0, 67.5, 0.0),
+	('TAS046', 'Renew Verify Contract Workpermit Service', 'الموافقة المبدئية لتصريح العمل', 'Labor Services - Tasheel', 3474.63, 0.0, 65.37, 0.0),
+	('TAS047', 'Golden Visa Pre Approval for Work Permit', 'الموافقة المبدئية لتصريح العمل - الاقامة الذهبية', 'Labor Services - Tasheel', 50.36, 0.0, 110.0, 0.0),
+	('TAS048', 'Relative Work Contract', 'عقد عمل - الاقارب', 'Labor Services - Tasheel', 50.36, 0.0, 110.0, 0.0),
+	('TAS049', 'Entry Permit Company Visa AOE', 'إذن دخول - شركات - الإمارات الشمالية', 'AOE - Labor Services - Tasheel', 353.91, 0.0, 41.09, 0.0),
+	('TAS050', 'Change Status Company Visa AOE', 'تعديل وضع - شركات - الإمارات الشمالية', 'AOE - Labor Services - Tasheel', 656.05, 0.0, 43.95, 0.0),
+	('TAS051', 'Residence Company Visa AOE 2 Years', 'إقامة - شركات - سنتان - الإمارات الشمالية', 'AOE - Labor Services - Tasheel', 454.62, 0.0, 35.0, 3.24),
+	('TAS052', 'Emirates ID AOE Company Visa 2 Years', 'الهوية الإماراتية - شركات - سنتان - الإمارات الشمالية', 'AOE - Labor Services - Tasheel', 302.14, 0.0, 30.0, 0.0),
+	('TAS053', 'Cancellation Company Visa AOE', 'إلغاء الإقامة - شركات - الإمارات الشمالية', 'AOE - Labor Services - Tasheel', 202.84, 0.0, 42.16, 0.0),
+	('TAS054', 'Entry Permit Company Visa Inside Country DXB', 'إذن دخول - داخل الدولة - شركات - الإمارات الشمالية', 'DXB - Labor Services - Tasheel', 1022.5, 0.0, 112.5, 0.0),
+	('TAS055', 'Entry Permit Company Visa Outside Country DXB', 'إذن دخول - خارج الدولة - شركات - الإمارات الشمالية', 'DXB - Labor Services - Tasheel', 387.5, 0.0, 112.5, 0.0),
+	('TAS056', 'Change Status Company Visa DXB', 'تعديل وضع - شركات - دبي', 'DXB - Labor Services - Tasheel', 572.5, 0.0, 112.5, 0.0),
+	('TAS057', 'Residence Cancellation Company Visa Inside DXB', 'إلغاء الإقامة - داخل الدولة - شركات - دبي', 'DXB - Labor Services - Tasheel', 122.5, 0.0, 77.5, 0.0),
+	('TAS058', 'Residence Cancellation Company Visa Outside DXB', 'الغاء الاقامة -خارج الدولة - شركات - دبي', 'DXB - Labor Services - Tasheel', 222.5, 0.0, 102.5, 0.0),
+	('TAS059', 'Residence Company Visa DXB New/Renewal 2 Years', 'إقامة - شركات - سنتان - جديد/تجديد - دبي', 'DXB - Labor Services - Tasheel', 443.5, 0.0, 96.5, 0.0),
+	('TADB01', 'Tadbeer Residence Visa New/Renewal 2 Years', 'اقامة - تدبير - سنتان - جديد/تجديد', 'Tadbeer Services', 317.25, 0.0, 40.0, 62.75),
+	('TADB02', 'Tadbeer Emirates ID New/Renewal 2 Years', 'الهوية الإماراتية - تدبير - سنتان - جديد/تجديد', 'Tadbeer Services', 353.91, 0.0, 31.09, 0.0),
+	('TADB03', 'Tadbeer Contract Fess', 'مصاريف عقد العمل - تدبير', 'Tadbeer Services', 0.0, 0.0, 35.0, 0.0),
+	('VISA56', 'DXB Family Holding Fees', 'تعليق الإقامة العائلية - دبي', 'DXB - Residence Visa', 0.0, 0.0, 100.0, 0.0),
+	('VISA58', 'Guarantor File Resident Issue', 'اصدار ملف ضامن مقيم', 'AOE - Residence Visa', 353.91, 0.0, 40.0, 6.09),
+	('VISA64', 'Fines Reduction Request', 'طلب تخفيض الغرامات', 'AOE - Residence Visa', 253.2, 0.0, 40.0, 56.8),
+	('VISA60', 'Investigation Permit Leaving (Exceptional) Issue', 'طلب تصريح مغادرة الدولة', 'AOE - Residence Visa', 353.91, 0.0, 40.0, 6.09),
+	('VISA61', 'Residency Countries of Disasters and Wars (Without Guarantor)', 'إقامة - دول الحروب والكوارث - بدون ضامن', 'AOE - Residence Visa', 353.91, 0.0, 40.0, 6.09),
+	('TAS060', 'Department of Economic Development – License Renewal', 'تجديد الرخصة التجارية - دائرة التنمية الاقتصادية', 'Tasheel', 0.0, 0.0, 0.0, 0.0),
+	('TAS061', 'Attestation of the Commercial Lease Agreement', 'تصديق عقود الإيجار التجارية', 'Tasheel', 0.0, 0.0, 0.0, 0.0),
+	('TAS062', 'Municipal Clearance Certificate', 'شهادة براءة ذمة من البلدية', 'Tasheel', 0.0, 0.0, 0.0, 0.0),
+	('Bank01', 'Bank Charges', 'عمولة البنك', 'OTHER SERVICES', 0.0, 0.0, 0.0, 0.0),
+	('EMBASSY02', 'Embassy Service Pre-Typed', 'فحص طبي - سفارات', 'Embassy Service Pre typed', 0.0, 50.0, 0.0, 0.0),
+	('M42', 'Pre-employment Pre-typed', 'فحص طبي - ما قبل العمل', 'Sales Medical', 0.0, 50.0, 0.0, 0.0),
+	('OT1', 'Photograph', 'صورة شخصية', 'OTHER SERVICES', 0.0, 30.0, 0.0, 0.0),
+	('OT2', 'RTA License', 'رخصة القيادة', 'OTHER SERVICES', 322.0, 0.0, 28.0, 0.0),
+	('OT3', 'Business Setup - Freezone', 'تاسيس الشركات - منطقة حرة', 'OTHER SERVICES', 5000.0, 1000.0, 0.0, 200.0),
+	('OT4', 'Business Setup - Main Land', 'تاسيس الشركات - البر الرئيسي', 'OTHER SERVICES', 5000.0, 1000.0, 0.0, 200.0),
+	('OT5', 'Ejari Service', 'خدمات ايجارى', 'OTHER SERVICES', 500.0, 0.0, 200.0, 0.0),
+	('VIP1', 'HOME VIP Service', 'خدمة الفحص الطبي بالمنزل', 'MEDICAL SERVICE FEE', 0.0, 200.0, 0.0, 0.0),
+	('VIP2', 'Medical Service Fee - Urgent - 04 Hours', 'رسوم الفحص الطبي - عاجل - 4 ساعات', 'MEDICAL SERVICE FEE', 0.0, 400.0, 0.0, 0.0),
+	('VIP3', 'Medical Service Fee - Fast Track - 24 Hours', 'رسوم الفحص الطبي - عاجل - 24 ساعة', 'MEDICAL SERVICE FEE', 0.0, 150.0, 0.0, 0.0),
+	('VIP4', 'Medical Service Fee - Urgent - 08 Hours', 'رسوم الفحص الطبي - عاجل - 8 ساعات', 'MEDICAL SERVICE FEE', 0.0, 300.0, 0.0, 0.0),
+	('VISA40', 'Security Deposit - AOE', 'مبلغ الضمان - الإمارات الشمالية', 'AOE - Residence Visa', 0.0, 0.0, 0.0, 0.0),
+	('VISA41', 'Security Deposit - DXB', 'مبلغ الضمان - دبي', 'DXB - Residence Visa', 0.0, 0.0, 0.0, 0.0),
+	('VISA42', 'Visa Fine - DXB', 'غرامات الإقامة - دبي', 'DXB - Residence Visa', 0.0, 0.0, 0.0, 0.0),
+	('VISA43', 'Visa Fine - AOE', 'غرامات الإقامة - الإمارات الشمالية', 'AOE - Residence Visa', 0.0, 0.0, 0.0, 0.0),
+	('VISA44', 'Emirates ID Fine - DXB', 'غرامات الهوية الإماراتية - دبي', 'DXB - Residence Visa', 0.0, 0.0, 0.0, 0.0),
+	('VISA45', 'Emirates ID Fine - AOE', 'غرامات الهوية الإماراتية - الإمارات الشمالية', 'AOE - Residence Visa', 0.0, 0.0, 0.0, 0.0),
+	('VISA46', 'Company Fine', 'غرامات الشركات', 'DXB - Labor Services - Tasheel', 0.0, 0.0, 0.0, 0.0),
+	('VISA 69', 'Issuance of a Clear Criminal Record Certificate', 'إصدار شهادة بحث الحالة الجنائية', 'DXB - Labor Services - Tasheel', 50.36, 0.0, 49.65, 0.0),
 )
 
 
@@ -244,10 +268,12 @@ def run(dry_run=1, confirm=None):
 		groups = import_item_groups()
 		created, problems = import_items()
 		prices = frappe.db.count("Item Price")
+		services, _, service_problems = ([], [], []) if problems else medical_service_seed.import_services()
+		problems += [(f"service {position}", title, reason) for position, title, reason in service_problems]
 
 		if problems:
 			frappe.db.rollback()
-			print_report(removed, groups, created, problems, prices=prices)
+			print_report(removed, groups, created, problems, prices=prices, services=services)
 			print("\n  ABORTED, nothing was changed: fix the rows above.")
 			return {"aborted": True, "problems": problems}
 
@@ -261,13 +287,14 @@ def run(dry_run=1, confirm=None):
 		frappe.db.rollback()
 		raise
 
-	print_report(removed, groups, created, problems, prices=prices)
+	print_report(removed, groups, created, problems, prices=prices, services=services)
 	print("\n  " + ("Dry run: everything was rolled back." if dry_run else "Committed."))
 
 	return {
 		"removed": removed,
 		"item_groups": len(groups),
 		"items": len(created),
+		"medical_services": len(services),
 		"dry_run": bool(dry_run),
 	}
 
@@ -401,21 +428,20 @@ def import_items():
 	"""Create ITEMS. Returns (created codes, [(position, code, reason)])."""
 	created, problems, seen = [], [], set()
 
-	# Settings that would otherwise get in the way of a bulk load:
-	# - in_import keeps the sheet's item_code; with Create Item Code From
-	#   Item Group on, Item.before_naming would otherwise replace it
-	# - the sheet has no Arabic names, so the mandatory check is lifted for
-	#   the load and restored after (both inside this transaction)
-	arabic_mandatory = frappe.db.get_single_value("Settings", "item_name_arabic_mandatory")
-	if arabic_mandatory:
-		frappe.db.set_single_value("Settings", "item_name_arabic_mandatory", 0)
+	for label, doctype, name in (("TAX", "Tax", TAX), ("BASE_UNIT", "Unit", BASE_UNIT)):
+		if not frappe.db.exists(doctype, name):
+			problems.append((label, name, f"{doctype} '{name}' does not exist"))
+	if problems:
+		return created, problems
 
+	# in_import keeps the sheet's item_code; with Create Item Code From Item
+	# Group on, Item.before_naming would otherwise replace it
 	frappe.flags.in_import = True
 	frappe.flags.mute_messages = True
 
 	try:
 		for position, row in enumerate(ITEMS, start=1):
-			code, name, group, gov, service_charge, typing, transaction, tax, unit = row
+			code, name, name_arabic, group, gov, service_charge, typing, transaction = row
 
 			if code.lower() in seen:
 				problems.append((position, code, "duplicate item_code"))
@@ -425,27 +451,22 @@ def import_items():
 			if group not in ITEM_GROUPS:
 				problems.append((position, code, f"item group '{group}' is not in ITEM_GROUPS"))
 				continue
-			if tax and not frappe.db.exists("Tax", tax):
-				problems.append((position, code, f"Tax '{tax}' does not exist"))
-				continue
-			if unit and not frappe.db.exists("Unit", unit):
-				problems.append((position, code, f"Unit '{unit}' does not exist"))
-				continue
 
 			item = {
 				"doctype": "Item",
 				"item_code": code,
 				"item_name": name,
+				"item_name_arabic": name_arabic,
 				"item_group": group,
 				"item_type": "Service",
 				"gov": flt(gov),
 				"service_charge": flt(service_charge),
 				"typing_charges": flt(typing),
 				"transaction_charges": flt(transaction),
-				"tax": tax or None,
+				"tax": TAX,
 				# The Item.json default does not reach a dict insert; a blank unit
 				# would also become a blank Item Unit row in before_validate
-				"base_unit": unit or "PCS",
+				"base_unit": BASE_UNIT,
 				# Item.update_standard_buying_price compares this with > 0, so None fails
 				"standard_buying_price": 0,
 			}
@@ -454,14 +475,11 @@ def import_items():
 	finally:
 		frappe.flags.in_import = False
 		frappe.flags.mute_messages = False
-		if arabic_mandatory:
-			frappe.db.set_single_value("Settings", "item_name_arabic_mandatory", arabic_mandatory)
 
 	return created, problems
 
 
-
-def print_report(removed, groups=(), created=(), problems=(), prices=0):
+def print_report(removed, groups=(), created=(), problems=(), prices=0, services=()):
 	print("\n  Removed")
 	for label, count in removed.items():
 		print(f"    {label:<40} {count}")
@@ -470,6 +488,7 @@ def print_report(removed, groups=(), created=(), problems=(), prices=0):
 	print(f"    {'Item Group':<40} {len(groups)}")
 	print(f"    {'Item':<40} {len(created)} of {len(ITEMS)}")
 	print(f"    {'Item Price (Standard Selling)':<40} {prices}")
+	print(f"    {'Medical Services':<40} {len(services)} of {len(medical_service_seed.SERVICES)}")
 
 	for position, code, reason in problems:
 		print(f"    ! #{position}: {code} -- {reason}")

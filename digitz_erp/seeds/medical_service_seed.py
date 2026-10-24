@@ -27,9 +27,10 @@ Service Items child row each service gets.
 The child row is priced from the linked Item -- see child_row() for the
 arithmetic. It is a snapshot: token_sync reprices from the price list or Item.
 
-Run clean_start_seed first: it loads the Items these rows link to, and clears
-the Medical Services this replaces.
-Re-running is safe: an existing title is skipped, never rewritten.
+clean_start_seed runs import_services() itself, after it has wiped Medical
+Services and reloaded the Items these rows link to, so a clean start needs no
+separate run of this seed. Run it on its own only to add services that are
+missing: an existing title is skipped, never rewritten.
 """
 
 import frappe
@@ -76,30 +77,15 @@ def run(dry_run=0):
 	"""
 	dry_run = cint(dry_run)
 
-	created, existing, problems = [], [], []
+	try:
+		created, existing, problems = import_services()
+	except Exception:
+		frappe.db.rollback()
+		raise
 
-	for position, (title, item_code) in enumerate(SERVICES, start=1):
-		if not frappe.db.exists("Item", item_code):
-			problems.append((position, title, f"Item not found: {item_code}"))
-			continue
-
-		if frappe.db.exists("Medical Services", title):
-			existing.append(title)
-			continue
-
-		if not dry_run:
-			frappe.get_doc(
-				{
-					"doctype": "Medical Services",
-					"title": title,
-					"display_name": title,
-					"services": [child_row(item_code)],
-				}
-			).insert(ignore_permissions=True)
-
-		created.append((title, item_code))
-
-	if not dry_run:
+	if dry_run:
+		frappe.db.rollback()
+	else:
 		frappe.db.commit()
 
 	prefix = "[dry run] would create" if dry_run else "created"
@@ -127,14 +113,45 @@ def run(dry_run=0):
 	}
 
 
+def import_services():
+	"""Insert every service in SERVICES that is not there yet. Does not commit.
+
+	Returns (created [(title, item_code)], existing [title],
+	problems [(position, title, reason)]).
+	"""
+	created, existing, problems = [], [], []
+
+	for position, (title, item_code) in enumerate(SERVICES, start=1):
+		if not frappe.db.exists("Item", item_code):
+			problems.append((position, title, f"Item not found: {item_code}"))
+			continue
+
+		if frappe.db.exists("Medical Services", title):
+			existing.append(title)
+			continue
+
+		frappe.get_doc(
+			{
+				"doctype": "Medical Services",
+				"title": title,
+				"display_name": title,
+				"services": [child_row(item_code)],
+			}
+		).insert(ignore_permissions=True)
+
+		created.append((title, item_code))
+
+	return created, existing, problems
+
+
 def child_row(item_code):
 	"""One Service Items row, priced from the Item.
 
-	Mirrors the rows already on the site: `rate` is the full charge, the item's
-	service charge plus the government fee, with qty 1 and the same value in
-	gross and net. Tax is left off the row (`tax_excluded`), which is what the
-	existing records do and what makes token_sync.build_invoice_items treat the
-	line as zero rated.
+	`rate` is the full charge, the sum of the item's service, typing and
+	transaction charges and government fee, with qty 1 and the same value in
+	gross and net. Tax is left off the row (`tax_excluded`), as the earlier
+	records had it; this does not decide the invoice's tax, which
+	token_sync.item_tax takes from the Item.
 	"""
 	item = frappe.db.get_value("Item", item_code, ["item_name", "service_charge", "typing_charges", "transaction_charges", "gov"], as_dict=True)
 
