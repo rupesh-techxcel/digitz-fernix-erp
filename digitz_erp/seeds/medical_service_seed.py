@@ -64,9 +64,9 @@ SERVICES = (
 	('123-EID 5 Years - DXB', 'EID03'),
 	('124-EID Replacement -DXB', 'EID13'),
 	('125-EID Modification - DXB', 'MOD1'),
-	('Medical Group Female', 'M08'),
-	('Medical Group Male', 'M08'),
-	('Other Group Services', 'VISA18'),
+	('126-Medical Group Female', 'M08'),
+	('127-Medical Group Male', 'M08'),
+	('128-Other Group Services', 'VISA18'),
 )
 
 
