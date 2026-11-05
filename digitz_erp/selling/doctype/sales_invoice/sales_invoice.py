@@ -155,7 +155,6 @@ class SalesInvoice(Document):
             self.paid_amount = self.rounded_total
             self.payment_status = "Cheque" if self.payment_mode == "Bank" else self.payment_mode
         else:
-            self.payment_status = "Credit"
             self.payment_mode = ""
             self.payment_account = ""
             self.meta.get_field("payment_mode").hidden = 1
@@ -165,7 +164,13 @@ class SalesInvoice(Document):
             # Issue - First save the invoie not as credit sale, it will fill up the paid_amount
             # equal to rounded_total. Make it as credit sale in the draft mode and then save.
             # In this case its required to make the paid_amount zero
-            self.paid_amount = 0  
+            if self.docstatus == 0:
+                self.paid_amount = 0
+            paid = flt(self.paid_amount, 2)
+            self.payment_status = (
+                "Paid" if self.docstatus == 1 and paid >= flt(self.rounded_total, 2)
+                else "Partial" if paid > 0 else "Credit"
+            )
                   
         self.in_words =  money_in_words(self.rounded_total,"AED")
 

@@ -691,6 +691,18 @@ frappe.provide("digitz_erp.si_engine");
 		}
 	};
 
+	// Individuals inherit the salesman of their linked Corporate customer.
+	engine.customer_salesman = async function (customer) {
+		if (!customer) return "";
+		const r = await frappe.db.get_value("Customer", customer, ["customer_type", "company_customer", "salesman"]);
+		const c = r.message || {};
+		if (c.customer_type === "Individual" && c.company_customer) {
+			const corporate = await frappe.db.get_value("Customer", c.company_customer, "salesman");
+			return corporate.message?.salesman || "";
+		}
+		return c.salesman || "";
+	};
+
 	// Customer Company and Tax Id: read-only, except on the Default Walk-in Customer,
 	// where the user types the applicant's company and TRN.
 	engine.customer_billing_details = function (customer) {

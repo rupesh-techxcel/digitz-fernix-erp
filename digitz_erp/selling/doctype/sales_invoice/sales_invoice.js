@@ -68,7 +68,6 @@ frappe.ui.form.on('Sales Invoice', {
 		register_ctrl_p();
 
 		frm.add_fetch('customer', 'full_address', 'customer_address')
-		frm.add_fetch('customer', 'salesman', 'salesman')
 		frm.add_fetch('customer', 'credit_days', 'credit_days')
 		frm.add_fetch('payment_mode', 'account', 'payment_account')
 
@@ -207,6 +206,10 @@ frappe.ui.form.on('Sales Invoice', {
 	},
 
 	customer(frm) {
+		const customer = frm.doc.customer;
+		digitz_erp.si_engine.customer_salesman(customer).then((salesman) => {
+			if (frm.doc.customer === customer) frm.set_value("salesman", salesman);
+		});
 
 		apply_customer_billing_details(frm, true);
 

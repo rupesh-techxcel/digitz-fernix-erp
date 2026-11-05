@@ -564,7 +564,7 @@ frappe.provide("digitz_erp");
 						doctype: DOCTYPE,
 						fields: ["name", "posting_date", "posting_time", "customer", "customer_name", "customer_display_name",
 							"customer_company", "customer_mobile_number", "customer_token", "medical_service", "credit_sale", "payment_mode",
-							"payment_status", "rounded_total", "docstatus"],
+							"payment_status", "paid_amount", "rounded_total", "docstatus"],
 						filters: this.filters(),
 						or_filters: this.search
 							? ["name", "customer", "customer_display_name", "customer_company", "customer_mobile_number", "customer_token"].map((f) => [DOCTYPE, f, "like", like])
@@ -608,6 +608,14 @@ frappe.provide("digitz_erp");
 				return `<span class="indicator-pill ${colour}">${label}</span>`;
 			};
 			const time = (row) => (row.posting_time ? moment(String(row.posting_time), "HH:mm:ss").format("HH:mm") : "");
+			const payment = (row) => {
+				if (!row.credit_sale) {
+					return `<span class="ci-tag">${esc(row.payment_mode || row.payment_status || __("Cash"))}</span>`;
+				}
+				const paid = row.docstatus === 1 && flt(row.paid_amount, 2) >= flt(row.rounded_total, 2);
+				const label = paid ? __("Paid") : row.docstatus === 1 && flt(row.paid_amount, 2) > 0 ? __("Partially Paid") : __("Credit");
+				return `<span class="ci-tag${paid ? "" : " ci-tag-credit"}">${label}</span>`;
+			};
 
 			$table.html(`
 				<div class="ci-scroll">
@@ -625,7 +633,7 @@ frappe.provide("digitz_erp");
 									${row.customer_company && row.customer_company !== row.customer ? `<div class="ci-sub ci-ellipsis">${esc(row.customer_company)}</div>` : ""}</td>
 								<td class="ci-nowrap">${esc(row.customer_mobile_number)}</td>
 								<td><div class="ci-ellipsis">${esc(row.customer_token)}</div><div class="ci-sub ci-ellipsis">${esc(row.medical_service)}</div></td>
-								<td>${row.credit_sale ? `<span class="ci-tag ci-tag-credit">${__("Credit")}</span>` : `<span class="ci-tag">${esc(row.payment_mode || row.payment_status || __("Cash"))}</span>`}</td>
+								<td>${payment(row)}</td>
 								<td class="ci-num ci-strong">${money(row.rounded_total)}</td>
 								<td>${status(row)}</td>
 							</tr>`).join("")}
@@ -1495,7 +1503,9 @@ frappe.provide("digitz_erp");
 		// What the form does when a customer is picked
 		async on_customer() {
 			const doc = this.doc;
+			const customer = doc.customer;
 			if (!doc.customer) {
+				doc.salesman = "";
 				return;
 			}
 			const c = await read_values("Customer", doc.customer,
@@ -1504,10 +1514,13 @@ frappe.provide("digitz_erp");
 
 			// fetch_from / add_fetch on the form
 			Object.assign(doc, {
-				customer_name: c.customer_name, customer_address: c.full_address, salesman: c.salesman,
+				customer_name: c.customer_name, customer_address: c.full_address,
 				credit_days: c.credit_days, address_line_1: c.address_line_1, address_line_2: c.address_line_2,
 				area_name: c.area_name, country: c.country,
 			});
+			const salesman = await E().customer_salesman(customer);
+			if (doc.customer !== customer) return;
+			doc.salesman = salesman;
 
 			// The customer's contact: Mobile No, else Phone, and Email Id. An invoice
 			// raised from a token carries the patient's own name and mobile, so there
