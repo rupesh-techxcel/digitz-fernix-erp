@@ -522,7 +522,10 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	# The header and footer images are stamped over the rendered pages, so the page
 	# margins keep that space clear on every page: the header's full height at the
 	# top, and at the bottom the footer plus the line "Page X of Y" sits on.
-	footer_height_pt = get_footer_size_pt(footer_image_path, A4_WIDTH_PT)[1] if has_footer else 0
+	company_doc.full_width_footer = doc.doctype == "Sales Invoice" and not template_override
+	footer_height_pt = get_footer_size_pt(
+		footer_image_path, A4_WIDTH_PT, full_width=company_doc.full_width_footer
+	)[1] if has_footer else 0
 	page_number_bottom_pt = footer_height_pt + 8
 	margin_top_pt = (get_header_height_pt(header_image_path, A4_WIDTH_PT) if has_header else 0) + 12
 	margin_bottom_pt = max(page_number_bottom_pt + 22, 99)  # 99pt = the 35mm this used before
@@ -722,7 +725,7 @@ class HeaderFooterPDF(FPDF):
 
 	def footer(self):
 		absolute_path = os.path.join(frappe.get_site_path("public"), self.footer_image.strip("/"))
-		width_pt, height_pt = get_footer_size_pt(absolute_path, self.w)
+		width_pt, height_pt = get_footer_size_pt(absolute_path, self.w, full_width=self.full_width_footer)
 
 		# Centred at the bottom edge, in the image's own proportions
 		self.image(absolute_path, x=(self.w - width_pt) / 2, y=self.h - height_pt, w=width_pt, h=height_pt)
@@ -730,6 +733,7 @@ class HeaderFooterPDF(FPDF):
 	def get_company_details(self, company_doc):	
 		self.header_image = company_doc.header_image or ""
 		self.footer_image = company_doc.footer_image or ""
+		self.full_width_footer = bool(company_doc.get("full_width_footer"))
 
 # --- PDF Generator Utilities ---
 
@@ -746,13 +750,15 @@ def get_header_height_pt(header_image_path, page_width_pt):
 	return page_width_pt * img.height / img.width
 
 
-def get_footer_size_pt(footer_image_path, page_width_pt):
+def get_footer_size_pt(footer_image_path, page_width_pt, full_width=False):
 	"""(width, height) the footer image is drawn at, in points.
 
 	FOOTER_SCALE of its natural height, keeping its proportions so it is not
 	stretched across the page, and never wider than the page.
 	"""
 	img = Image.open(footer_image_path)
+	if full_width:
+		return page_width_pt, page_width_pt * img.height / img.width
 	dpi = img.info.get("dpi", (72, 72))[1] or 72
 	height_pt = (img.height / dpi) * 72 * FOOTER_SCALE
 	width_pt = height_pt * img.width / img.height
