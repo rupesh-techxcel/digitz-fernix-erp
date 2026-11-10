@@ -210,7 +210,7 @@ def correction_blocked_reason(doc):
 
 @frappe.whitelist()
 def correct_sales_invoice(docname, check_only=0):
-    """The cashier's Correct: a submitted credit invoice, of any date, goes back
+    """The cashier's Edit (formerly Correct): a submitted credit invoice, of any date, goes back
     to draft under the same number. With check_only, only says whether it may
     (the reason is thrown when not)."""
     from frappe.utils import cint
@@ -220,14 +220,14 @@ def correct_sales_invoice(docname, check_only=0):
     from digitz_erp.selling.doctype.sales_invoice.sales_invoice import get_utilized_credit
 
     if "Cashier" not in frappe.get_roles():
-        frappe.throw("Correct is the cashier's option. A supervisor uses Revert To Draft or Cancel / Amend.",
+        frappe.throw("Edit is the cashier's option. A supervisor uses Revert To Draft or Cancel / Amend.",
                      frappe.PermissionError)
 
     doc = frappe.get_doc("Sales Invoice", docname)
     doc.check_permission("write")
     reason = correction_blocked_reason(doc)
     if reason:
-        frappe.throw(reason, title="Cannot Correct This Invoice")
+        frappe.throw(reason, title="Cannot Edit This Invoice")
     if cint(check_only):
         return {"ok": True}
 

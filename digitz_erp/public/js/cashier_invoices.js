@@ -950,7 +950,6 @@ frappe.provide("digitz_erp");
 			this.refresh_values();
 			this.refresh_rows();
 			this.refresh_totals();
-			this.render_schedule();
 			this.refresh_banners();
 			this.host.paint(this.tab);
 		}
@@ -997,7 +996,7 @@ frappe.provide("digitz_erp");
 			}
 			// A cashier's correction of a submitted invoice: allowed for a credit sale
 			// (any date); the server says why when it is not
-			saved && doc.docstatus === 1 && today_only() && buttons.push(btn("correct", __("Correct")));
+			saved && doc.docstatus === 1 && today_only() && buttons.push(btn("correct", __("Edit")));
 			// A submitted credit sale not yet fully paid: take the payment here
 			// (public/js/cashier_receipts.js), as a Receipt Entry
 			this.can_record_payment() && buttons.push(btn("record-payment", __("Record Payment"), "btn-primary"));
@@ -1418,7 +1417,6 @@ frappe.provide("digitz_erp");
 			E().set_cash_balance(this.doc);
 			this.refresh_rows();
 			this.refresh_totals();
-			this.render_schedule();
 			this.refresh_states();
 			this.refresh_values();
 		}
@@ -1602,71 +1600,6 @@ frappe.provide("digitz_erp");
 				doc.payment_mode = "";
 				await this.on_payment_mode();
 			}
-		}
-
-		// ------------------------------------------------------ receipt schedule
-
-		// The schedule sits in the Payment popup: bound to it while it is open
-		bind_schedule($root) {
-			$root.on("change", ".ci-schedule input[data-f]", (e) => {
-				const input = e.currentTarget;
-				const row = (this.doc.receipt_schedule || []).find((r) => r.name === input.dataset.row);
-				if (!row) {
-					return;
-				}
-				row[input.dataset.f] = input.dataset.f === "amount" ? flt(input.value) : input.value;
-				this.mark_dirty();
-			});
-			$root.on("click", ".ci-schedule-add", () => {
-				const row = frappe.model.add_child(this.doc, "Receipt Schedule", "receipt_schedule");
-				row.date = this.doc.posting_date;
-				row.payment_mode = "Cash";
-				row.amount = 0;
-				this.mark_dirty();
-				this.render_schedule();
-			});
-			$root.on("click", ".ci-schedule-del", (e) => {
-				const name = $(e.currentTarget).attr("data-row");
-				this.doc.receipt_schedule = (this.doc.receipt_schedule || []).filter((r) => r.name !== name);
-				this.doc.receipt_schedule.forEach((r, i) => (r.idx = i + 1));
-				this.mark_dirty();
-				this.render_schedule();
-			});
-		}
-
-		render_schedule() {
-			const doc = this.doc;
-			const $wrap = this.$schedule;
-			if (!$wrap) {
-				return;
-			}
-			const show = cint(doc.credit_sale) && this.visible("receipt_schedule");
-			$wrap.prop("hidden", !show);
-			if (!show) {
-				return;
-			}
-			const editable = this.is_editable();
-			const rows = doc.receipt_schedule || [];
-			const focused = document.activeElement && $.contains($wrap[0], document.activeElement);
-			if (focused) {
-				return;
-			}
-			$wrap.html(`
-				<div class="ci-schedule-head">
-					<span>${__("Receipt Schedule")}</span>
-					${editable ? `<button type="button" class="btn btn-xs btn-default ci-schedule-add">${__("Add")}</button>` : ""}
-				</div>
-				<table class="ci-table ci-schedule-table">
-					<thead><tr><th>${__("Due")}</th><th>${__("Mode")}</th><th class="ci-num">${__("Amount")}</th><th></th></tr></thead>
-					<tbody>${rows.map((r) => `
-						<tr>
-							<td>${editable ? `<input type="date" class="ci-input" data-row="${r.name}" data-f="date" value="${esc(r.date || "")}">` : frappe.datetime.str_to_user(r.date)}</td>
-							<td>${editable ? `<input type="text" class="ci-input" data-row="${r.name}" data-f="payment_mode" value="${esc(r.payment_mode || "")}">` : esc(r.payment_mode)}</td>
-							<td class="ci-num">${editable ? `<input type="text" inputmode="decimal" class="ci-input" data-row="${r.name}" data-f="amount" value="${num(r.amount)}">` : money(r.amount)}</td>
-							<td>${editable ? `<button type="button" class="btn btn-xs btn-default ci-schedule-del" data-row="${r.name}" aria-label="${__("Remove")}">${frappe.utils.icon("delete", "xs")}</button>` : ""}</td>
-						</tr>`).join("")}
-					</tbody>
-				</table>`);
 		}
 
 		// ------------------------------------------------------------- actions
@@ -1926,7 +1859,7 @@ frappe.provide("digitz_erp");
 			});
 		}
 
-		// Correct (cashiers): ask the server whether this invoice may be corrected,
+		// Edit (cashiers): ask the server whether this invoice may be corrected,
 		// then take it back to draft under the same number for editing
 		async correct() {
 			const method = "digitz_erp.api.sales_invoice_api.correct_sales_invoice";
@@ -1936,14 +1869,14 @@ frappe.provide("digitz_erp");
 				return; // the reason it cannot be corrected is shown
 			}
 			frappe.confirm(
-				__("Take {0} back to draft to correct it? It keeps its number. Edit it, then submit it again.", [esc(this.doc.name)]),
+				__("Take {0} back to draft to edit it? It keeps its number. Edit it, then submit it again.", [esc(this.doc.name)]),
 				async () => {
 					try {
 						await frappe.xcall(method, { docname: this.doc.name });
 					} catch (e) {
 						return;
 					}
-					frappe.show_alert({ message: __("{0} is a draft again: correct it and submit.", [this.doc.name]), indicator: "green" });
+					frappe.show_alert({ message: __("{0} is a draft again: edit it and submit.", [this.doc.name]), indicator: "green" });
 					this.host.list.loaded = false;
 					await this.reload();
 				}
@@ -1971,8 +1904,8 @@ frappe.provide("digitz_erp");
 
 		// The Payment card's fields in a popup, beside the item search. Every change
 		// goes straight into the invoice through on_change, exactly as typing in the
-		// card does (default payment mode, account, change to return, credit
-		// schedule), so the card behind always shows the same values.
+		// card does (default payment mode, account, change to return), so the card
+		// behind always shows the same values.
 		// `on_done`: run when Done is clicked (not when the popup is closed), after
 		// the popup's values are in the invoice: the save or submit it was opened for
 		open_payment_dialog(focus, on_done) {
@@ -2007,9 +1940,6 @@ frappe.provide("digitz_erp");
 				}));
 			});
 
-			// Credit sale: the receipt schedule, as the Payment card had it
-			fields.push({ fieldtype: "Section Break", fieldname: "schedule_section" }, { fieldtype: "HTML", fieldname: "schedule" });
-
 			const d = new frappe.ui.Dialog({
 				title: __("Payment"),
 				size: "large",
@@ -2043,12 +1973,9 @@ frappe.provide("digitz_erp");
 					}
 				}
 			};
-			// The console's colours, for the schedule table
+			// The console's colours for the payment fields
 			d.$wrapper.addClass("ci-pay-dialog");
-			this.$schedule = d.fields_dict.schedule.$wrapper.addClass("ci-schedule");
-			this.bind_schedule(this.$schedule);
 			d.onhide = () => {
-				this.$schedule = null;
 				this.refresh();
 			};
 
@@ -2081,8 +2008,6 @@ frappe.provide("digitz_erp");
 						<div><span>${__("Total")}</span><strong>${money(doc.rounded_total || doc.grand_total)}</strong></div>
 						${cash ? `<div class="${balance < 0 ? "is-short" : ""}"><span>${__("Change to return")}</span><strong>${money(balance)}</strong></div>` : ""}
 					</div>`);
-				d.set_df_property("schedule_section", "hidden", credit ? 0 : 1);
-				this.render_schedule();
 				// Let the field's own change settle before listening again
 				setTimeout(() => (syncing = false), 0);
 			};

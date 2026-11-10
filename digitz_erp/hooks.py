@@ -110,7 +110,7 @@ after_install = "digitz_erp.api.install_api.after_install"
 after_migrate = [
 	"digitz_erp.api.bundled_files.ensure_bundled_files",
 	"digitz_erp.api.token_simulator.update_token_url_after_migrate",
-	# Adds the Cashier's customer and item rights; never takes one away, so a
+	# Adds the Cashier's customer rights and read on Item; never takes one away, so a
 	# live site keeps what its Role Permission Manager says for the rest
 	"digitz_erp.api.cashier_permissions.apply_on_migrate",
 	# Hides the roles the Medical Center never assigns (none still held by a user)
@@ -150,7 +150,7 @@ permission_query_conditions = {
 #	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
 # }
 #
-# Cashiers add and edit Items and Customers (api/cashier_permissions.py RULES)
+# Cashiers add and edit Customers, and only pick Items (api/cashier_permissions.py RULES)
 
 # DocType Class
 # ---------------

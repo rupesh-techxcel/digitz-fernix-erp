@@ -4,9 +4,9 @@
 """What the Cashier role may do, enforced on every install and migrate.
 
 A cashier works the counter: opens and closes the day, bills and prints invoices,
-collects payments on credit invoices (Receipt Entry), and adds and edits customers
-and items. They never manage prices or other masters, and never cancel, amend or
-delete an invoice, a receipt, a customer or an item.
+collects payments on credit invoices (Receipt Entry), and adds and edits customers.
+They only pick items, never add or change one, never manage prices or other
+masters, and never cancel, amend or delete an invoice, a receipt or a customer.
 
 The permissions ship two ways: as rows in each doctype's own JSON, and as Custom
 DocPerm fixtures (Sales Invoice, Customer, ...). But once a site has a Custom
@@ -20,7 +20,7 @@ Only the Cashier row is touched, and only the flags listed: other flags and othe
 roles are left as the site has them.
 
 A fresh install gets every rule (apply, from after_sync). A migrate only grants
-the customer and item rights (apply_on_migrate): a live site keeps whatever its
+the customer rights (apply_on_migrate): a live site keeps whatever its
 Role Permission Manager says for everything else, and nothing is taken away.
 
 Check a site with: bench --site <site> execute digitz_erp.api.cashier_permissions.report
@@ -47,7 +47,8 @@ RULES = {
 		"cancel": 0, "amend": 0, "delete": 0,
 	},
 	"Counter Session": {"read": 1, "print": 1, "write": 0, "create": 0, "delete": 0, "cancel": 0},
-	"Item": {**LOOKUP, "create": 1, "write": 1, "delete": 0, "submit": 0, "cancel": 0, "amend": 0},
+	# Picked on the invoice only: items are kept by the supervisors
+	"Item": {**LOOKUP, **NO_CHANGES},
 	"Item Price": {"write": 0, "create": 0, "delete": 0},
 	"Price List": {"select": 1, "write": 0, "create": 0, "delete": 0},
 	"Payment Mode": {**LOOKUP, **NO_CHANGES},
@@ -60,7 +61,7 @@ RULES = {
 	"Medical Services": {**LOOKUP, **NO_CHANGES},
 	"Medical Service Logs": {**LOOKUP, **NO_CHANGES},
 	"Global Settings": {"read": 1, "write": 0},
-	# Picked in the Customer and Item forms a cashier fills in. Grant only: any
+	# Picked in the Customer form a cashier fills in, and in the item lines. Grant only: any
 	# other right a site has given the Cashier on these is left as it is
 	"Customer Group": LOOKUP,
 	"Area": LOOKUP,
@@ -120,8 +121,9 @@ def ensure_cashier_permissions():
 		print("Cashier permissions corrected:\n  " + "\n  ".join(changed))
 
 
-# What a migrate adds on a live site: the customer and item rights, and the
-# masters picked in those forms. Grant only.
+# What a migrate adds on a live site: the customer rights, read on Item, and
+# the masters picked in those forms. Grant only (the patch
+# remove_cashier_item_edit takes the Item edit rights away once).
 MIGRATE_GRANTS = (
 	"Customer", "Item", "Customer Group", "Area", "Country", "Currency",
 	"Item Group", "Item Subgroup", "Brand", "Asset Category",
@@ -157,7 +159,7 @@ def apply():
 
 
 def apply_on_migrate():
-	"""after_migrate: only the customer and item grants (see MIGRATE_GRANTS)."""
+	"""after_migrate: only the customer grants and read on Item (see MIGRATE_GRANTS)."""
 	if frappe.db.exists("Role", ROLE):
 		grant_cashier_permissions(MIGRATE_GRANTS)
 
