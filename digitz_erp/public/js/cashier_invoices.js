@@ -1042,6 +1042,9 @@ frappe.provide("digitz_erp");
 				received_amount: cash,
 				reason_for_unfilled_invoice: !doc.invoice_fullfilled,
 			};
+			// Overrides the DocType's read-only flag either way: Posting Date and Time
+			// are read-only in the DocType and open up when Edit Posting Date And Time
+			// is ticked, as in the form
 			const read_only = {
 				posting_date: !cint(doc.edit_posting_date_and_time),
 				posting_time: !cint(doc.edit_posting_date_and_time),
@@ -1057,7 +1060,8 @@ frappe.provide("digitz_erp");
 
 			Object.entries(this.controls).forEach(([fieldname, control]) => {
 				const meta_df = frappe.meta.get_docfield(DOCTYPE, fieldname);
-				control.df.read_only = !editable || cint(meta_df.read_only) || read_only[fieldname] ? 1 : 0;
+				const locked = fieldname in read_only ? read_only[fieldname] : cint(meta_df.read_only);
+				control.df.read_only = !editable || locked ? 1 : 0;
 				// Like the form: a read-only field with nothing in it is not shown
 				const value = doc[fieldname];
 				const empty = control.df.read_only && meta_df.fieldtype !== "Check" && (value === undefined || value === null || value === "");
