@@ -19,7 +19,7 @@ from digitz_erp.api.sales_order_api import check_and_update_sales_order_status,u
 from digitz_erp.api.settings_api import add_seconds_to_time
 from frappe import _
 from frappe.utils import cint, flt, fmt_money
-from digitz_erp.api.counter_session_api import restrict_cashier_posting_date, stamp_counter_session
+from digitz_erp.api.counter_session_api import stamp_counter_session
 from digitz_erp.accounts.doctype.gl_posting.gl_posting import get_party_balance
 from digitz_erp.api.settings_api import get_customer_terms
 from digitz_erp.api.items_api import get_item_uoms 
@@ -69,15 +69,6 @@ def get_sales_payment_defaults(customer=None, company=None):
 
 
 class SalesInvoice(Document):
-
-    def onload(self):
-        # A draft taken back for correction keeps its date (the Cashier Console
-        # then lets a cashier edit it however old it is)
-        from digitz_erp.api.sales_invoice_api import correction_date
-
-        kept = correction_date(self)
-        if kept:
-            self.set_onload("correction_date", str(kept))
 
     def Voucher_In_The_Same_Time(self):
         possible_invalid= frappe.db.count('Sales Invoice', {'posting_date': ['=', self.posting_date], 'posting_time':['=', self.posting_time]})
@@ -267,8 +258,6 @@ class SalesInvoice(Document):
 
     def validate(self):
         
-        # A cashier saves and submits only today's invoices
-        restrict_cashier_posting_date(self)
         self.validate_customer_mobile_number()
         self.validate_received_amount()
         self.validate_line_amounts()

@@ -160,21 +160,9 @@ def get_sales_invoice_permission_query(user):
 # to draft under the same number, editing it and submitting it again. Only where
 # that is clean: a credit sale (no cash in any till) with no payment, return, stock
 # or project tied to it. Anything else is for a supervisor (Cancel / Amend, or
-# Revert To Draft). A corrected invoice keeps its date when submitted again,
-# however old (is_under_correction, counter_session_api.restrict_cashier_posting_date).
+# Revert To Draft).
 
 CORRECTION_COMMENT = "Taken back to draft for correction"
-
-
-def correction_date(doc):
-    """The posting date a cashier's correction of `doc` keeps, or None when `doc`
-    is not a draft taken back for correction."""
-    if doc.is_new() or doc.docstatus != 0:
-        return None
-    if not frappe.db.exists("Comment", {"reference_doctype": doc.doctype, "reference_name": doc.name,
-            "comment_type": "Comment", "content": ("like", f"{CORRECTION_COMMENT}%")}):
-        return None
-    return frappe.db.get_value(doc.doctype, doc.name, "posting_date")
 
 
 def correction_blocked_reason(doc):

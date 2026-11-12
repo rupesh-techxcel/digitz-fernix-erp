@@ -51,35 +51,10 @@ frappe.provide("digitz_erp");
 		control.$input && control.$input.is("textarea") && control.$input.css("height", "72px");
 	}
 
-	// A cashier who is not a supervisor dates invoices today or up to a few days
-	// back, never ahead (the server's counter_session_api.restrict_cashier_posting_date).
-	// A draft dated outside that window opens read-only.
+	// A cashier who is not a supervisor (corrects a submitted credit sale with Edit)
 	function today_only() {
 		const state = digitz_erp.counter_state;
 		return state ? !!state.must_open_day : frappe.user.has_role("Cashier") && !frappe.user.has_role("System Manager");
-	}
-
-	// The cashier's window: [earliest, today], as "YYYY-MM-DD"
-	function cashier_window() {
-		const today = frappe.datetime.get_today();
-		const days = cint((digitz_erp.counter_state || {}).backdate_days) || 10;
-		return [frappe.datetime.add_days(today, -days), today, days];
-	}
-
-	function outside_window(date) {
-		const [earliest, today] = cashier_window();
-		return !!date && (date < earliest || date > today);
-	}
-
-	// A submitted invoice taken back to correct keeps its own date, however old
-	// (sales_invoice_api.correction_date)
-	function keeps_correction_date(doc) {
-		const kept = doc.__onload && doc.__onload.correction_date;
-		return !!kept && kept === doc.posting_date;
-	}
-
-	function other_day(doc) {
-		return !doc.__islocal && doc.docstatus === 0 && outside_window(doc.posting_date) && !keeps_correction_date(doc);
 	}
 
 	function linked_to(doc) {
@@ -700,8 +675,7 @@ frappe.provide("digitz_erp");
 		}
 
 		is_editable() {
-			return this.doc.docstatus === 0 && !this.doc.tab_sales && !linked_to(this.doc).length
-				&& !(today_only() && other_day(this.doc));
+			return this.doc.docstatus === 0 && !this.doc.tab_sales && !linked_to(this.doc).length;
 		}
 
 		visible(fieldname) {
@@ -1069,7 +1043,6 @@ frappe.provide("digitz_erp");
 				reason_for_unfilled_invoice: !doc.invoice_fullfilled,
 			};
 			const read_only = {
-				// A cashier may date an invoice back too (within the window check() and the server hold)
 				posting_date: !cint(doc.edit_posting_date_and_time),
 				posting_time: !cint(doc.edit_posting_date_and_time),
 				customer_company: !this.walk_in,
@@ -1149,9 +1122,6 @@ frappe.provide("digitz_erp");
 			}
 			if (doc.docstatus === 2) {
 				banners.push(["red", __("This invoice is cancelled. Amend it to make a corrected copy."), "amend", __("Amend")]);
-			}
-			if (today_only() && other_day(doc)) {
-				banners.push(["orange", __("This draft is dated {0}. A cashier can date an invoice at most {1} days back: ask a supervisor to handle it.", [frappe.datetime.str_to_user(doc.posting_date), cashier_window()[2]])]);
 			}
 			this.$el.find(".ci-banners").html(banners.map(([tone, text, action, label]) => `
 				<div class="ci-banner ci-banner-${tone}">
@@ -1656,18 +1626,6 @@ frappe.provide("digitz_erp");
 				frappe.msgprint(__("Cannot change Sales Invoice created from a Tab Sales. Do it from the correspodning Tab Sale"));
 				return false;
 			}
-			if (today_only() && outside_window(doc.posting_date) && !keeps_correction_date(doc)) {
-				const [earliest, today, days] = cashier_window();
-				frappe.msgprint({
-					title: __("Date Not Allowed"),
-					indicator: "orange",
-					message: doc.posting_date > today
-						? __("An invoice cannot be dated after today.")
-						: __("A cashier can date an invoice at most {0} days back (from {1}).", [days, frappe.datetime.str_to_user(earliest)]),
-				});
-				this.focus_field("posting_date");
-				return false;
-			}
 			if (!cint(doc.credit_sale) && !doc.payment_account) {
 				frappe.msgprint(__("Select payment account"));
 			}
@@ -1796,12 +1754,7 @@ frappe.provide("digitz_erp");
 					if (saved.name !== old_name) {
 						frappe.model.remove_from_locals(DOCTYPE, old_name);
 					}
-					// Saving does not run the server's onload: keep a correction's kept date
-					const kept = doc.__onload && doc.__onload.correction_date;
 					this.doc = frappe.get_doc(DOCTYPE, saved.name) || saved;
-					if (kept && this.doc.docstatus === 0) {
-						this.doc.__onload = Object.assign({}, this.doc.__onload, { correction_date: kept });
-					}
 					this.dirty = false;
 					this.render();
 					old_key !== this.doc.name && this.host.renamed(this.tab, old_key);
