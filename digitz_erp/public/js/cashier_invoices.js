@@ -1622,8 +1622,7 @@ frappe.provide("digitz_erp");
 		}
 
 		// What the form checks before it saves or submits
-		// `resume`: what to run once the Payment popup fills a missing payment field
-		check(action, resume) {
+		check(action) {
 			const doc = this.doc;
 
 			if (doc.tab_sales) {
@@ -1658,10 +1657,10 @@ frappe.provide("digitz_erp");
 			if (this.host.mobile_mandatory) {
 				need("customer_mobile_number", doc.customer_mobile_number);
 			}
-			// Only payment fields missing (e.g. Received Amount): no alert, the Payment
-			// popup opens on the field, and Done carries on with the save or submit
+			// Only payment fields missing (e.g. Reference No): no alert, the Payment
+			// popup opens on the field, and its Save & Submit carries on
 			if (missing.length && missing_fields.every((f) => PAYMENT_FIELDS.includes(f))) {
-				this.open_payment_dialog(first_payment_field, resume);
+				this.open_payment_dialog(first_payment_field);
 				return false;
 			}
 			if (missing.length) {
@@ -1703,14 +1702,14 @@ frappe.provide("digitz_erp");
 			}
 		}
 
-		// Save & Submit (Ctrl+Shift+S): save the changes, then submit as Submit does
-		// (its confirmation included). Stops if the save does not go through.
+		// Save & Submit (Ctrl+Shift+S): save the changes, then submit as Submit does.
+		// Stops if the save does not go through.
 		async save_and_submit() {
 			if (this.saving || !this.is_editable()) {
 				return;
 			}
 			if (this.dirty || this.doc.__islocal) {
-				await this.save("Save", () => this.save_and_submit());
+				await this.save("Save");
 				if (this.dirty || this.doc.__islocal || this.doc.docstatus !== 0) {
 					return;
 				}
@@ -1718,9 +1717,7 @@ frappe.provide("digitz_erp");
 			await this.save("Submit");
 		}
 
-		// `resume`: run after the Payment popup fills a missing payment field
-		// (default: this save again)
-		async save(action, resume) {
+		async save(action) {
 			if (this.saving || !this.is_editable()) {
 				return;
 			}
@@ -1734,7 +1731,7 @@ frappe.provide("digitz_erp");
 				// A copied invoice must not carry delivery note allocations
 				delete doc.delivery_notes;
 			}
-			if (!this.check(action, resume || (() => this.save(action)))) {
+			if (!this.check(action)) {
 				this.render_rows();
 				this.refresh();
 				return;
@@ -1773,11 +1770,9 @@ frappe.provide("digitz_erp");
 				}
 			};
 
-			if (action === "Submit") {
-				frappe.confirm(__("Permanently Submit {0}?", [esc(doc.name)]), run);
-			} else {
-				await run();
-			}
+			// Submits straight away, without the form's "Permanently Submit?" prompt:
+			// the cashier has just checked the payment, and Cancel can still undo it
+			await run();
 		}
 
 		cancel() {
@@ -1863,15 +1858,16 @@ frappe.provide("digitz_erp");
 		// goes straight into the invoice through on_change, exactly as typing in the
 		// card does (default payment mode, account, change to return), so the card
 		// behind always shows the same values.
-		// `on_done`: run when Done is clicked (not when the popup is closed), after
-		// the popup's values are in the invoice: the save or submit it was opened for
-		open_payment_dialog(focus, on_done) {
+		// A cash sale's Received Amount starts at the total, so the cashier only
+		// types it when the customer hands over more (for change).
+		async open_payment_dialog(focus) {
 			if (!this.is_editable()) {
 				return;
 			}
 			const doc = this.doc;
 			const FIELDS = PAYMENT_FIELDS;
 			let syncing = false;
+			const payment_modes = await this.get_payment_modes();
 
 			const fields = [{ fieldtype: "HTML", fieldname: "summary" }];
 			FIELDS.forEach((fieldname, i) => {
@@ -1880,9 +1876,12 @@ frappe.provide("digitz_erp");
 					return;
 				}
 				i === 3 && fields.push({ fieldtype: "Column Break" });
-				fields.push(Object.assign({}, meta_df, {
+				// Payment Mode as a plain dropdown: there are only a few
+				const select = fieldname === "payment_mode"
+					? { fieldtype: "Select", options: ["", ...payment_modes].join("\n") }
+					: { get_query: this.query_for(fieldname) };
+				fields.push(Object.assign({}, meta_df, select, {
 					hidden: 0, depends_on: null, mandatory_depends_on: null, read_only_depends_on: null,
-					get_query: this.query_for(fieldname),
 					change: () => {
 						if (syncing) {
 							return;
@@ -1892,7 +1891,11 @@ frappe.provide("digitz_erp");
 							return;
 						}
 						doc[fieldname] = value;
-						this.on_change(fieldname).then(() => sync());
+						this.on_change(fieldname)
+							// Switching to cash (e.g. Credit Sale unticked) fills it too, but
+							// a Received Amount the cashier cleared is left cleared
+							.then(() => fieldname !== "received_amount" && fill_received())
+							.then(() => sync());
 					},
 				}));
 			});
@@ -1901,15 +1904,9 @@ frappe.provide("digitz_erp");
 				title: __("Payment"),
 				size: "large",
 				fields,
-				primary_action_label: __("Done"),
+				// Straight on to Save & Submit from the payment
+				primary_action_label: __("Save & Submit"),
 				primary_action: async () => {
-					await take_values();
-					d.hide();
-					on_done && on_done();
-				},
-				// Straight on to Save & Submit from the payment (its confirmation included)
-				secondary_action_label: __("Save & Submit"),
-				secondary_action: async () => {
 					await take_values();
 					d.hide();
 					this.save_and_submit();
@@ -1929,6 +1926,15 @@ frappe.provide("digitz_erp");
 						await this.on_change(fieldname);
 					}
 				}
+			};
+			// Empty Received Amount on a cash sale: the total, as if paid exactly
+			const fill_received = async () => {
+				const total = flt(doc.rounded_total || doc.grand_total);
+				if (cint(doc.credit_sale) || doc.payment_mode_type !== "Cash" || flt(doc.received_amount) || !total) {
+					return;
+				}
+				doc.received_amount = total;
+				await this.on_change("received_amount");
 			};
 			// The console's colours for the payment fields
 			d.$wrapper.addClass("ci-pay-dialog");
@@ -1970,11 +1976,28 @@ frappe.provide("digitz_erp");
 			};
 
 			d.show();
-			sync();
+			fill_received().then(() => sync());
 			setTimeout(() => {
 				const target = focus || (doc.payment_mode_type === "Cash" && !cint(doc.credit_sale) ? "received_amount" : "payment_mode");
 				d.fields_dict[target] && d.fields_dict[target].$input && d.fields_dict[target].$input.trigger("focus");
 			}, 300);
+		}
+
+		// The Payment Mode names for the popup's dropdown, fetched once. Uses the
+		// Link field's own search, so the same users can read them. One not listed
+		// (e.g. on an old invoice) is added, so the dropdown still shows it.
+		async get_payment_modes() {
+			if (!this.payment_modes) {
+				const r = await frappe.call({
+					method: "frappe.desk.search.search_link",
+					args: { doctype: "Payment Mode", txt: "", page_length: 100, reference_doctype: DOCTYPE },
+				});
+				this.payment_modes = (r.message || []).map((m) => m.value).sort();
+			}
+			const current = this.doc.payment_mode;
+			return current && !this.payment_modes.includes(current)
+				? [...this.payment_modes, current]
+				: this.payment_modes;
 		}
 
 		// Show Company / Show TRN only change the printout, so like the form
