@@ -15,4 +15,5 @@ recursive-include digitz_erp *.png
 recursive-include digitz_erp *.py
 recursive-include digitz_erp *.svg
 recursive-include digitz_erp *.txt
+recursive-include digitz_erp *.xlsx
 recursive-exclude digitz_erp *.pyc

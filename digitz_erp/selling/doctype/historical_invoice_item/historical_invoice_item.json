@@ -1,0 +1,218 @@
+{
+ "actions": [],
+ "creation": "2026-11-13 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "stock_id",
+  "service_name",
+  "category",
+  "quantity",
+  "column_break_a",
+  "service_charge",
+  "total_service_charge",
+  "extra_charge",
+  "total_vat",
+  "section_govt",
+  "govt_fee",
+  "govt_bank",
+  "bank_service_charge",
+  "bank_service_charge_vat",
+  "column_break_b",
+  "other_charge",
+  "total_govt_fee",
+  "bank_reference_number",
+  "mb_st_dw_id",
+  "application_id",
+  "ref_name",
+  "section_other",
+  "employee_commission",
+  "customer_commission",
+  "discount_amount",
+  "reward_amount",
+  "column_break_c",
+  "line_total",
+  "net_service_charge",
+  "amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "stock_id",
+   "fieldtype": "Data",
+   "label": "Stock ID",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "service_name",
+   "fieldtype": "Data",
+   "label": "Service",
+   "in_list_view": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "label": "Category",
+   "in_list_view": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "quantity",
+   "fieldtype": "Float",
+   "label": "Quantity",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "column_break_a",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "service_charge",
+   "fieldtype": "Currency",
+   "label": "Service Charge"
+  },
+  {
+   "fieldname": "total_service_charge",
+   "fieldtype": "Currency",
+   "label": "Total Service Charge",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "extra_charge",
+   "fieldtype": "Currency",
+   "label": "Extra / Round Off Charge"
+  },
+  {
+   "fieldname": "total_vat",
+   "fieldtype": "Currency",
+   "label": "VAT",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "section_govt",
+   "fieldtype": "Section Break",
+   "label": "Govt. Fee"
+  },
+  {
+   "fieldname": "govt_fee",
+   "fieldtype": "Currency",
+   "label": "Govt. Fee"
+  },
+  {
+   "fieldname": "govt_bank",
+   "fieldtype": "Data",
+   "label": "Govt. Bank"
+  },
+  {
+   "fieldname": "bank_service_charge",
+   "fieldtype": "Currency",
+   "label": "Bank Service Charge"
+  },
+  {
+   "fieldname": "bank_service_charge_vat",
+   "fieldtype": "Currency",
+   "label": "Bank Service Charge VAT"
+  },
+  {
+   "fieldname": "column_break_b",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "other_charge",
+   "fieldtype": "Currency",
+   "label": "Other Charge"
+  },
+  {
+   "fieldname": "total_govt_fee",
+   "fieldtype": "Currency",
+   "label": "Total Govt. Fee",
+   "in_list_view": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "bank_reference_number",
+   "fieldtype": "Data",
+   "label": "Bank Reference Number"
+  },
+  {
+   "fieldname": "mb_st_dw_id",
+   "fieldtype": "Data",
+   "label": "MB/ST/DW-ID"
+  },
+  {
+   "fieldname": "application_id",
+   "fieldtype": "Data",
+   "label": "Application ID / Receipt ID"
+  },
+  {
+   "fieldname": "ref_name",
+   "fieldtype": "Data",
+   "label": "Ref. Name"
+  },
+  {
+   "fieldname": "section_other",
+   "fieldtype": "Section Break",
+   "label": "Commission and Totals"
+  },
+  {
+   "fieldname": "employee_commission",
+   "fieldtype": "Currency",
+   "label": "Employee Commission"
+  },
+  {
+   "fieldname": "customer_commission",
+   "fieldtype": "Currency",
+   "label": "Customer Commission"
+  },
+  {
+   "fieldname": "discount_amount",
+   "fieldtype": "Currency",
+   "label": "Discount Amount"
+  },
+  {
+   "fieldname": "reward_amount",
+   "fieldtype": "Currency",
+   "label": "Reward Amount"
+  },
+  {
+   "fieldname": "column_break_c",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "line_total",
+   "fieldtype": "Currency",
+   "label": "Line Total (excl. VAT)"
+  },
+  {
+   "fieldname": "net_service_charge",
+   "fieldtype": "Currency",
+   "label": "Net Service Charge"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "in_list_view": 1,
+   "columns": 1,
+   "read_only": 1,
+   "description": "Line Total + VAT: what the customer paid for this line"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Selling",
+ "name": "Historical Invoice Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 0
+}

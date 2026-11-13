@@ -1,0 +1,400 @@
+/* Historical Invoices
+ *
+ * Loaded by Frappe together with the page (Page.load_assets), so edits here
+ * need a page reload, not a bench build. Colours come from the Digitz desk
+ * theme tokens (public/css/digitz_desk.bundle.css), with fallbacks, as in the
+ * Cashier Console.
+ */
+
+.historical-invoices {
+	--hi-blue: var(--digitz-blue, #214dbb);
+	--hi-blue-soft: var(--digitz-blue-soft-2, #edf4ff);
+	--hi-canvas: var(--digitz-blue-soft-3, #f7fbff);
+	--hi-border: var(--digitz-blue-border, #cfe0ff);
+	--hi-text: var(--digitz-text, #1b2b47);
+	--hi-muted: var(--digitz-text-soft, #5f6f8c);
+	--hi-surface: var(--digitz-white, #ffffff);
+	--hi-shadow-sm: var(--digitz-shadow-sm, 0 2px 8px rgba(33, 77, 187, 0.06));
+	--hi-green: #16a34a;
+	--hi-orange: #ea8a0c;
+	--hi-red: #dc2626;
+
+	max-width: 1320px;
+	margin: 4px auto 32px;
+	color: var(--hi-text);
+}
+
+[data-theme="dark"] .historical-invoices {
+	--hi-blue-soft: rgba(77, 163, 255, 0.12);
+	--hi-canvas: rgba(255, 255, 255, 0.02);
+	--hi-border: var(--border-color, #2f3b52);
+	--hi-text: var(--text-color, #e6ebf5);
+	--hi-muted: var(--text-muted, #9aa6bd);
+	--hi-surface: var(--card-bg, #1c2333);
+	--hi-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.historical-invoices .is-loading {
+	opacity: 0.6;
+	transition: opacity 0.2s ease;
+}
+
+.hi-muted { color: var(--hi-muted); }
+.hi-strong { font-weight: 600; }
+.hi-pre { white-space: pre-line; }
+.hi-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- Tiles ---------- */
+
+.hi-tiles {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+.hi-tile {
+	position: relative;
+	overflow: hidden;
+	padding: 14px 16px;
+	border: 1px solid var(--hi-border);
+	border-radius: 14px;
+	background: var(--hi-surface);
+	box-shadow: var(--hi-shadow-sm);
+}
+
+.hi-tile::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 3px;
+	background: var(--hi-blue);
+	opacity: 0.6;
+}
+
+.hi-tile.is-paid::before { background: var(--hi-green); opacity: 1; }
+.hi-tile.is-unpaid::before { background: var(--hi-red); opacity: 1; }
+.hi-tile.is-unpaid .hi-tile-value { color: var(--hi-red); }
+
+.hi-tile-label {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--hi-muted);
+}
+
+.hi-tile-value {
+	margin-top: 4px;
+	font-size: 20px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ---------- List ---------- */
+
+.hi-table {
+	border: 1px solid var(--hi-border);
+	border-radius: 14px;
+	background: var(--hi-surface);
+	box-shadow: var(--hi-shadow-sm);
+	overflow: hidden;
+}
+
+.hi-scroll {
+	max-height: 620px;
+	overflow: auto;
+}
+
+.hi-grid {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 13px;
+}
+
+.hi-grid th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 10px 12px;
+	background: var(--hi-blue-soft);
+	color: var(--hi-muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	border-bottom: 1px solid var(--hi-border);
+}
+
+[data-theme="dark"] .hi-grid th { background: var(--hi-surface); }
+
+.hi-grid td {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--hi-border);
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.hi-grid tbody tr:last-child td { border-bottom: 0; }
+.hi-grid tbody tr:hover td { background: var(--hi-canvas); }
+
+.hi-link { font-weight: 600; color: var(--hi-blue); }
+
+.hi-ellipsis {
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.hi-badge {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+	background: var(--hi-blue-soft);
+	color: var(--hi-muted);
+}
+
+.hi-badge.is-paid { background: rgba(22, 163, 74, 0.12); color: var(--hi-green); }
+.hi-badge.is-part { background: rgba(234, 138, 12, 0.14); color: var(--hi-orange); }
+.hi-badge.is-unpaid { background: rgba(220, 38, 38, 0.12); color: var(--hi-red); }
+
+.hi-pager {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 12px 2px;
+	font-size: 12px;
+}
+
+.hi-empty {
+	padding: 40px 16px;
+	text-align: center;
+	color: var(--hi-muted);
+}
+
+/* ---------- Invoice sheet ---------- */
+
+.hi-sheet {
+	max-width: 960px;
+	margin: 0 auto;
+	padding: 32px 36px;
+	border: 1px solid var(--hi-border);
+	border-radius: 14px;
+	background: var(--hi-surface);
+	box-shadow: var(--hi-shadow-sm);
+	font-size: 13px;
+}
+
+.hi-letterhead,
+.hi-letterfoot {
+	margin: -12px -16px 0;
+}
+
+.hi-letterhead img,
+.hi-letterfoot img {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.hi-letterhead { border-bottom: 2px solid var(--hi-blue); padding-bottom: 8px; }
+.hi-letterfoot { margin: 28px -16px -12px; }
+
+.hi-sheet-head {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 16px;
+	padding-bottom: 20px;
+	border-bottom: 2px solid var(--hi-blue);
+}
+
+.hi-company {
+	display: flex;
+	gap: 14px;
+	align-items: flex-start;
+}
+
+.hi-company img {
+	max-height: 64px;
+	max-width: 120px;
+	object-fit: contain;
+}
+
+.hi-company-name {
+	font-size: 16px;
+	font-weight: 700;
+}
+
+.hi-title { text-align: right; }
+
+.hi-title h2 {
+	margin: 0 0 4px;
+	font-size: 22px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--hi-blue);
+}
+
+.hi-number {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 15px;
+	font-weight: 600;
+	margin-bottom: 12px;
+}
+
+.hi-meta {
+	display: grid;
+	grid-template-columns: 1.2fr 1fr;
+	gap: 24px;
+	padding: 20px 0;
+}
+
+.hi-label {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--hi-muted);
+	margin-bottom: 4px;
+}
+
+.hi-billto-name {
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.hi-facts {
+	display: grid;
+	gap: 6px;
+}
+
+.hi-fact {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	border-bottom: 1px dashed var(--hi-border);
+	padding-bottom: 4px;
+}
+
+.hi-fact span { color: var(--hi-muted); }
+
+.hi-scroll-x { overflow-x: auto; }
+
+.hi-items {
+	width: 100%;
+	min-width: 640px;
+	border-collapse: collapse;
+}
+
+.hi-items th {
+	padding: 9px 10px;
+	background: var(--hi-blue-soft);
+	color: var(--hi-muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	text-align: left;
+}
+
+.hi-items th.hi-num { text-align: right; }
+
+.hi-items td {
+	padding: 10px;
+	border-bottom: 1px solid var(--hi-border);
+	vertical-align: top;
+}
+
+.hi-idx { width: 32px; color: var(--hi-muted); }
+
+.hi-service { font-weight: 600; }
+
+.hi-details {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 12px;
+	margin-top: 2px;
+	font-size: 11px;
+	color: var(--hi-muted);
+}
+
+.hi-foot {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 24px;
+	padding-top: 20px;
+}
+
+.hi-notes {
+	flex: 1 1 260px;
+	font-size: 12px;
+}
+
+.hi-notes p { margin-bottom: 4px; }
+
+.hi-warn { color: var(--hi-orange); }
+
+.hi-totals {
+	flex: 0 1 340px;
+	border-collapse: collapse;
+}
+
+.hi-totals td { padding: 6px 4px; }
+
+.hi-totals tr.hi-grand td {
+	padding-top: 10px;
+	border-top: 2px solid var(--hi-text);
+	font-size: 16px;
+	font-weight: 700;
+}
+
+.hi-totals tr.hi-due td {
+	color: var(--hi-red);
+	font-weight: 600;
+}
+
+@media (max-width: 767px) {
+	.hi-sheet { padding: 20px 16px; }
+	.hi-meta { grid-template-columns: 1fr; }
+	.hi-title { text-align: left; }
+	.hi-totals { flex-basis: 100%; }
+}
+
+/* ---------- Print: the invoice sheet only ---------- */
+
+@media print {
+	body * { visibility: hidden; }
+
+	.hi-sheet,
+	.hi-sheet * { visibility: visible; }
+
+	.hi-sheet {
+		position: absolute;
+		inset: 0 auto auto 0;
+		width: 100%;
+		max-width: none;
+		border: 0;
+		box-shadow: none;
+		padding: 0;
+		background: #fff;
+		color: #000;
+	}
+
+	.hi-scroll-x { overflow: visible; }
+	.hi-items { min-width: 0; }
+}

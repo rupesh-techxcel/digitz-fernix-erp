@@ -1,0 +1,283 @@
+{
+ "actions": [],
+ "creation": "2026-11-13 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "invoice_number",
+  "invoice_date",
+  "invoice_time",
+  "column_break_inv",
+  "payment_mode",
+  "payment_status",
+  "source_file",
+  "section_customer",
+  "customer_name",
+  "customer",
+  "display_customer",
+  "column_break_cust",
+  "customer_mobile",
+  "customer_email",
+  "sales_man",
+  "employee",
+  "employee_name",
+  "section_items",
+  "items",
+  "section_totals",
+  "total_service_charge",
+  "total_vat",
+  "total_govt_fee",
+  "total_bank_service_charge",
+  "total_other_charge",
+  "column_break_tot",
+  "total_discount",
+  "total_reward",
+  "total_extra_charge",
+  "net_total",
+  "invoice_total"
+ ],
+ "fields": [
+  {
+   "fieldname": "invoice_number",
+   "fieldtype": "Data",
+   "label": "Invoice Number",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "invoice_date",
+   "fieldtype": "Date",
+   "label": "Invoice Date",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "invoice_time",
+   "fieldtype": "Time",
+   "label": "Invoice Time"
+  },
+  {
+   "fieldname": "column_break_inv",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payment_mode",
+   "fieldtype": "Data",
+   "label": "Payment Mode",
+   "in_standard_filter": 1,
+   "description": "CARD TYPE in the source report"
+  },
+  {
+   "fieldname": "payment_status",
+   "fieldtype": "Select",
+   "label": "Payment Status",
+   "options": "\nFully Paid\nPartly Paid\nNot Paid",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "label": "Source File",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_customer",
+   "fieldtype": "Section Break",
+   "label": "Customer"
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "description": "CUSTOMER in the source report, as written"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Linked Customer",
+   "options": "Customer",
+   "description": "Set when a Customer with this name exists"
+  },
+  {
+   "fieldname": "display_customer",
+   "fieldtype": "Data",
+   "label": "Display Customer",
+   "description": "The person the service was for (DISPLAY CUSTOMER)"
+  },
+  {
+   "fieldname": "column_break_cust",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "customer_mobile",
+   "fieldtype": "Data",
+   "label": "Customer Mobile"
+  },
+  {
+   "fieldname": "customer_email",
+   "fieldtype": "Data",
+   "label": "Customer Email"
+  },
+  {
+   "fieldname": "sales_man",
+   "fieldtype": "Data",
+   "label": "Sales Man"
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Data",
+   "label": "Employee",
+   "description": "User who raised the invoice"
+  },
+  {
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "label": "Employee Name"
+  },
+  {
+   "fieldname": "section_items",
+   "fieldtype": "Section Break",
+   "label": "Services"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Historical Invoice Item"
+  },
+  {
+   "fieldname": "section_totals",
+   "fieldtype": "Section Break",
+   "label": "Totals"
+  },
+  {
+   "fieldname": "total_service_charge",
+   "fieldtype": "Currency",
+   "label": "Service Charges (incl. VAT)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_vat",
+   "fieldtype": "Currency",
+   "label": "VAT",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_govt_fee",
+   "fieldtype": "Currency",
+   "label": "Govt. Fees",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_bank_service_charge",
+   "fieldtype": "Currency",
+   "label": "Bank Service Charges",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_other_charge",
+   "fieldtype": "Currency",
+   "label": "Other Charges",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_tot",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "total_discount",
+   "fieldtype": "Currency",
+   "label": "Discount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_reward",
+   "fieldtype": "Currency",
+   "label": "Reward",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_extra_charge",
+   "fieldtype": "Currency",
+   "label": "Extra / Round Off",
+   "read_only": 1
+  },
+  {
+   "fieldname": "net_total",
+   "fieldtype": "Currency",
+   "label": "Net Total (excl. VAT)",
+   "read_only": 1,
+   "description": "Sum of LINE TOTAL"
+  },
+  {
+   "fieldname": "invoice_total",
+   "fieldtype": "Currency",
+   "label": "Invoice Total",
+   "read_only": 1,
+   "in_list_view": 1,
+   "bold": 1,
+   "description": "INVOICE TOTAL from the source report"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-13 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Selling",
+ "name": "Historical Invoice",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "print": 1,
+   "export": 1,
+   "report": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Management",
+   "read": 1,
+   "print": 1,
+   "export": 1,
+   "report": 1
+  },
+  {
+   "role": "Cashier",
+   "read": 1,
+   "print": 1,
+   "export": 1,
+   "report": 1
+  },
+  {
+   "role": "Accounts User",
+   "read": 1,
+   "print": 1,
+   "export": 1,
+   "report": 1
+  }
+ ],
+ "sort_field": "invoice_date",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "field:invoice_number",
+ "naming_rule": "By fieldname",
+ "description": "Invoices from the previous system, imported read-only so they can be looked up. Not posted to the ledger.",
+ "in_create": 1,
+ "search_fields": "customer_name,display_customer,customer_mobile",
+ "title_field": "customer_name",
+ "show_title_field_in_link": 0
+}
