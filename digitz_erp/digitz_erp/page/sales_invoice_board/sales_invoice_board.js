@@ -5,7 +5,7 @@
 // as the cashier's work queue.
 //
 // Token fetching, customer creation and invoice creation all live on the server
-// now (digitz_erp/api/token_sync.py, run by a cron job every minute). This page
+// now (digitz_erp/api/token_sync.py, run by a cron job every 20 seconds). This page
 // only renders and reacts: it refreshes when the server says something changed,
 // with a slow timer as a safety net in case the socket drops.
 //

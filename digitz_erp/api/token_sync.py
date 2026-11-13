@@ -86,11 +86,11 @@ class TokenSkipped(Exception):
 
 
 def enqueue_medical_token_sync():
-	"""Cron entry point, runs every minute.
+	"""Cron entry point, runs every 20 seconds (see hooks.py).
 
 	The scheduler tick only enqueues; the actual work happens on the long queue
 	so a slow remote API can never hold up other scheduled jobs. `deduplicate`
-	means a run that overruns its minute is not stacked on top of itself, which
+	means a run that overruns its 20 seconds is not stacked on top of itself, which
 	is the server side replacement for the old `window.__..._sync_running` lock.
 	"""
 	if not is_sync_enabled():

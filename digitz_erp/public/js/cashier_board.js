@@ -8,7 +8,7 @@
 // The standalone Sales Invoice Board page (digitz_erp/page/sales_invoice_board)
 // does the same and now sends console users here. Token fetching, customer
 // creation and invoice creation all live on the server (digitz_erp/api/
-// token_sync.py, a cron job every minute), so the board has no Sync Now button
+// token_sync.py, a cron job every 20 seconds), so the board has no Sync Now button
 // of its own. This view only renders and reacts:
 // it refreshes when the server says something changed, with a slow timer as a
 // safety net in case the socket drops, and only while the tab is on screen.

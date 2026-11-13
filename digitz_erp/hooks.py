@@ -196,7 +196,10 @@ scheduler_events = {
 	"cron": {
 		# Pulls medical tokens and raises Sales Invoices. Replaces the browser
 		# driven loop that used to run in the Sales Invoice Board page.
-		"* * * * *": [
+		# Every 20 seconds: the sixth field is seconds (croniter). Needs
+		# "scheduler_tick_interval" of 10 in common_site_config.json, or the
+		# scheduler only checks once a minute and the job runs once a minute.
+		"* * * * * */20": [
 			"digitz_erp.api.token_sync.enqueue_medical_token_sync"
 		]
 	}

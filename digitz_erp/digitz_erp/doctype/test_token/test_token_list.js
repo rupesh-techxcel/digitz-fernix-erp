@@ -39,7 +39,7 @@ function show_status(listview) {
 			html = __("Token URL is the simulator, but Enable Token Sync is off in Settings.");
 		} else {
 			colour = "green";
-			html = __("Token URL is the simulator: {0}. The sync picks these tokens up every minute, or click Sync Now.", [esc(s.token_url)]);
+			html = __("Token URL is the simulator: {0}. The sync picks these tokens up every 20 seconds, or click Sync Now.", [esc(s.token_url)]);
 		}
 		if (s.enabled && s.site_by_name) {
 			html += " " + __("This site is reached by its own name, which must resolve on this server (e.g. through /etc/hosts).");
