@@ -21,8 +21,8 @@ class SalesReturn(Document):
         self.in_words = money_in_words(self.rounded_total,"AED")
         self.update_sales_invoice_references()
 
-    def validate(self):
-        self.validate_sales()
+    # def validate(self):
+    #     self.validate_sales()
 
     def validate_sales(self):
 
@@ -49,15 +49,15 @@ class SalesReturn(Document):
 
         turn_off_background_job = frappe.db.get_single_value("Global Settings",'turn_off_background_job')
 
-        if(frappe.session.user == "Administrator" and turn_off_background_job):
-            self.do_postings_on_submit()
-        else:
-            # frappe.enqueue(self.do_postings_on_submit, queue="long")
-            self.do_postings_on_submit()
+        # if(frappe.session.user == "Administrator" and turn_off_background_job):
+        #     self.do_postings_on_submit()
+        # else:
+        #     # frappe.enqueue(self.do_postings_on_submit, queue="long")
+        self.do_postings_on_submit()
 
     def do_postings_on_submit(self):
         # Cost of goods sold need not include for Sales Return because it is not an expense but its only a reduction of sales revenue.
-        self.do_stock_posting()
+        # self.do_stock_posting()
         self.insert_gl_records()
         self.insert_payment_postings()
         update_accounts_for_doc_type('Sales Return', self.name)
@@ -244,15 +244,15 @@ class SalesReturn(Document):
 
         cancel_bank_reconciliation("Sales Return", self.name)
         self.cancel_sales_return()
-        update_sales_order_quantities_for_sales_return_on_update(self,for_delete_or_cancel=True)
-        check_and_update_sales_order_status(self.name, "Sales Return")
+        # update_sales_order_quantities_for_sales_return_on_update(self,for_delete_or_cancel=True)
+        # check_and_update_sales_order_status(self.name, "Sales Return")
 
-    def on_trash(self):
+    # def on_trash(self):
         # On cancel the quantities are already deleted.
-        self.update_sales_invoice_quantities_before_delete_or_cancel()
+        # self.update_sales_invoice_quantities_before_delete_or_cancel()
 
-        update_sales_order_quantities_for_sales_return_on_update(self,for_delete_or_cancel=True)
-        check_and_update_sales_order_status(self.name, "Sales Return")
+        # update_sales_order_quantities_for_sales_return_on_update(self,for_delete_or_cancel=True)
+        # check_and_update_sales_order_status(self.name, "Sales Return")
 
     def update_receipt_schedules(self):
         existing_entries = frappe.get_all("Receipt Schedule", filters={"receipt_against": "Return", "document_no": self.name})
