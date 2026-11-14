@@ -691,6 +691,40 @@ frappe.ui.form.on("Sales Return", "onload", function (frm) {
 
 });
 
+// Credit Sale and Payment Mode come from defaults and are easy to leave as they
+// are, so the user confirms them before the return is submitted.
+frappe.ui.form.on("Sales Return", "before_submit", function (frm) {
+	const rows = [[__("Credit Sale"), frm.doc.credit_sale ? __("Yes") : __("No")]];
+	if (!frm.doc.credit_sale) {
+		rows.push([__("Payment Mode"), frm.doc.payment_mode || __("Not set")]);
+	}
+	const table = rows
+		.map(([label, value]) => `<tr><td class="text-muted">${label}</td><td><b>${frappe.utils.escape_html(value)}</b></td></tr>`)
+		.join("");
+
+	return new Promise((resolve) => {
+		let confirmed = false;
+		const d = new frappe.ui.Dialog({
+			title: __("Confirm Payment Details"),
+			primary_action_label: __("Confirm and Submit"),
+			primary_action: () => {
+				confirmed = true;
+				d.hide();
+			},
+			secondary_action_label: __("Go Back"),
+			secondary_action: () => d.hide(),
+		});
+		d.$body.append(`<table class="table table-bordered">${table}</table>`);
+		d.onhide = () => {
+			if (!confirmed) {
+				frappe.validated = false;
+			}
+			resolve();
+		};
+		d.show();
+	});
+});
+
 frappe.ui.form.on('Sales Return Item', {
 	// cdt is Child DocType name i.e Quotation Item
 	// cdn is the row name for e.g bbfcb8da6a
