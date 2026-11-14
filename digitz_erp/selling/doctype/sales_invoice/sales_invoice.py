@@ -697,6 +697,18 @@ class SalesInvoice(Document):
             check_and_update_sales_order_status(self.name, "Sales Invoice")
         
         self.update_project_advance_amount(for_cancel=True)
+        self.unlink_medical_service_logs()
+
+    def unlink_medical_service_logs(self):
+        # Clear the link instead of deleting the log: the log stays Completed so
+        # the token sync never raises a second invoice for the same token.
+        frappe.db.set_value(
+            "Medical Service Logs",
+            {"sales_invoice": self.name},
+            "sales_invoice",
+            None,
+            update_modified=False,
+        )
 
 
     def cancel_sales_invoice(self):
