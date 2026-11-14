@@ -378,9 +378,10 @@ class SalesReturn(Document):
 
         self.update_sales_invoice_quantities_before_delete_or_cancel()
 
-        #print("before do_cancel_stock_posting")
-
-        self.do_cancel_stock_posting()
+        # Submit no longer posts stock, so only returns submitted before that
+        # change have stock postings to reverse.
+        if frappe.db.exists("Stock Ledger", {"voucher": "Sales Return", "voucher_no": self.name}):
+            self.do_cancel_stock_posting()
 
         delete_gl_postings_for_cancel_doc_type('Sales Return',self.name)
 
