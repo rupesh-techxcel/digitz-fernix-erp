@@ -98,13 +98,13 @@ class CounterSession(Document):
 				"before another day can be opened here."
 			)
 
-		# A cashier's own close that waits for approval still holds them: it is
-		# their one unfinished day.
+		# Only an active day holds the cashier. Counted closes may await approval
+		# while the cashier opens and bills in a new session.
 		own = frappe.db.get_value(
-			"Counter Session", {"cashier": self.cashier, "docstatus": 0, "name": ["!=", self.name]}, "name"
+			"Counter Session", {"cashier": self.cashier, "docstatus": 0, "status": "Open", "name": ["!=", self.name]}, "name"
 		)
 		if own:
-			frappe.throw(f"You already have an unfinished day ({own}). Close it before opening another.")
+			frappe.throw(f"You already have an open day ({own}). Close it before opening another.")
 
 	def validate_approver(self):
 		"""Only a supervisor can sign off a difference, and only as themselves."""

@@ -114,13 +114,6 @@ digitz_erp.DayOpen = class DayOpen extends digitz_erp.DayOpsBase {
 			);
 		}
 
-		if (s.session && s.session.status === "Closing") {
-			return this.state_panel(
-				__("Your last close is waiting for approval"),
-				__("A supervisor has to approve the cash difference on {0} before a new day can be opened.", [s.session.name]),
-				__("View Day Close"), () => this.go("day-close")
-			);
-		}
 
 		if (s.session) {
 			return this.state_panel(

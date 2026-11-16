@@ -21,7 +21,7 @@ A difference is not an error. The day goes to **Closing** (*Close sent for appro
 While you wait:
 
 - **The counter is free.** The next cashier can open on it straight away.
-- **You** cannot open a new day until your close is approved.
+- **You can open a new day** while the previous close awaits approval. The pending close stays available for the supervisor to review.
 
 ## About expenditure
 
@@ -31,6 +31,6 @@ While you wait:
 
 ## After closing
 
-- The badge shows *Day not opened* (or *Close awaiting approval*).
+- The badge shows *Day not opened*.
 - You cannot bill again until you open a new day.
 - A closed day cannot be edited. If the count was wrong, a System Manager cancels and amends it. See [Problems and messages](#counter-troubleshooting).

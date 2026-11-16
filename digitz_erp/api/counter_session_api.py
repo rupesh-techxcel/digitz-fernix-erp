@@ -33,16 +33,13 @@ DENOMINATIONS = (1000, 500, 200, 100, 50, 20, 10, 5, 1, 0.5, 0.25)
 
 
 def get_open_session(user=None, counter=None, billing=False):
-	"""The user's unsubmitted session (optionally on `counter`), as a name, or None.
+	"""The user's active Open session; counted closes never block a new day.
 
-	With `billing`, only a session still Open counts: one waiting in Closing for a
-	supervisor takes no more documents.
+	`billing` is retained for callers; both billing and Day Open use only Open.
 	"""
-	filters = {"cashier": user or frappe.session.user, "docstatus": 0}
+	filters = {"cashier": user or frappe.session.user, "docstatus": 0, "status": "Open"}
 	if counter:
 		filters["counter"] = counter
-	if billing:
-		filters["status"] = "Open"
 	return frappe.db.get_value("Counter Session", filters, "name")
 
 
@@ -380,21 +377,45 @@ def approve_close(session):
 # the Excel export (day_overview_lines), so the three always agree.
 
 
+def get_invoice_day_sessions(date):
+	"""Select days only by submitted invoices' posting date, including amendments.
+
+	Invoices keep the original session link when a close is amended. Resolve that
+	chain before selecting the current, non-cancelled close.
+	"""
+	sources = set(frappe.db.sql_list(
+		"""
+		SELECT DISTINCT counter_session FROM `tabSales Invoice`
+		WHERE docstatus = 1 AND posting_date = %(date)s
+		  AND IFNULL(counter_session, '') != ''
+		""",
+		{"date": date},
+	))
+	if not sources:
+		return []
+	rows = frappe.get_all(
+		"Counter Session", fields=["name", "amended_from", "docstatus"],
+		order_by="counter, opened_on",
+	)
+	parents = {row.name: row.amended_from for row in rows}
+	names = []
+	for row in rows:
+		if row.docstatus == 2:
+			continue
+		source = row.name
+		while parents.get(source):
+			source = parents[source]
+		if source in sources:
+			names.append(row.name)
+	return names
+
+
 def build_day_overview(date=None):
 	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import get_takings_by_mode
 
 	date = getdate(date or nowdate())
 	is_today = date == getdate(nowdate())
-	# The date's days, and -- looking at today -- any day still unfinished from before,
-	# which still has to be counted
-	names = frappe.db.sql_list(
-		"""
-		SELECT name FROM `tabCounter Session`
-		WHERE docstatus < 2 AND (DATE(opened_on) = %(date)s OR (%(is_today)s AND docstatus = 0))
-		ORDER BY counter, opened_on
-		""",
-		{"date": date, "is_today": 1 if is_today else 0},
-	)
+	names = get_invoice_day_sessions(date)
 	docs = [frappe.get_doc("Counter Session", name) for name in names]
 	modes = get_non_cash_payment_modes()
 	system = get_takings_by_mode({doc.name: doc.source_session() for doc in docs})
