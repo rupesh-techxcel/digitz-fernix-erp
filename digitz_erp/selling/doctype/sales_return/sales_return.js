@@ -24,12 +24,6 @@ frappe.ui.form.on('Sales Return', {
 		frm.add_fetch('customer', 'credit_days', 'credit_days')
 		frm.add_fetch('payment_mode', 'account', 'payment_account')
 
-		frappe.db.get_value('Company', frm.doc.company, 'default_credit_sale', function(r) {
-			if (r && r.default_credit_sale === 1) {
-				frm.set_value('credit_sale', 1);
-			}
-		});
-
 		frm.set_query("warehouse", function() {
 		  return {
 			"filters": {
@@ -87,11 +81,8 @@ frappe.ui.form.on('Sales Return', {
 		
 		frm.trigger("get_default_company_and_warehouse");
 
-		frappe.db.get_value('Company', frm.doc.company, 'default_credit_sale', function(r) {
-			if (r && r.default_credit_sale === 1) {
-					frm.set_value('credit_sale', 1);
-			}
-		});
+		// New returns default to a refund, independently of Company credit defaults.
+		frm.set_value('credit_sale', 0);
 
 		set_default_payment_mode(frm);
 	}
