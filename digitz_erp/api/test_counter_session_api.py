@@ -86,12 +86,13 @@ class TestDayOverviewRecalculation(unittest.TestCase):
 				doc.is_new = lambda: False
 				doc.source_session = lambda: 'day-1'
 				doc.set = doc.__setitem__
-				doc.calculate_cash = lambda: model.CounterSession.calculate_cash(doc)
+				doc.calculate_cash = lambda **kwargs: model.CounterSession.calculate_cash(doc, **kwargs)
 				with patch.object(api, 'frappe') as framework, \
 						patch.object(api, 'get_invoice_day_sessions', return_value=['day-1']), \
 						patch.object(api, 'get_non_cash_payment_modes', return_value=[]), \
 						patch.object(api, 'nowdate', return_value='2026-11-16'), \
 						patch.object(model, 'get_takings_by_mode', return_value={'day-1': {}}), \
+						patch.object(model, 'get_document_dates', return_value=['2026-11-13']), \
 						patch.object(model, 'frappe') as model_framework:
 					framework._dict = frappe._dict
 					framework.get_doc.return_value = doc
@@ -109,3 +110,61 @@ class TestDayOverviewRecalculation(unittest.TestCase):
 					self.assertEqual(doc.closed_on, '2026-11-13 20:00:00')
 					framework.db.set_value.assert_not_called()
 					model_framework.db.set_value.assert_not_called()
+
+
+class TestDayOverviewInvoiceDates(unittest.TestCase):
+	"""A day left open past midnight: the board shows only the chosen date's
+	documents, by their posting date, unless later dates are asked for."""
+
+	def make_session(self, model):
+		doc = frappe._dict({
+			'doctype': 'Counter Session', 'name': 'day-1', 'docstatus': 1, 'status': 'Closed',
+			'cashier': 'cashier@example.com', 'counter': 'Counter 3',
+			'opened_on': '2026-11-13 09:00:00', 'closed_on': '2026-11-14 20:00:00',
+			'opening_float': 100, 'counted_cash': 190, 'cash_expenditure': 10,
+			'approved_by': None, 'payment_mode_totals': [], 'denominations': [],
+		})
+		doc.is_new = lambda: False
+		doc.source_session = lambda: 'day-1'
+		doc.set = doc.__setitem__
+		doc.calculate_cash = lambda **kwargs: model.CounterSession.calculate_cash(doc, **kwargs)
+		return doc
+
+	def overview(self, include_later):
+		from digitz_erp.digitz_erp.doctype.counter_session import counter_session as model
+
+		doc = self.make_session(model)
+		with patch.object(api, 'frappe') as framework, \
+				patch.object(api, 'get_invoice_day_sessions', return_value=['day-1']), \
+				patch.object(api, 'get_non_cash_payment_modes', return_value=[]), \
+				patch.object(api, 'nowdate', return_value='2026-11-16'), \
+				patch.object(model, 'get_takings_by_mode', return_value={'day-1': {}}) as takings, \
+				patch.object(model, 'get_document_dates', return_value=['2026-11-13', '2026-11-14']), \
+				patch.object(model, 'frappe') as model_framework:
+			framework._dict = frappe._dict
+			framework.get_doc.return_value = doc
+			model_framework.db.sql.side_effect = [[[50]], [[0]], [[0]], [[0]]]
+			session = api.build_day_overview('2026-11-13', include_later).sessions[0]
+			queries = [c.args for c in model_framework.db.sql.call_args_list]
+		return session, queries, takings
+
+	def test_selected_date_only_by_posting_date(self):
+		session, queries, takings = self.overview(0)
+		for query, params in queries:
+			self.assertIn("d.posting_date = %(posting_date)s", query)
+			self.assertNotIn("opened_on", query)
+			self.assertEqual(str(params["posting_date"]), "2026-11-13")
+		self.assertEqual(takings.call_args.args[1:], (date(2026, 11, 13), False))
+		# The count and expenditure belong to the whole day: hidden for part of it
+		self.assertTrue(session.partial)
+		self.assertEqual(str(session.continues_to), "2026-11-14")
+		self.assertEqual((session.counted_cash, session.difference, session.cash_expenditure), (None, None, None))
+		self.assertEqual(session.expected_cash, 150)
+
+	def test_include_later_dates(self):
+		session, queries, takings = self.overview(1)
+		for query, _params in queries:
+			self.assertIn("d.posting_date >= %(posting_date)s", query)
+		self.assertEqual(takings.call_args.args[1:], (date(2026, 11, 13), True))
+		self.assertFalse(session.partial)
+		self.assertEqual((session.counted_cash, session.expected_cash, session.difference), (190, 140, 50))

@@ -39,13 +39,32 @@ CASH_MOVEMENTS = (
 TOLERANCE = 0.005
 
 
-def get_takings_by_mode(sessions):
+def posting_date_condition(posting_date=None, include_later=False):
+	"""SQL condition limiting a session's documents `d` to the Day Close board's
+	date: `posting_date` only, or with `include_later` that date and the ones
+	after it. No date means the whole session."""
+	if not posting_date:
+		return ""
+	return "AND d.posting_date >= %(posting_date)s" if include_later else "AND d.posting_date = %(posting_date)s"
+
+
+def get_document_dates(source):
+	"""The posting dates of the submitted documents saved in session `source`, oldest first."""
+	union = " UNION ".join(
+		f"SELECT posting_date FROM `tab{doctype}` WHERE counter_session = %(source)s AND docstatus = 1"
+		for doctype in {doctype for _field, doctype, *_rest in CASH_MOVEMENTS}
+	)
+	return sorted(frappe.db.sql_list(union, {"source": source}))
+
+
+def get_takings_by_mode(sessions, posting_date=None, include_later=False):
 	"""{session: {payment mode: net amount}} of the non-cash documents saved in
 	`sessions` -- what the card machine and bank should show for each day.
 
 	`sessions` maps the name to report under to the name the documents carry
 	(the original session, for a corrected copy; see CounterSession.source_session).
-	Signs and credit sales are treated as in CASH_MOVEMENTS.
+	Signs and credit sales are treated as in CASH_MOVEMENTS. `posting_date` and
+	`include_later` limit the documents as in posting_date_condition.
 	"""
 	takings = {name: {} for name in sessions}
 	if not sessions:
@@ -56,15 +75,16 @@ def get_takings_by_mode(sessions):
 
 	for _field, doctype, amount_expr, sign, skip_credit in CASH_MOVEMENTS:
 		credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
+		dated = posting_date_condition(posting_date, include_later)
 		rows = frappe.db.sql(
 			f"""
 			SELECT d.counter_session, d.payment_mode, SUM({amount_expr})
 			FROM `tab{doctype}` d
 			INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
-			WHERE d.counter_session IN %(sources)s AND d.docstatus = 1 AND pm.mode != 'Cash' {credit}
+			WHERE d.counter_session IN %(sources)s AND d.docstatus = 1 AND pm.mode != 'Cash' {credit} {dated}
 			GROUP BY d.counter_session, d.payment_mode
 			""",
-			{"sources": list(reported_as)},
+			{"sources": list(reported_as), "posting_date": posting_date},
 		)
 		for source, mode, amount in rows:
 			for name in reported_as[source]:
@@ -133,9 +153,11 @@ class CounterSession(Document):
 			amended_from = frappe.db.get_value("Counter Session", name, "amended_from")
 		return name
 
-	def calculate_cash(self):
+	def calculate_cash(self, posting_date=None, include_later=False):
 		"""Sum the submitted cash documents of this session and, less the
-		expenditure entered at Day Close, the expected cash."""
+		expenditure entered at Day Close, the expected cash. `posting_date` and
+		`include_later` limit the documents as in posting_date_condition: the Day
+		Close board's view of a date, worked out in memory and never saved."""
 		expected = flt(self.opening_float)
 		source = self.source_session()
 
@@ -143,14 +165,15 @@ class CounterSession(Document):
 			amount = 0
 			if not self.is_new():
 				credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
+				dated = posting_date_condition(posting_date, include_later)
 				amount = flt(frappe.db.sql(
 					f"""
 					SELECT SUM({amount_expr})
 					FROM `tab{doctype}` d
 					INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
-					WHERE d.counter_session = %s AND d.docstatus = 1 AND pm.mode = 'Cash' {credit}
+					WHERE d.counter_session = %(source)s AND d.docstatus = 1 AND pm.mode = 'Cash' {credit} {dated}
 					""",
-					(source,),
+					{"source": source, "posting_date": posting_date},
 				)[0][0])
 			self.set(field, amount)
 			expected += sign * amount

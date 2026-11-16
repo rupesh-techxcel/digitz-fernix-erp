@@ -525,6 +525,8 @@ digitz_erp.dayops_styles = function () {
 .dcb-toolbar .dcb-date { width: 170px; }
 .dcb-toolbar .dcb-date .frappe-control { margin-bottom: 0; }
 .dcb-chips { display: flex; gap: 6px; padding-bottom: 4px; }
+.dcb-later { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-weight: normal; white-space: nowrap; cursor: pointer; }
+.dcb-later input { margin: 0; }
 .dcb-chip { border: 1px solid var(--border-color); background: var(--control-bg); color: var(--text-color); border-radius: 999px; padding: 3px 12px; font-size: 12px; }
 .dcb-chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .dcb-summary { font-size: 12px; padding-bottom: 6px; }

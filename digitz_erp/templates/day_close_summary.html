@@ -35,7 +35,7 @@
 	<div class="dcs-title">DAY CLOSE SUMMARY<span>ملخص إغلاق اليوم</span></div>
 	<div class="dcs-meta">
 		<div><b>{{ company or "" }}</b></div>
-		<div><b>Date:</b> {{ frappe.utils.formatdate(o.date) }}</div>
+		<div><b>Date:</b> {{ frappe.utils.formatdate(o.date) }}{% if o.include_later %} and later dates{% endif %}</div>
 		<div><b>Printed:</b> {{ frappe.utils.format_datetime(printed_on) }} by {{ printed_by }}</div>
 	</div>
 

@@ -475,11 +475,17 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 	// supervisor closes a day for a cashier (or their own), approves a count, and
 	// reopens a closed day to correct it. See counter_session_api.build_day_overview.
 
+	// A day can run past midnight: the board shows the chosen date's documents
+	// only, or with "Include later dates" that date's and the ones after it
+	board_args() {
+		return { date: this.board_date, include_later: this.board_include_later ? 1 : 0 };
+	}
+
 	async render_board(date) {
 		this.board_date = date || this.board_date || frappe.datetime.get_today();
 		const r = await frappe.call({
 			method: "digitz_erp.api.counter_session_api.get_day_overview",
-			args: { date: this.board_date },
+			args: this.board_args(),
 		});
 		const o = (this.overview = r.message);
 		const sessions = o.sessions || [];
@@ -494,6 +500,8 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				<div><a href="/app/counter-session/${encodeURIComponent(x.name)}">${this.esc(x.name)}</a></div>
 				<div class="dcb-time">${time(x.opened_on)} → ${x.closed_on ? time(x.closed_on) : __("open")}</div>
 				${x.carried_over ? `<div class="dcb-note">${__("Opened {0}", [frappe.datetime.str_to_user(String(x.opened_on).split(" ")[0])])}</div>` : ""}
+				${x.continues_to ? `<div class="dcb-note">${__("Continues to {0}", [frappe.datetime.str_to_user(x.continues_to)])}</div>` : ""}
+				${x.partial ? `<div class="dcb-note">${__("Count and difference cover the whole day: not shown for part of it")}</div>` : ""}
 				${x.amended_from ? `<div class="dcb-note">${__("Corrects {0}", [this.esc(x.amended_from)])}</div>` : ""}
 				<div style="margin-top: 4px;">${pill(x.status)}</div>
 			</th>`).join("");
@@ -530,6 +538,9 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					<button class="dcb-chip" data-day="${frappe.datetime.get_today()}">${__("Today")}</button>
 					<button class="dcb-chip" data-day="${frappe.datetime.add_days(frappe.datetime.get_today(), -1)}">${__("Yesterday")}</button>
 				</div>
+				<label class="dcb-later" title="${__("For a day left open past midnight, also show its documents posted after this date")}">
+					<input type="checkbox" data-later ${this.board_include_later ? "checked" : ""}> ${__("Include later dates")}
+				</label>
 				<div class="dcb-summary text-muted">
 					${__("{0} days", [sessions.length])} · ${__("{0} open", [count("Open")])} · ${__("{0} awaiting approval", [count("Closing")])} · ${__("{0} closed", [count("Closed")])}
 				</div>
@@ -568,12 +579,16 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		this.board_date_control.set_value(this.board_date);
 		this.$body.find(".dcb-chip").each((_, el) => el.classList.toggle("active", el.dataset.day === this.board_date));
 		this.$body.find("[data-day]").on("click", (e) => this.render_board($(e.currentTarget).attr("data-day")));
+		this.$body.find("[data-later]").on("change", (e) => {
+			this.board_include_later = e.currentTarget.checked;
+			this.render_board();
+		});
 		this.$body.find("[data-tool]").on("click", (e) => {
 			const tool = $(e.currentTarget).attr("data-tool");
 			if (tool === "refresh") {
 				this.render_board();
 			} else if (tool === "excel") {
-				window.open(`/api/method/digitz_erp.api.counter_session_api.export_day_overview?date=${encodeURIComponent(this.board_date)}`);
+				window.open(`/api/method/digitz_erp.api.counter_session_api.export_day_overview?${new URLSearchParams(this.board_args())}`);
 			} else {
 				this.print_summary();
 			}
@@ -598,7 +613,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 	async print_summary() {
 		const r = await frappe.call({
 			method: "digitz_erp.api.counter_session_api.get_day_summary_html",
-			args: { date: this.board_date },
+			args: this.board_args(),
 		});
 		const w = window.open("", "_blank");
 		if (!w) {

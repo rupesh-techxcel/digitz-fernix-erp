@@ -410,22 +410,36 @@ def get_invoice_day_sessions(date):
 	return names
 
 
-def build_day_overview(date=None):
-	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import get_takings_by_mode
+def build_day_overview(date=None, include_later=0):
+	"""The Day Close board for `date`. A day can run past midnight, so each
+	session's figures cover only the documents posted on `date`, or with
+	`include_later` on `date` and the dates after it."""
+	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import (
+		get_document_dates,
+		get_takings_by_mode,
+	)
 
 	date = getdate(date or nowdate())
+	include_later = bool(cint(include_later))
 	is_today = date == getdate(nowdate())
 	names = get_invoice_day_sessions(date)
 	docs = [frappe.get_doc("Counter Session", name) for name in names]
 	modes = get_non_cash_payment_modes()
-	system = get_takings_by_mode({doc.name: doc.source_session() for doc in docs})
+	system = get_takings_by_mode({doc.name: doc.source_session() for doc in docs}, date, include_later)
 
 	sessions = []
 	for doc in docs:
 		# Display current submitted transactions even after a close was approved.
 		# Recalculate in memory: preserve the recorded count and approval history.
-		doc.calculate_cash()
-		counted = doc.status != "Open"
+		doc.calculate_cash(posting_date=date, include_later=include_later)
+		dates = [getdate(d) for d in get_document_dates(doc.source_session())]
+		later_dates = [d for d in dates if d > date]
+		# The count, the entered totals and the expenditure belong to the whole
+		# day: shown only when the figures cover all of its documents
+		partial = any(d < date or (d > date and not include_later) for d in dates)
+		if partial:
+			doc.expected_cash = flt(doc.expected_cash) + flt(doc.cash_expenditure)
+		counted = doc.status != "Open" and not partial
 		entered = {row.payment_mode: flt(row.amount) for row in doc.payment_mode_totals}
 		sessions.append(frappe._dict({
 			"name": doc.name,
@@ -437,6 +451,8 @@ def build_day_overview(date=None):
 			"opened_on": doc.opened_on,
 			"closed_on": doc.closed_on,
 			"carried_over": getdate(doc.opened_on) != date,
+			"partial": partial,
+			"continues_to": max(later_dates) if later_dates else None,
 			"amended_from": doc.amended_from,
 			"closed_by_name": frappe.utils.get_fullname(doc.closed_by) if doc.closed_by else None,
 			"approved_by_name": frappe.utils.get_fullname(doc.approved_by) if doc.approved_by else None,
@@ -448,7 +464,7 @@ def build_day_overview(date=None):
 			"cash_receipts": flt(doc.cash_receipts),
 			"cash_refunds": flt(doc.cash_refunds),
 			"cash_paid_out": flt(doc.cash_paid_out),
-			"cash_expenditure": flt(doc.cash_expenditure),
+			"cash_expenditure": None if partial else flt(doc.cash_expenditure),
 			"expected_cash": flt(doc.expected_cash),
 			# Not counted yet: nothing to show, rather than a misleading 0
 			"counted_cash": flt(doc.counted_cash) if counted else None,
@@ -464,6 +480,7 @@ def build_day_overview(date=None):
 
 	overview = frappe._dict({
 		"date": date,
+		"include_later": include_later,
 		"is_today": is_today,
 		"modes": modes,
 		"sessions": sessions,
@@ -539,19 +556,19 @@ def get_slip_payment_rows(doc):
 
 
 @frappe.whitelist()
-def get_day_overview(date=None):
+def get_day_overview(date=None, include_later=0):
 	"""Every counter's day for `date` (default today), for the supervisor's Day Close."""
 	if not is_supervisor():
 		frappe.throw("Only a supervisor can see every counter's day.", frappe.PermissionError)
-	return build_day_overview(date)
+	return build_day_overview(date, include_later)
 
 
 @frappe.whitelist()
-def get_day_summary_html(date=None):
+def get_day_summary_html(date=None, include_later=0):
 	"""The Day Close Summary print: the grid of a date, landscape, with signatures."""
 	if not is_supervisor():
 		frappe.throw("Only a supervisor can print the Day Close Summary.", frappe.PermissionError)
-	overview = build_day_overview(date)
+	overview = build_day_overview(date, include_later)
 	default_company = frappe.db.get_single_value("Global Settings", "default_company")
 	return frappe.render_template(
 		"digitz_erp/templates/day_close_summary.html",
@@ -566,7 +583,7 @@ def get_day_summary_html(date=None):
 
 
 @frappe.whitelist()
-def export_day_overview(date=None):
+def export_day_overview(date=None, include_later=0):
 	"""The Day Close grid of a date as a formatted Excel workbook: System Manager only.
 
 	Laid out like the Print Summary -- one column per session, the totals last --
@@ -581,7 +598,7 @@ def export_day_overview(date=None):
 	from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 	from openpyxl.utils import get_column_letter
 
-	o = build_day_overview(date)
+	o = build_day_overview(date, include_later)
 	default_company = frappe.db.get_single_value("Global Settings", "default_company")
 	sessions = o.sessions
 	last_col = len(sessions) + 2  # label column, the sessions, the total
@@ -614,7 +631,7 @@ def export_day_overview(date=None):
 	merged(1, "DAY CLOSE SUMMARY", Font(size=16, bold=True, color="FFFFFF"), navy, 30)
 	merged(2, " · ".join(filter(None, [
 		default_company,
-		f"Date: {frappe.utils.formatdate(o.date)}",
+		f"Date: {frappe.utils.formatdate(o.date)}{' and later dates' if o.include_later else ''}",
 		f"Exported {frappe.utils.format_datetime(now_datetime())} by {frappe.utils.get_fullname(frappe.session.user)}",
 	])), Font(size=10, italic=True, color="595959"), light, 20)
 
