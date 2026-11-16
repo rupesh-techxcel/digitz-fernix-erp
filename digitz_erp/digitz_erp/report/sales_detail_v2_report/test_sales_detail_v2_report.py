@@ -1,4 +1,5 @@
 import unittest
+from datetime import date, time, timedelta
 from unittest.mock import Mock, patch
 
 import frappe
@@ -104,3 +105,38 @@ class TestSalesDetailV2Report(unittest.TestCase):
                 report.execute(dict(from_date="2026-11-01", to_date="2026-11-05",
                                     min_invoice_total=100, max_invoice_total=50))
         get_data.assert_not_called()
+
+    def test_chronological_sort_across_batches_and_invoice_lines(self):
+        def row(invoice, day, clock, idx=1):
+            return frappe._dict(invoice_number=invoice, posting_date=day,
+                                posting_time=clock, idx=idx)
+
+        later = date(2026, 11, 14)
+        earlier = date(2026, 11, 13)
+        batches = [
+            [row("SI-10", earlier, timedelta(hours=10)),
+             row("SI-NEXT", later, timedelta(0)),
+             row("SI-09", earlier, timedelta(hours=9), 2)],
+            [row("SI-09", earlier, timedelta(hours=9)),
+             row("SI-EARLY", earlier, "08:59:59.999999"),
+             row("SI-TIE", earlier, time(9)),
+             row("SI-MIDNIGHT", earlier, None)],
+        ]
+        # More than 500 invoices forces the real multi-batch retrieval path.
+        with patch.object(frappe, "get_roles", return_value=["System Manager"]), \
+                patch.object(frappe, "get_list", return_value=[f"SI-{i}" for i in range(501)]), \
+                patch.object(frappe, "db", new=Mock()) as db, \
+                patch.object(report, "make_row", side_effect=lambda source, first: (source.invoice_number, source.idx, first)):
+            db.get_table_columns.return_value = []
+            db.sql.side_effect = batches
+            result = report.get_data(dict(from_date=earlier, to_date=later))
+        self.assertEqual(db.sql.call_count, 2)
+        self.assertEqual(result, [
+            ("SI-MIDNIGHT", 1, True),
+            ("SI-EARLY", 1, True),
+            ("SI-09", 1, True),
+            ("SI-09", 2, False),
+            ("SI-TIE", 1, True),
+            ("SI-10", 1, True),
+            ("SI-NEXT", 1, True),
+        ])

@@ -2,7 +2,7 @@
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, today
+from frappe.utils import flt, getdate, get_time, today
 
 
 # Keep logically mapped reference columns in their original order.
@@ -173,7 +173,10 @@ def get_data(filters):
                 query = query.replace(f"line.{field}", f"NULL AS {field}")
         rows = frappe.db.sql(query, params, as_dict=True)
         data.extend(rows)
-    data.sort(key=lambda r: (str(r.posting_date), str(r.posting_time), r.invoice_number, r.idx))
+    # MariaDB TIME values are timedeltas: str(9 AM) is "9:...", which sorts
+    # after "10:...". Compare actual dates/times across all query batches.
+    data.sort(key=lambda r: (getdate(r.posting_date), get_time(r.posting_time or "00:00:00"),
+                             r.invoice_number, r.idx))
     seen = set()
     result = []
     for row in data:
