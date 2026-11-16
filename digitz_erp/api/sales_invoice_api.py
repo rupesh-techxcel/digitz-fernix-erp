@@ -136,6 +136,9 @@ def generate_sales_invoice_for_delivery_note(delivery_note: str):
 
 
 def get_sales_invoice_permission_query(user):
+    if getattr(frappe.flags, "console_invoice_scope", False):
+        return None  # Set only inside the permission-checked console listing.
+
     if not user or user == "Administrator":
         return None  # Full access for Administrator
 
@@ -153,6 +156,36 @@ def get_sales_invoice_permission_query(user):
 
     # Otherwise, restrict to only their own records
     return f"`tabSales Invoice`.owner = {frappe.db.escape(user)}"
+
+
+@frappe.whitelist()
+def get_console_invoices(filters=None, or_filters=None, start=0, scope="mine"):
+    """Console-only ownership scope; retain document and user permissions."""
+    from frappe.utils import cint
+
+    if not frappe.has_permission("Sales Invoice", "read"):
+        frappe.throw("Not permitted to read Sales Invoices.", frappe.PermissionError)
+    if scope not in ("mine", "others", "all"):
+        frappe.throw("Invalid invoice scope.")
+    filters = frappe.parse_json(filters) or []
+    or_filters = frappe.parse_json(or_filters) or []
+    filters = list(filters)
+    if scope != "all":
+        filters.append(["Sales Invoice", "owner", "=" if scope == "mine" else "!=", frappe.session.user])
+    previous = getattr(frappe.flags, "console_invoice_scope", False)
+    try:
+        frappe.flags.console_invoice_scope = True
+        return frappe.get_list(
+            "Sales Invoice",
+            fields=["name", "posting_date", "posting_time", "customer", "customer_name", "customer_display_name",
+                    "customer_company", "customer_mobile_number", "customer_token", "medical_service", "credit_sale", "payment_mode",
+                    "payment_status", "paid_amount", "rounded_total", "docstatus", "owner"],
+            filters=filters, or_filters=or_filters,
+            order_by="posting_date desc, posting_time desc, creation desc",
+            limit_start=max(0, cint(start)), limit_page_length=51,
+        )
+    finally:
+        frappe.flags.console_invoice_scope = previous
 
 
 # ------------------------------------------------------------ cashier correction

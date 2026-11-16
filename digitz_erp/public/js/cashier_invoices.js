@@ -448,6 +448,7 @@ frappe.provide("digitz_erp");
 			this.host = host;
 			this.$el = $el;
 			this.range = "today";
+			this.scope = today_only() ? "mine" : "all";
 			this.status = "";
 			this.payment = "";
 			this.search = "";
@@ -473,6 +474,7 @@ frappe.provide("digitz_erp");
 							${[["today", __("Today")], ["week", __("This Week")], ["month", __("This Month")], ["30", __("Last 30 Days")], ["all", __("All")]]
 								.map(([v, label]) => `<option value="${v}"${v === this.range ? " selected" : ""}>${label}</option>`).join("")}
 						</select>
+						${chips("scope", [["mine", __("My Invoices")], ["others", __("Other Cashiers’ Invoices")], ["all", __("All Invoices")]], this.scope)}
 						${chips("status", [["", __("Any Status")], ["0", __("Draft")], ["1", __("Submitted")], ["2", __("Cancelled")]], this.status)}
 						${chips("payment", [["", __("Cash & Credit")], ["cash", __("Cash")], ["credit", __("Credit")]], this.payment)}
 						<span class="ci-list-count text-muted"></span>
@@ -534,19 +536,14 @@ frappe.provide("digitz_erp");
 			this.$el.addClass("is-loading");
 			try {
 				const r = await frappe.call({
-					method: "frappe.client.get_list",
+					method: "digitz_erp.api.sales_invoice_api.get_console_invoices",
 					args: {
-						doctype: DOCTYPE,
-						fields: ["name", "posting_date", "posting_time", "customer", "customer_name", "customer_display_name",
-							"customer_company", "customer_mobile_number", "customer_token", "medical_service", "credit_sale", "payment_mode",
-							"payment_status", "paid_amount", "rounded_total", "docstatus"],
+						scope: this.scope,
 						filters: this.filters(),
 						or_filters: this.search
 							? ["name", "customer", "customer_display_name", "customer_company", "customer_mobile_number", "customer_token"].map((f) => [DOCTYPE, f, "like", like])
 							: [],
-						order_by: "posting_date desc, posting_time desc, creation desc",
-						limit_start: start,
-						limit_page_length: digitz_erp.InvoiceList.PAGE + 1,
+						start: start,
 					},
 				});
 				if (seq !== this.seq) {
@@ -597,7 +594,7 @@ frappe.provide("digitz_erp");
 					<table class="ci-table ci-table-list">
 						<thead><tr>
 							<th>${__("Invoice")}</th><th>${__("Date")}</th><th>${__("Customer")}</th><th>${__("Mobile")}</th>
-							<th>${__("Token / Service")}</th><th>${__("Payment")}</th><th class="ci-num">${__("Total")}</th><th>${__("Status")}</th>
+							<th>${__("Created By")}</th><th>${__("Token / Service")}</th><th>${__("Payment")}</th><th class="ci-num">${__("Total")}</th><th>${__("Status")}</th>
 						</tr></thead>
 						<tbody>${this.rows.map((row) => `
 							<tr data-name="${esc(row.name)}" tabindex="0">
@@ -607,6 +604,7 @@ frappe.provide("digitz_erp");
 									${row.customer_display_name && row.customer_display_name !== row.customer ? `<div class="ci-sub ci-ellipsis">${esc(row.customer)}</div>` : ""}
 									${row.customer_company && row.customer_company !== row.customer ? `<div class="ci-sub ci-ellipsis">${esc(row.customer_company)}</div>` : ""}</td>
 								<td class="ci-nowrap">${esc(row.customer_mobile_number)}</td>
+								<td>${esc(row.owner)}</td>
 								<td><div class="ci-ellipsis">${esc(row.customer_token)}</div><div class="ci-sub ci-ellipsis">${esc(row.medical_service)}</div></td>
 								<td>${payment(row)}</td>
 								<td class="ci-num ci-strong">${money(row.rounded_total)}</td>
