@@ -747,6 +747,18 @@ def export_day_overview(date=None, include_later=0):
 	frappe.response["type"] = "binary"
 
 
+def get_live_session(name: str | None) -> str | None:
+	"""Follow a cancelled Counter Session to the amendment that replaced it.
+
+	None when there is no live version (cancelled and never amended).
+	"""
+	seen = set()
+	while name and name not in seen and frappe.db.get_value("Counter Session", name, "docstatus") == 2:
+		seen.add(name)
+		name = frappe.db.get_value("Counter Session", {"amended_from": name}, "name")
+	return name
+
+
 @frappe.whitelist()
 def edit_close(session, counted_cash=None, denominations=None, remarks=None, expenditure=None, payment_totals=None):
 	"""A supervisor corrects a counted day: the count, the expenditure and the
@@ -773,6 +785,12 @@ def edit_close(session, counted_cash=None, denominations=None, remarks=None, exp
 		target.amended_from = doc.name
 	else:
 		frappe.throw(f"{session} is not counted yet: close it first.")
+
+	# The previous day may have been corrected since: link its live amendment
+	live_previous = get_live_session(target.previous_session)
+	if live_previous != target.previous_session:
+		target.previous_session = live_previous
+		target.previous_closing_cash = flt(frappe.db.get_value("Counter Session", live_previous, "counted_cash")) if live_previous else 0
 
 	apply_count(target, counted_cash, denominations, expenditure, payment_totals)
 	note = f"Corrected by {frappe.utils.get_fullname(frappe.session.user)} on {frappe.utils.format_datetime(now_datetime())}: {remarks.strip()}"
