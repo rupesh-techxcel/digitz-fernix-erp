@@ -612,6 +612,19 @@ class SalesReturn(Document):
             return cost_of_goods_sold
 
 @frappe.whitelist()
+def print_credit_note_pdf(docname: str) -> str:
+    """Render the Sales Return as a TAX CREDIT NOTE PDF, attach it and return its URL."""
+    from digitz_erp.selling.doctype.quotation.quotation import generate_custom_invoice_pdf
+
+    doc = frappe.get_doc("Sales Return", docname)
+    doc.check_permission("read")
+
+    if not doc.items:
+        frappe.throw("Items are required before printing.")
+
+    return generate_custom_invoice_pdf(doc)
+
+@frappe.whitelist()
 def get_default_payment_mode():
     default_payment_mode = frappe.db.get_value('Company', filters={'name'},fieldname='default_payment_mode_for_sales')
     #print(default_payment_mode)

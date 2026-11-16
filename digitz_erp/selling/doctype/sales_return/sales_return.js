@@ -941,6 +941,10 @@ frappe.ui.form.on('Sales Return Item', {
 
 
 let create_custom_buttons = function(frm){
+	if (!frm.is_new()) {
+		frm.add_custom_button(__("Print Credit Note"), () => print_credit_note(frm, false), __("Print"));
+		frm.add_custom_button(__("Preview Credit Note"), () => print_credit_note(frm, true), __("Print"));
+	}
 	if (frappe.user.has_role('Management')) {
 		if(!frm.is_new() && (frm.doc.docstatus == 1)){
 		frm.add_custom_button('General Ledgers',() =>{
@@ -951,6 +955,39 @@ let create_custom_buttons = function(frm){
 		}, 'Postings');
 		}
 	}
+}
+
+// The TAX CREDIT NOTE PDF (templates/sales_return_template.html), printed the
+// same way as the Sales Invoice: saved first, regenerated, then sent to the
+// printer through a hidden frame, or shown in a new tab for a preview.
+let print_credit_note = async function (frm, preview) {
+	if (frm.is_dirty()) {
+		try {
+			await frm.save(frm.doc.docstatus === 1 ? "Update" : "Save");
+		} catch (e) {
+			return;
+		}
+		if (frm.is_dirty()) {
+			return;
+		}
+	}
+	const r = await frappe.call({
+		method: "digitz_erp.selling.doctype.sales_return.sales_return.print_credit_note_pdf",
+		args: { docname: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Generating PDF..."),
+	});
+	const url = r && r.message;
+	if (!url) {
+		frappe.msgprint(__("The PDF was not found. Try again."));
+		return;
+	}
+	if (preview) {
+		window.open(`${encodeURI(url)}?v=${Date.now()}`, "_blank");
+	} else {
+		digitz_erp.si_engine.print_pdf(url, __("Credit Note PDF"));
+	}
+	frm.reload_doc();
 }
 
 let general_ledgers = function (frm) {

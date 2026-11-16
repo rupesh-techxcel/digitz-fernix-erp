@@ -414,6 +414,7 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	payment_terms = ""
 	receipt_number = ""
 	receipt_info = None
+	return_invoices = []
 	file_suffix = "document"
 
 	# Doctype-specific logic
@@ -444,6 +445,14 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		receipt_info = get_sales_invoice_receipt_info(doc)
 		receipt_number = receipt_info.number if receipt_info else ""
 
+	elif doc.doctype == "Sales Return":
+		customer_address = doc.customer_address
+		party_trn_no = doc.tax_id
+		customer_name = doc.customer_name
+		file_suffix = "credit_note"
+		trn_no = frappe.db.get_value("Company", doc.company, "tax_id")
+		return_invoices = list(dict.fromkeys(row.sales_invoice for row in doc.get("invoices") or [] if row.sales_invoice))
+
 	elif doc.doctype == "Purchase Order":
 		supplier_name = doc.supplier
 		supplier_address = doc.supplier_address or ""
@@ -470,10 +479,11 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		"payment_terms": payment_terms,
 		"receipt_number": receipt_number,
 		"receipt_info": receipt_info,
+		"return_invoices": return_invoices,
 		# Receipt Info means the invoice is paid: the PAID stamp under the totals
 		"paid_stamp": get_paid_stamp() if receipt_info else None,
 		# The amount in words in Arabic, under the English one on the invoice
-		"in_words_ar": get_arabic_amount_in_words(doc.get("rounded_total")) if doc.doctype == "Sales Invoice" else "",
+		"in_words_ar": get_arabic_amount_in_words(doc.get("rounded_total")) if doc.doctype in ("Sales Invoice", "Sales Return") else "",
 		"party_trn_no": party_trn_no,
 		# The customer's mobile, unless it is the 0000 placeholder a synced invoice
 		# can carry until the cashier enters the real one
@@ -490,6 +500,8 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		if doc.doctype == "Delivery Note"
 		else "digitz_erp/templates/sales_invoice_template.html"
 		if doc.doctype == "Sales Invoice"
+		else "digitz_erp/templates/sales_return_template.html"
+		if doc.doctype == "Sales Return"
 		else "digitz_erp/templates/purchase_order_template.html"
 		if doc.doctype == "Purchase Order"
 		else "digitz_erp/templates/quotation_template.html"
@@ -522,7 +534,7 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	# The header and footer images are stamped over the rendered pages, so the page
 	# margins keep that space clear on every page: the header's full height at the
 	# top, and at the bottom the footer plus the line "Page X of Y" sits on.
-	company_doc.full_width_footer = doc.doctype == "Sales Invoice" and not template_override
+	company_doc.full_width_footer = doc.doctype in ("Sales Invoice", "Sales Return") and not template_override
 	footer_height_pt = get_footer_size_pt(
 		footer_image_path, A4_WIDTH_PT, full_width=company_doc.full_width_footer
 	)[1] if has_footer else 0

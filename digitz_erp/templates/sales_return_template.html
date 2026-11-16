@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+    }
+
+    .table-no-border {
+      width: 99%;
+      border-collapse: collapse;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      color: #000;
+      margin-bottom: 8px;
+    }
+
+    .table-no-border td {
+      border: none;
+      padding: 5px;
+      vertical-align: top;
+    }
+
+    .items-table {
+      width: 99%;
+      margin: 0 auto;
+      border-collapse: collapse;
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+      color: #000;
+    }
+
+    .items-table th,
+    .items-table td {
+      border: 1px solid #000;
+      padding: 4px 5px;
+      vertical-align: top;
+    }
+
+    /* Arabic line under an English heading */
+    .ar-sub {
+      display: block;
+      font-size: 9px;
+      font-weight: normal;
+      direction: rtl;
+    }
+
+    .items-table tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    .items-table thead th {
+      background-color: #eaeaea;
+      color: #222;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      font-size: 9.5px;
+      text-align: center;
+    }
+
+    .items-table .total-row td {
+      background-color: #eaeaea;
+      font-weight: bold;
+      font-size: 11.5px;
+      vertical-align: middle;
+    }
+
+    .box {
+      width: 50%;
+      border: 1px solid #ddd;
+      padding: 12px;
+      background-color: #fbfbfb;
+      line-height: 1.6;
+    }
+
+    .section-header {
+      font-size: 15px;
+      font-weight: bold;
+      color: rgba(76, 69, 69, 0.79);
+      background-color: #f4f4f4;
+      margin-bottom: 8px;
+      border: 1px solid #ddd;
+    }
+  </style>
+</head>
+<body>
+
+<table class="table-no-border">
+  <tr>
+    <td style="text-align: center; padding: 10px 12px; background-color: #f2f2f2;">
+      <div style="font-size: 20px; font-weight: bold; letter-spacing: 1px;">TAX CREDIT NOTE</div>
+      <div style="font-size: 15px; font-weight: bold; direction: rtl; margin-top: 2px;">إشعار دائن ضريبي</div>
+    </td>
+  </tr>
+</table>
+
+<table class="table-no-border">
+  <tr>
+    <td class="box">
+      <div class="section-header">To,</div>
+      <div><strong>Applicant Name</strong> <span style="direction: rtl;">اسم المتقدم</span>:
+        {{ doc.customer_display_name or customer_name }}</div>
+      {% if doc.tax_id %}
+      <div><strong>TRN</strong> <span style="direction: rtl;">الرقم الضريبي</span>: {{ doc.tax_id }}</div>
+      {% endif %}
+      {% if customer_address %}
+      <div>{{ customer_address }}</div>
+      {% endif %}
+    </td>
+    <td class="box">
+      <table class="table-no-border" style="font-size: 12px;">
+        <tr>
+          <td class="section-header">Credit Note No:</td>
+          <td class="section-header">{{ doc.name }}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Date:</td>
+          <td>{{ date }}</td>
+        </tr>
+        {% if return_invoices %}
+        <tr>
+          <td style="font-weight: bold;">Against Invoice:</td>
+          <td>{{ return_invoices | join(", ") }}</td>
+        </tr>
+        {% endif %}
+        {% if trn_no %}
+        <tr>
+          <td style="font-weight: bold;">Our TRN:</td>
+          <td>{{ trn_no }}</td>
+        </tr>
+        {% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
+
+<table class="items-table">
+  <thead>
+    <tr>
+      <th style="width: 5%;">Sl<span class="ar-sub">م</span></th>
+      <th style="width: 37%;">Item<span class="ar-sub">الصنف</span></th>
+      <th style="width: 8%;">Qty<span class="ar-sub">الكمية</span></th>
+      <th style="width: 16%;">Taxable Amount<span class="ar-sub">المبلغ الخاضع للضريبة</span></th>
+      {% set tax_rates = items | map(attribute="tax_rate") | select | unique | list %}
+      {% set header_tax_rate = tax_rates[0] if tax_rates | length == 1 else 5 %}
+      <th style="width: 16%;">Tax Amount ({{ header_tax_rate | int }}%)<span class="ar-sub">مبلغ الضريبة ({{ header_tax_rate | int }}%)</span></th>
+      <th style="width: 18%;">Net Amount<span class="ar-sub">المبلغ الصافي</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td style="text-align: center;">{{ loop.index }}</td>
+      <td>{{ item.display_name or item.item_name }}</td>
+      <td style="text-align: center;">{{ "%g"|format(item.qty or 0) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(item.taxable_amount or 0) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(item.tax_amount or 0) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(item.net_amount or 0) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="total-row">
+      <td colspan="2" style="text-align: center;">Total<span class="ar-sub">الإجمالي</span></td>
+      <td style="text-align: center;">{{ "%g"|format(items | sum(attribute="qty")) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(items | sum(attribute="taxable_amount")) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(items | sum(attribute="tax_amount")) }}</td>
+      <td style="text-align: right;">{{ "{:,.2f}".format(items | sum(attribute="net_amount")) }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div style="margin-top: 20px;">
+  <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+    <tr>
+      <td style="width: 64%; vertical-align: top; padding-right: 14px;">
+        <div style="font-size: 12.5px; margin: 2px 0 6px;">
+          <strong style="font-size: 14px;">AED</strong>&nbsp;
+          {{ (doc.in_words or "")[4:] if (doc.in_words or "").startswith("AED ") else doc.in_words }}
+        </div>
+        {% if in_words_ar %}
+        <div style="background-color: #f2f4f5; border-radius: 6px; padding: 7px 12px; direction: rtl; text-align: right; font-size: 12.5px;">
+          {{ in_words_ar }}
+        </div>
+        {% endif %}
+      </td>
+      <td style="width: 36%; vertical-align: top; border-left: 1.5px solid #444; padding-left: 14px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          {% if doc.additional_discount %}
+          <tr>
+            <td style="padding: 3px 0;"><strong>DISCOUNT</strong><span class="ar-sub" style="font-size: 11px; text-align: left;">الخصم</span></td>
+            <td style="width: 12px; text-align: center;">:</td>
+            <td style="text-align: right; white-space: nowrap;">{{ "{:,.2f}".format(doc.additional_discount) }} د.إ</td>
+          </tr>
+          {% endif %}
+          {% if doc.round_off %}
+          <tr>
+            <td style="padding: 3px 0;"><strong>ROUND OFF</strong><span class="ar-sub" style="font-size: 11px; text-align: left;">التقريب</span></td>
+            <td style="width: 12px; text-align: center;">:</td>
+            <td style="text-align: right; white-space: nowrap;">{{ "{:,.2f}".format(doc.round_off) }} د.إ</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <td style="padding: 7px 0 3px;"><strong>{{ "CREDITED AMOUNT" if doc.credit_sale else "REFUND AMOUNT" }}</strong><span class="ar-sub" style="font-size: 11px; text-align: left;">{{ "المبلغ الدائن" if doc.credit_sale else "المبلغ المسترد" }}</span></td>
+            <td style="width: 12px; text-align: center;">:</td>
+            <td style="text-align: right; white-space: nowrap; font-size: 13px; font-weight: bold;">{{ "{:,.2f}".format(doc.rounded_total or 0) }} د.إ</td>
+          </tr>
+          {% if not doc.credit_sale and doc.payment_mode %}
+          <tr>
+            <td style="padding: 3px 0;"><strong>REFUND MODE</strong><span class="ar-sub" style="font-size: 11px; text-align: left;">طريقة الاسترداد</span></td>
+            <td style="width: 12px; text-align: center;">:</td>
+            <td style="text-align: right;">{{ doc.payment_mode }}</td>
+          </tr>
+          {% endif %}
+        </table>
+      </td>
+    </tr>
+  </table>
+</div>
+
+{% if doc.remarks and doc.remarks.strip() %}
+<div style="margin-top: 12px; font-size: 12px;">
+  <strong>Notes</strong> <span style="direction: rtl;">ملاحظات</span>: {{ doc.remarks | e }}
+</div>
+{% endif %}
+
+<div style="margin-top: 20px; font-size: 12px; line-height: 1.8; page-break-inside: avoid;">
+  <div><strong>Issued By</strong> <span style="direction: rtl;">أصدرت بواسطة</span>: {{ frappe.db.get_value("User", doc.owner, "full_name") or doc.owner }}</div>
+  <div><strong>Printed On:</strong> {{ frappe.utils.now_datetime().strftime("%d-%m-%Y %I:%M %p") }}</div>
+</div>
+
+</body>
+</html>
