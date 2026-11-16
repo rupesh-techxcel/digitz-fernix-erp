@@ -68,3 +68,44 @@ class TestPendingCloseAllowsOpen(unittest.TestCase):
 			pending.update(status="Open", counter="Counter 2")
 			model.CounterSession.validate_single_open_session(doc)
 			framework.throw.assert_called_once()
+
+
+class TestDayOverviewRecalculation(unittest.TestCase):
+	def test_pending_and_closed_overviews_recalculate_after_return_cancelled(self):
+		from digitz_erp.digitz_erp.doctype.counter_session import counter_session as model
+		for docstatus, status in ((0, 'Closing'), (1, 'Closed')):
+			with self.subTest(status=status):
+				doc = frappe._dict({
+					'doctype': 'Counter Session', 'name': 'day-1', 'docstatus': docstatus,
+					'status': status, 'cashier': 'cashier@example.com', 'counter': 'Counter 3',
+					'opened_on': '2026-11-13 09:00:00', 'closed_on': '2026-11-13 20:00:00',
+					'opening_float': 100, 'counted_cash': 140, 'cash_expenditure': 0,
+					'approved_by': 'Administrator' if docstatus else None,
+					'payment_mode_totals': [], 'denominations': [],
+				})
+				doc.is_new = lambda: False
+				doc.source_session = lambda: 'day-1'
+				doc.set = doc.__setitem__
+				doc.calculate_cash = lambda: model.CounterSession.calculate_cash(doc)
+				with patch.object(api, 'frappe') as framework, \
+						patch.object(api, 'get_invoice_day_sessions', return_value=['day-1']), \
+						patch.object(api, 'get_non_cash_payment_modes', return_value=[]), \
+						patch.object(api, 'nowdate', return_value='2026-11-16'), \
+						patch.object(model, 'get_takings_by_mode', return_value={'day-1': {}}), \
+						patch.object(model, 'frappe') as model_framework:
+					framework._dict = frappe._dict
+					framework.get_doc.return_value = doc
+					# 100 float + 50 sales - 20 return = 130 expected; count 140.
+					model_framework.db.sql.side_effect = [[[50]], [[0]], [[20]], [[0]]]
+					before = api.build_day_overview('2026-11-13').sessions[0]
+					self.assertEqual((before.cash_refunds, before.expected_cash, before.difference), (20, 130, 10))
+					# Cancelled return no longer contributes to submitted refunds.
+					model_framework.db.sql.side_effect = [[[50]], [[0]], [[0]], [[0]]]
+					after = api.build_day_overview('2026-11-13').sessions[0]
+					self.assertEqual((after.cash_refunds, after.expected_cash, after.difference), (0, 150, -10))
+					self.assertEqual(after.counted_cash, 140)
+					self.assertEqual(doc.docstatus, docstatus)
+					self.assertEqual(doc.status, status)
+					self.assertEqual(doc.closed_on, '2026-11-13 20:00:00')
+					framework.db.set_value.assert_not_called()
+					model_framework.db.set_value.assert_not_called()

@@ -422,8 +422,9 @@ def build_day_overview(date=None):
 
 	sessions = []
 	for doc in docs:
-		if doc.docstatus == 0:
-			doc.calculate_cash()  # live figures for a day still open or waiting
+		# Display current submitted transactions even after a close was approved.
+		# Recalculate in memory: preserve the recorded count and approval history.
+		doc.calculate_cash()
 		counted = doc.status != "Open"
 		entered = {row.payment_mode: flt(row.amount) for row in doc.payment_mode_totals}
 		sessions.append(frappe._dict({
