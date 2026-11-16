@@ -4,4 +4,5 @@
 *.swp
 tags
 digitz_erp/docs/current
-node_modules/
+node_modules/# Built by bench build; never committed
+digitz_erp/public/dist/
