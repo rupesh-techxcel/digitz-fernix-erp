@@ -211,5 +211,25 @@ class CounterSession(Document):
 		self.closed_on = self.closed_on or now_datetime()
 		self.closed_by = self.closed_by or self.cashier
 
+	def on_submit(self):
+		self.relink_next_days()
+
+	def relink_next_days(self):
+		"""Point the days still open or awaiting approval that follow this one
+		at it, and carry its count as their previous close.
+
+		A supervisor's correction replaces a closed day with an amended copy,
+		often after the next day was opened. A day left linked to the cancelled
+		original cannot be saved, so it cannot be closed either.
+		"""
+		replaced = [self.name] + ([self.amended_from] if self.amended_from else [])
+		for name in frappe.get_all(
+			"Counter Session", filters={"docstatus": 0, "previous_session": ["in", replaced]}, pluck="name"
+		):
+			frappe.db.set_value(
+				"Counter Session", name,
+				{"previous_session": self.name, "previous_closing_cash": flt(self.counted_cash)},
+			)
+
 	def on_cancel(self):
 		self.db_set("status", "Cancelled")
