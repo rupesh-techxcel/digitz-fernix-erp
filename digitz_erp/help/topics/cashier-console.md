@@ -96,8 +96,8 @@ A cashier bills on their counter's PC, after opening the day, and dates an invoi
 - no payment is recorded against it, and it has no Sales Return;
 - it did not update stock and is not linked to a project, sales order or delivery note.
 
-**System Managers** can also correct an unlinked cash sale from **Edit**. They must
-give a reason, which is recorded on the invoice. The invoice keeps its original
+**System Managers** can correct any unlinked invoice from **Edit**: credit, cash,
+card or bank. They must give a reason, which is recorded on the invoice. The invoice keeps its original
 owner, `modified_by`, posting date, time, and counter day; the person who edits or
 resubmits is recorded separately in the invoice comments. The receipt printout
 continues to show the original cashier. After resubmitting it, use **Day Close → Reopen

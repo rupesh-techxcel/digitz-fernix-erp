@@ -973,10 +973,9 @@ frappe.provide("digitz_erp");
 					? btn("submit", __("Submit"), "btn-primary")
 					: btn("save-submit", __("Save & Submit"), "btn-primary"));
 			}
-			// A cashier's correction of a submitted invoice: allowed for a credit sale
-			// (any date); the server says why when it is not
-			const supervisor_cash_correction = system_manager && !cint(doc.credit_sale) && doc.payment_mode_type === "Cash";
-			saved && doc.docstatus === 1 && (today_only() || supervisor_cash_correction) && buttons.push(btn("correct", __("Edit")));
+			// Correction of a submitted invoice: a cashier's credit sale (any date), or
+			// for a System Manager any payment mode; the server says why when it is not allowed
+			saved && doc.docstatus === 1 && (today_only() || system_manager) && buttons.push(btn("correct", __("Edit")));
 			// A submitted credit sale not yet fully paid: take the payment here
 			// (public/js/cashier_receipts.js), as a Receipt Entry
 			this.can_record_payment() && buttons.push(btn("record-payment", __("Record Payment"), "btn-primary"));
@@ -1818,6 +1817,8 @@ frappe.provide("digitz_erp");
 			} catch (e) {
 				return; // the reason it cannot be corrected is shown
 			}
+			// A System Manager's correction needs a reason; the invoice stays in its
+			// cashier's name
 			if (system_manager) {
 				const d = new frappe.ui.Dialog({
 					title: __("Correct {0}", [this.doc.name]),

@@ -97,10 +97,11 @@ class TestInvoiceCorrection(unittest.TestCase):
         self.framework.db.delete.assert_not_called()
 
     @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
-    def test_system_manager_cannot_use_cash_correction_for_non_cash_mode(self, _allocations):
+    def test_system_manager_can_check_a_card_or_bank_sale(self, _allocations):
+        self.doc.payment_mode = 'RAK BANK'
         self.framework.db.get_value.return_value = 'Bank'
-        with self.assertRaises(ValueError):
-            api.correct_sales_invoice.__wrapped__(docname=self.doc.name, check_only=1)
+        result = api.correct_sales_invoice.__wrapped__(docname=self.doc.name, check_only=1)
+        self.assertEqual(result, {'ok': True})
 
     @patch('digitz_erp.selling.doctype.sales_invoice.sales_invoice.get_utilized_credit', return_value=0)
     @patch('digitz_erp.api.gl_posting_api.update_accounts_for_doc_type')
@@ -217,6 +218,28 @@ class TestInvoiceCorrection(unittest.TestCase):
         doc.add_comment.assert_called_once_with(
             'Comment', 'Cash invoice correction submitted by Admin User.'
         )
+
+    @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
+    def test_system_manager_can_check_a_credit_sale(self, _allocations):
+        self.doc.credit_sale = 1
+        self.doc.paid_amount = 0
+        result = api.correct_sales_invoice.__wrapped__(docname=self.doc.name, check_only=1)
+        self.assertEqual(result, {'ok': True})
+
+    @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
+    def test_system_manager_credit_sale_needs_a_reason(self, _allocations):
+        self.doc.credit_sale = 1
+        self.doc.paid_amount = 0
+        with self.assertRaises(ValueError):
+            api.correct_sales_invoice.__wrapped__(docname=self.doc.name)
+        self.framework.db.delete.assert_not_called()
+
+    @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
+    def test_system_manager_credit_sale_with_payment_is_blocked(self, _allocations):
+        self.doc.credit_sale = 1
+        self.doc.paid_amount = 50
+        with self.assertRaises(ValueError):
+            api.correct_sales_invoice.__wrapped__(docname=self.doc.name, check_only=1)
 
     @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
     def test_cashier_correction_still_rejects_cash_sales(self, _allocations):
