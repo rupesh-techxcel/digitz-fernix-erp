@@ -248,7 +248,10 @@ def correct_sales_invoice(docname, check_only=0, reason=None):
 
     from digitz_erp.api.bank_reconciliation_api import cancel_bank_reconciliation
     from digitz_erp.api.gl_posting_api import update_accounts_for_doc_type
-    from digitz_erp.selling.doctype.sales_invoice.sales_invoice import get_utilized_credit
+    from digitz_erp.selling.doctype.sales_invoice.sales_invoice import (
+        CORRECTION_POSTING_DATETIME_MARKER,
+        get_utilized_credit,
+    )
 
     roles = set(frappe.get_roles())
     system_manager = frappe.session.user == "Administrator" or "System Manager" in roles
@@ -291,5 +294,9 @@ def correct_sales_invoice(docname, check_only=0, reason=None):
     comment = f"{CORRECTION_COMMENT} by {frappe.utils.get_fullname(frappe.session.user)}."
     if system_manager_cash_correction:
         comment += f" Reason: {reason.strip()}"
+        comment += (
+            f" {CORRECTION_POSTING_DATETIME_MARKER}"
+            f"{doc.posting_date}T{doc.posting_time}]"
+        )
     doc.add_comment("Comment", comment)
     return {"ok": True, "name": doc.name}

@@ -73,6 +73,8 @@ class TestInvoiceCorrection(unittest.TestCase):
             for_advance_payment=0,
             delivery_notes=[],
             customer='CUST-TEST-001',
+            posting_date='2026-11-18',
+            posting_time='12:34:56',
             meta=SimpleNamespace(get_table_fields=lambda: []),
             add_comment=Mock(),
             check_permission=lambda permission: None,
@@ -107,6 +109,8 @@ class TestInvoiceCorrection(unittest.TestCase):
     def test_system_manager_correction_records_reason(
         self, _allocations, _cancel_reconciliation, _update_accounts, _utilized_credit
     ):
+        from digitz_erp.selling.doctype.sales_invoice.sales_invoice import CORRECTION_POSTING_DATETIME_MARKER
+
         self.framework.utils.get_fullname.return_value = 'Admin User'
         result = api.correct_sales_invoice.__wrapped__(
             docname=self.doc.name, reason='Correcting the recorded cash amount'
@@ -114,8 +118,28 @@ class TestInvoiceCorrection(unittest.TestCase):
         self.assertEqual(result, {'ok': True, 'name': self.doc.name})
         self.doc.add_comment.assert_called_once_with(
             'Comment',
-            'Taken back to draft for correction by Admin User. Reason: Correcting the recorded cash amount',
+            'Taken back to draft for correction by Admin User. Reason: Correcting the recorded cash amount '
+            f'{CORRECTION_POSTING_DATETIME_MARKER}2026-11-18T12:34:56]',
         )
+
+    @patch(
+        'digitz_erp.selling.doctype.sales_invoice.sales_invoice.frappe.get_all',
+        return_value=[frappe._dict(content='Correction [invoice-correction-original-posting-datetime:2026-11-18T12:34:56]')],
+    )
+    def test_correction_restores_original_posting_date_and_time(self, _comments):
+        from digitz_erp.selling.doctype.sales_invoice.sales_invoice import SalesInvoice
+
+        doc = SimpleNamespace(
+            name='SI-TEST-001',
+            doctype='Sales Invoice',
+            docstatus=0,
+            posting_date='2026-11-19',
+            posting_time='16:00:00',
+            is_new=lambda: False,
+        )
+        self.assertTrue(SalesInvoice.preserve_correction_posting_datetime(doc))
+        self.assertEqual(str(doc.posting_date), '2026-11-18')
+        self.assertEqual(str(doc.posting_time), '12:34:56')
 
     @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
     def test_cashier_correction_still_rejects_cash_sales(self, _allocations):

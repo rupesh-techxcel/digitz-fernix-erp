@@ -30,6 +30,7 @@ from frappe.utils import today, getdate
 # came without one -- so the draft can be saved. It must be replaced with the
 # customer's real number before the invoice is submitted.
 MOBILE_PLACEHOLDER = "0000"
+CORRECTION_POSTING_DATETIME_MARKER = "[invoice-correction-original-posting-datetime:"
 
 
 def is_placeholder_mobile(number):
@@ -109,7 +110,44 @@ class SalesInvoice(Document):
                 frappe.get_doc("File", name).delete(ignore_permissions=True)
 
         return files
+
+    def preserve_correction_posting_datetime(self):
+        """Restore the posted date/time during a System Manager cash correction."""
+        if self.is_new() or self.docstatus != 0:
+            return False
+
+        comments = frappe.get_all(
+            "Comment",
+            filters={
+                "reference_doctype": self.doctype,
+                "reference_name": self.name,
+                "content": ["like", f"%{CORRECTION_POSTING_DATETIME_MARKER}%"],
+            },
+            fields=["content"],
+            order_by="creation desc",
+            limit=1,
+        )
+        if not comments:
+            return False
+
+        content = comments[0].content or ""
+        start = content.rfind(CORRECTION_POSTING_DATETIME_MARKER)
+        end = content.find("]", start)
+        if start < 0 or end < 0:
+            frappe.throw("The original posting date and time for this correction could not be read.")
+
+        original = content[start + len(CORRECTION_POSTING_DATETIME_MARKER):end]
+        try:
+            original_datetime = get_datetime(original)
+        except (TypeError, ValueError):
+            frappe.throw("The original posting date and time for this correction are invalid.")
+
+        self.posting_date = original_datetime.date()
+        self.posting_time = original_datetime.time()
+        return True
+
     def before_validate(self):
+        preserve_posting_datetime = self.preserve_correction_posting_datetime()
         self.company = frappe.get_last_doc("Company").name
         self.apply_company_round_off_rule()
         self.set_customer_company_and_trn()
@@ -123,9 +161,10 @@ class SalesInvoice(Document):
         if not self.credit_sale and not self.payment_mode:
             frappe.throw("Payment mode is required when not a credit sale.")
             
-        self.validate_posting_date_edit_permission()
+        if not preserve_posting_datetime:
+            self.validate_posting_date_edit_permission()
 
-        if(self.Voucher_In_The_Same_Time()):
+        if not preserve_posting_datetime and self.Voucher_In_The_Same_Time():
 
                 self.Set_Posting_Time_To_Next_Second()
 

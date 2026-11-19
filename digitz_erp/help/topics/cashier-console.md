@@ -98,8 +98,9 @@ A cashier bills on their counter's PC, after opening the day, and dates an invoi
 
 **System Managers** can also correct an unlinked cash sale from **Edit**. They must
 give a reason, which is recorded on the invoice. The invoice keeps its original
-counter day. After resubmitting it, use **Day Close → Reopen & Save** to amend that
-day's close, keeping the counted cash and updating the expected cash and difference.
+posting date, time, and counter day. After resubmitting it, use **Day Close → Reopen
+& Save** to amend that day's close, keeping the counted cash and updating the expected
+cash and difference.
 
 ## Billing an invoice makes it yours
 
