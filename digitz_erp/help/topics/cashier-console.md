@@ -31,7 +31,7 @@ Pick the customer, add the items, take payment, then save and submit.
 
 1. **Customer.** Pick the customer. For a walk-in, change the name and, if needed, the company and TRN (see [Walk-in and corporate customers](#walk-in-customer)). **Customer details** opens the rest: email, company and TRN, address, salesman, token.
 2. **Items.** Search for an item to add it. Each line shows Qty, Rate, Service Charges, GOV, Typing Charges, Transaction Charges, VAT and Net. The Rate is the sum of the charges, and VAT is charged on all of them except GOV (see [Price lists](#price-lists)). The pencil on a line opens its details.
-3. **Payment** (Alt+P). Choose the payment mode, or tick **Credit Sale**. For a cash payment, enter the **Received Amount**: it must cover the total, and the change is shown.
+3. **Payment** (Alt+P). Choose the payment mode, or tick **Credit Sale**. No mode is filled in for you: saving without one opens this window on **Payment Mode**. For a cash payment, enter the **Received Amount**: it must cover the total, and the change is shown.
 4. **Save** (Ctrl+S), then **Submit**. A submitted invoice cannot be changed, only cancelled by someone allowed to.
 
 **Print shows** beside New Invoice chooses whether the customer's **Company** and **TRN** appear on the printout.

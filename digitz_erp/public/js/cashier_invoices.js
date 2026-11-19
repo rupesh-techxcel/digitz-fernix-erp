@@ -653,7 +653,13 @@ frappe.provide("digitz_erp");
 				// no company defaults (the server reports the permission error)
 				console.error("Error loading Sales Invoice company defaults:", err);
 			}
-			// Never a credit sale by default; the payment mode as for the customer
+			// Never a credit sale by default, and no payment mode: the cashier picks it
+			// in the Payment popup. The field's own default (Cash) is cleared; an
+			// amendment keeps the cancelled invoice's mode.
+			if (!this.doc.amended_from && this.doc.payment_mode) {
+				this.doc.payment_mode = "";
+				await this.on_payment_mode();
+			}
 			await this.set_default_payment_mode();
 			this.render();
 		}
@@ -1554,23 +1560,15 @@ frappe.provide("digitz_erp");
 			E().set_cash_balance(doc);
 		}
 
-		// Cash sale: the customer's default payment mode (else the company's). Credit: none.
+		// Cash sale: no payment mode is filled in, so the cashier must pick one in the
+		// Payment popup (a default left unchanged recorded card or bank sales as cash).
+		// Credit: none.
 		async set_default_payment_mode() {
 			const doc = this.doc;
 			if (doc.docstatus !== 0) {
 				return;
 			}
-			if (cint(doc.credit_sale) === 0) {
-				const d = await E().payment_defaults(doc);
-				if (d.payment_mode) {
-					if (d.payment_mode !== doc.payment_mode || !doc.payment_mode_type) {
-						doc.payment_mode = d.payment_mode;
-						await this.on_payment_mode();
-					}
-				} else {
-					frappe.msgprint(__("Default payment mode for sales not found."));
-				}
-			} else if (doc.payment_mode) {
+			if (cint(doc.credit_sale) && doc.payment_mode) {
 				doc.payment_mode = "";
 				await this.on_payment_mode();
 			}
@@ -1629,11 +1627,8 @@ frappe.provide("digitz_erp");
 				frappe.msgprint(__("Cannot change Sales Invoice created from a Tab Sales. Do it from the correspodning Tab Sale"));
 				return false;
 			}
-			if (!cint(doc.credit_sale) && !doc.payment_account) {
+			if (!cint(doc.credit_sale) && doc.payment_mode && !doc.payment_account) {
 				frappe.msgprint(__("Select payment account"));
-			}
-			if (!cint(doc.credit_sale) && !doc.payment_mode) {
-				frappe.msgprint(__("Select payment mode"));
 			}
 
 			const missing = [];
@@ -1648,6 +1643,8 @@ frappe.provide("digitz_erp");
 			};
 			need("customer", doc.customer);
 			need("items", (doc.items || []).length);
+			// No payment mode chosen: the Payment popup opens on it
+			!cint(doc.credit_sale) && need("payment_mode", doc.payment_mode);
 			if (!cint(doc.credit_sale) && doc.payment_mode_type === "Cash") {
 				need("received_amount", flt(doc.received_amount));
 			}
