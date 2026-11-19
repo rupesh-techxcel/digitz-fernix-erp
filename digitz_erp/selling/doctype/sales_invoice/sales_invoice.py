@@ -112,6 +112,14 @@ class SalesInvoice(Document):
         return files
 
     def get_pending_cash_correction_comment(self):
+        """The marker comment left by correct_sales_invoice, or None.
+
+        Anyone who can read the invoice can add a timeline comment, so the marker
+        counts only in the correction comment itself, written by a System Manager.
+        `owner` is set by Frappe to the logged-in user (`comment_email` is not).
+        """
+        from digitz_erp.api.sales_invoice_api import CORRECTION_COMMENT
+
         if self.is_new():
             return None
 
@@ -120,13 +128,16 @@ class SalesInvoice(Document):
             filters={
                 "reference_doctype": self.doctype,
                 "reference_name": self.name,
-                "content": ["like", f"%{CORRECTION_POSTING_DATETIME_MARKER}%"],
+                "comment_type": "Comment",
+                "content": ["like", f"{CORRECTION_COMMENT} by %{CORRECTION_POSTING_DATETIME_MARKER}%"],
             },
-            fields=["name", "content"],
+            fields=["name", "content", "owner"],
             order_by="creation desc",
-            limit=1,
         )
-        return comments[0] if comments else None
+        for comment in comments:
+            if comment.owner == "Administrator" or "System Manager" in frappe.get_roles(comment.owner):
+                return comment
+        return None
 
     def preserve_correction_posting_datetime(self):
         """Restore the posted date/time and owner during a System Manager correction."""

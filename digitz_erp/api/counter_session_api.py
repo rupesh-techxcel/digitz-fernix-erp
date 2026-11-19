@@ -54,16 +54,21 @@ def stamp_counter_session(doc):
 	Called from before_validate of Sales Invoice, Sales Return, Receipt Entry and
 	Expense Entry. Sets `counter_session` (and `counter` / `counter_device` where
 	the doctype has them) from the request's registered PC and the user's open
-	session on it. An invoice already assigned to a session keeps that attribution
-	when edited. A cashier who is not a supervisor is stopped without both.
+	session on it. A submitted invoice taken back to draft for correction keeps
+	its session; an ordinary draft takes the session it is saved or submitted in.
+	A cashier who is not a supervisor is stopped without both.
 	Nothing is required of background work, which has no request.
 	"""
 	if not getattr(frappe.local, "request", None):
 		return
 
-	# Keep an invoice's original day attribution through edits; current device and
+	# Keep a corrected invoice's original day attribution; current device and
 	# open-day checks still apply to cashiers.
-	preserve_session = doc.doctype == "Sales Invoice" and bool(doc.get("counter_session"))
+	preserve_session = (
+		doc.doctype == "Sales Invoice"
+		and bool(doc.get("counter_session"))
+		and was_taken_back_for_correction(doc)
+	)
 
 	device = get_request_device()
 	if device and not preserve_session:
@@ -92,6 +97,24 @@ def stamp_counter_session(doc):
 		f"Open the day on {device.counter} before billing. Click the counter badge at the top of the page.",
 		title="Day Not Opened",
 	)
+
+
+def was_taken_back_for_correction(doc):
+	"""Whether submitted invoice `doc` was taken back to draft by correct_sales_invoice.
+
+	A draft that was never submitted has no such comment, so its money goes to
+	the day it is submitted in, not to a day that may already be counted.
+	"""
+	from digitz_erp.api.sales_invoice_api import CORRECTION_COMMENT
+
+	if doc.is_new():
+		return False
+	return bool(frappe.db.exists("Comment", {
+		"reference_doctype": doc.doctype,
+		"reference_name": doc.name,
+		"comment_type": "Comment",
+		"content": ["like", f"{CORRECTION_COMMENT} by %"],
+	}))
 
 
 def get_last_close(counter):

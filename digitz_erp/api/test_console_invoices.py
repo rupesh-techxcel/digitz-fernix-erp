@@ -223,3 +223,90 @@ class TestInvoiceCorrection(unittest.TestCase):
         self.framework.get_roles.return_value = ['Cashier']
         with self.assertRaises(ValueError):
             api.correct_sales_invoice.__wrapped__(docname=self.doc.name, check_only=1)
+
+
+class TestCorrectionMarkerTrust(unittest.TestCase):
+    """Only a System Manager's correction comment carries a usable marker."""
+
+    def setUp(self):
+        from digitz_erp.selling.doctype.sales_invoice.sales_invoice import (
+            CORRECTION_POSTING_DATETIME_MARKER,
+            SalesInvoice,
+        )
+
+        patcher = patch('digitz_erp.selling.doctype.sales_invoice.sales_invoice.frappe')
+        self.framework = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.framework.get_roles.side_effect = lambda user: (
+            ['System Manager'] if user == 'admin@example.com' else ['Cashier']
+        )
+        self.marker = f'{CORRECTION_POSTING_DATETIME_MARKER}2026-01-01T00:00:00]'
+        self.get_comment = SalesInvoice.get_pending_cash_correction_comment
+        self.doc = SimpleNamespace(doctype='Sales Invoice', name='SI-TEST-001', is_new=lambda: False)
+
+    def comments(self, *rows):
+        self.framework.get_all.return_value = [frappe._dict(row) for row in rows]
+
+    def test_marker_from_a_cashier_is_ignored(self):
+        self.comments({'name': 'C-1', 'owner': 'cashier@example.com',
+                       'content': f'Taken back to draft for correction by X. {self.marker}'})
+        self.assertIsNone(self.get_comment(self.doc))
+
+    def test_marker_from_a_system_manager_is_used(self):
+        self.comments({'name': 'C-1', 'owner': 'admin@example.com',
+                       'content': f'Taken back to draft for correction by Admin. {self.marker}'})
+        self.assertEqual(self.get_comment(self.doc).name, 'C-1')
+
+    def test_newer_forged_marker_does_not_hide_the_real_one(self):
+        self.comments(
+            {'name': 'C-2', 'owner': 'cashier@example.com',
+             'content': f'Taken back to draft for correction by X. {self.marker}'},
+            {'name': 'C-1', 'owner': 'admin@example.com',
+             'content': f'Taken back to draft for correction by Admin. {self.marker}'},
+        )
+        self.assertEqual(self.get_comment(self.doc).name, 'C-1')
+
+    def test_query_accepts_only_correction_comments(self):
+        self.comments()
+        self.get_comment(self.doc)
+        filters = self.framework.get_all.call_args.kwargs['filters']
+        self.assertEqual(filters['comment_type'], 'Comment')
+        self.assertTrue(filters['content'][1].startswith('Taken back to draft for correction by '))
+
+
+class TestStampCounterSessionOnCorrection(unittest.TestCase):
+    """A corrected invoice keeps its day; an ordinary draft takes today's."""
+
+    def setUp(self):
+        from digitz_erp.api import counter_session_api
+
+        self.module = counter_session_api
+        for name, value in {
+            'get_request_device': SimpleNamespace(counter='Counter 1', device='PC-1'),
+            'get_open_session': 'CS-TODAY',
+        }.items():
+            patcher = patch.object(counter_session_api, name, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = patch.object(counter_session_api.frappe, 'local', SimpleNamespace(request=object()))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def invoice(self):
+        return frappe._dict(
+            doctype='Sales Invoice', name='SI-TEST-001', counter_session='CS-OLD',
+            counter='Counter 2', counter_device='PC-2', is_new=lambda: False,
+            meta=SimpleNamespace(has_field=lambda field: True),
+        )
+
+    def test_ordinary_draft_takes_the_open_session(self):
+        doc = self.invoice()
+        with patch.object(self.module, 'was_taken_back_for_correction', return_value=False):
+            self.module.stamp_counter_session(doc)
+        self.assertEqual((doc.counter_session, doc.counter), ('CS-TODAY', 'Counter 1'))
+
+    def test_corrected_invoice_keeps_its_session(self):
+        doc = self.invoice()
+        with patch.object(self.module, 'was_taken_back_for_correction', return_value=True):
+            self.module.stamp_counter_session(doc)
+        self.assertEqual((doc.counter_session, doc.counter), ('CS-OLD', 'Counter 2'))
