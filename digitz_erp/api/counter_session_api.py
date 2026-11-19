@@ -54,14 +54,19 @@ def stamp_counter_session(doc):
 	Called from before_validate of Sales Invoice, Sales Return, Receipt Entry and
 	Expense Entry. Sets `counter_session` (and `counter` / `counter_device` where
 	the doctype has them) from the request's registered PC and the user's open
-	session on it. A cashier who is not a supervisor is stopped without both.
+	session on it. An invoice already assigned to a session keeps that attribution
+	when edited. A cashier who is not a supervisor is stopped without both.
 	Nothing is required of background work, which has no request.
 	"""
 	if not getattr(frappe.local, "request", None):
 		return
 
+	# Keep an invoice's original day attribution through edits; current device and
+	# open-day checks still apply to cashiers.
+	preserve_session = doc.doctype == "Sales Invoice" and bool(doc.get("counter_session"))
+
 	device = get_request_device()
-	if device:
+	if device and not preserve_session:
 		if doc.meta.has_field("counter"):
 			doc.counter = device.counter
 		if doc.meta.has_field("counter_device"):
@@ -69,7 +74,8 @@ def stamp_counter_session(doc):
 
 	session = get_open_session(counter=device.counter, billing=True) if device else None
 	if session:
-		doc.counter_session = session
+		if not preserve_session:
+			doc.counter_session = session
 		return
 
 	if not must_have_open_day():

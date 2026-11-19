@@ -950,6 +950,7 @@ frappe.provide("digitz_erp");
 			const doc = this.doc;
 			const saved = !doc.__islocal;
 			const manager = frappe.user.has_role("Management");
+			const system_manager = frappe.session.user === "Administrator" || frappe.user.has_role("System Manager");
 			const can_revert = ["Administrator", "it-admin"].includes(frappe.session.user) || manager;
 			const btn = (action, label, cls = "btn-default", icon = "") =>
 				`<button type="button" class="btn btn-sm ${cls}" data-action="${action}">${icon ? frappe.utils.icon(icon, "sm") : ""}<span>${label}</span></button>`;
@@ -968,7 +969,8 @@ frappe.provide("digitz_erp");
 			}
 			// A cashier's correction of a submitted invoice: allowed for a credit sale
 			// (any date); the server says why when it is not
-			saved && doc.docstatus === 1 && today_only() && buttons.push(btn("correct", __("Edit")));
+			const supervisor_cash_correction = system_manager && !cint(doc.credit_sale) && doc.payment_mode_type === "Cash";
+			saved && doc.docstatus === 1 && (today_only() || supervisor_cash_correction) && buttons.push(btn("correct", __("Edit")));
 			// A submitted credit sale not yet fully paid: take the payment here
 			// (public/js/cashier_receipts.js), as a Receipt Entry
 			this.can_record_payment() && buttons.push(btn("record-payment", __("Record Payment"), "btn-primary"));
@@ -1813,10 +1815,38 @@ frappe.provide("digitz_erp");
 		// then take it back to draft under the same number for editing
 		async correct() {
 			const method = "digitz_erp.api.sales_invoice_api.correct_sales_invoice";
+			const system_manager = frappe.session.user === "Administrator" || frappe.user.has_role("System Manager");
 			try {
 				await frappe.xcall(method, { docname: this.doc.name, check_only: 1 });
 			} catch (e) {
 				return; // the reason it cannot be corrected is shown
+			}
+			if (system_manager) {
+				const d = new frappe.ui.Dialog({
+					title: __("Correct {0}", [this.doc.name]),
+					fields: [{
+						fieldtype: "Small Text",
+						fieldname: "reason",
+						label: __("Reason for the correction"),
+						reqd: 1,
+						description: __("If this invoice belongs to a closed counter day, correct that day separately in Day Close after resubmitting the invoice."),
+					}],
+					primary_action_label: __("Continue"),
+					primary_action: async (values) => {
+						d.disable_primary_action();
+						try {
+							await frappe.xcall(method, { docname: this.doc.name, reason: values.reason });
+							d.hide();
+							frappe.show_alert({ message: __("{0} is a draft again: edit it and submit.", [this.doc.name]), indicator: "green" });
+							this.host.list.loaded = false;
+							await this.reload();
+						} catch (e) {
+							d.enable_primary_action();
+						}
+					},
+				});
+				d.show();
+				return;
 			}
 			frappe.confirm(
 				__("Take {0} back to draft to edit it? It keeps its number. Edit it, then submit it again.", [esc(this.doc.name)]),

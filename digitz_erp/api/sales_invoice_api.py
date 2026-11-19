@@ -192,14 +192,14 @@ def get_console_invoices(filters=None, or_filters=None, start=0, scope="mine"):
 # A cashier corrects a submitted credit invoice, of any date, by taking it back
 # to draft under the same number, editing it and submitting it again. Only where
 # that is clean: a credit sale (no cash in any till) with no payment, return, stock
-# or project tied to it. Anything else is for a supervisor (Cancel / Amend, or
-# Revert To Draft).
+# or project tied to it. A System Manager may also correct an unlinked cash sale,
+# with a reason and a separate correction to its closed day if already counted.
 
 CORRECTION_COMMENT = "Taken back to draft for correction"
 
 
-def correction_blocked_reason(doc):
-    """Why `doc` cannot be corrected by a cashier, or None when it can."""
+def correction_blocked_reason(doc, allow_cash_sale=False):
+    """Why `doc` cannot be corrected, or None when it can."""
     from frappe.utils import flt
 
     from digitz_erp.api.receipt_entry_api import get_allocations_for_sales_invoice
@@ -207,12 +207,19 @@ def correction_blocked_reason(doc):
     name = doc.name
     if doc.docstatus != 1:
         return f"{name} is not submitted. Only a submitted invoice is corrected this way; a draft can be edited as it is."
-    if not doc.credit_sale:
+    if doc.credit_sale and allow_cash_sale:
+        return f"{name} is a credit sale. Use the credit-sale correction flow."
+    if not doc.credit_sale and not allow_cash_sale:
         return (f"{name} is a cash sale. Only credit sale invoices can be corrected: a cash sale's money is "
                 "already in the till and the day's count. Ask a supervisor.")
 
+    if allow_cash_sale:
+        mode = frappe.db.get_value("Payment Mode", doc.payment_mode, "mode") if doc.payment_mode else None
+        if mode != "Cash":
+            return f"{name} is not paid in cash. This correction flow is only for cash sales."
+
     receipts = sorted({a.receipt_no for a in get_allocations_for_sales_invoice(name, "") if a.get("receipt_no")})
-    if receipts or flt(doc.paid_amount) > 0:
+    if receipts or (not allow_cash_sale and flt(doc.paid_amount) > 0):
         return (f"A payment is recorded against {name}" + (f" ({', '.join(receipts)})" if receipts else "")
                 + ". Ask a supervisor to correct it.")
 
@@ -230,25 +237,37 @@ def correction_blocked_reason(doc):
 
 
 @frappe.whitelist()
-def correct_sales_invoice(docname, check_only=0):
-    """The cashier's Edit (formerly Correct): a submitted credit invoice, of any date, goes back
-    to draft under the same number. With check_only, only says whether it may
-    (the reason is thrown when not)."""
+def correct_sales_invoice(docname, check_only=0, reason=None):
+    """Take an eligible invoice back to draft under the same number.
+
+    Cashiers may correct eligible credit sales. System Managers may also correct
+    unlinked cash sales, with a reason; a closed counter day must be amended
+    separately after the corrected invoice is resubmitted.
+    """
     from frappe.utils import cint
 
     from digitz_erp.api.bank_reconciliation_api import cancel_bank_reconciliation
     from digitz_erp.api.gl_posting_api import update_accounts_for_doc_type
     from digitz_erp.selling.doctype.sales_invoice.sales_invoice import get_utilized_credit
 
-    if "Cashier" not in frappe.get_roles():
-        frappe.throw("Edit is the cashier's option. A supervisor uses Revert To Draft or Cancel / Amend.",
-                     frappe.PermissionError)
+    roles = set(frappe.get_roles())
+    system_manager = frappe.session.user == "Administrator" or "System Manager" in roles
+    if not system_manager and "Cashier" not in roles:
+        frappe.throw("Only a cashier or System Manager can correct an invoice.", frappe.PermissionError)
 
     doc = frappe.get_doc("Sales Invoice", docname)
     doc.check_permission("write")
-    reason = correction_blocked_reason(doc)
-    if reason:
-        frappe.throw(reason, title="Cannot Edit This Invoice")
+    system_manager_cash_correction = system_manager and not bool(doc.credit_sale)
+    if system_manager_cash_correction:
+        blocked_reason = correction_blocked_reason(doc, allow_cash_sale=True)
+        if not cint(check_only) and not (reason or "").strip():
+            frappe.throw("Give a reason for correcting this invoice.")
+    elif "Cashier" in roles:
+        blocked_reason = correction_blocked_reason(doc)
+    else:
+        frappe.throw("System Manager correction is only available for cash sales.", frappe.PermissionError)
+    if blocked_reason:
+        frappe.throw(blocked_reason, title="Cannot Edit This Invoice")
     if cint(check_only):
         return {"ok": True}
 
@@ -269,5 +288,8 @@ def correct_sales_invoice(docname, check_only=0):
     frappe.db.set_value("Customer", doc.customer, "utilized_credit", get_utilized_credit(doc.customer),
                         update_modified=False)
 
-    doc.add_comment("Comment", f"{CORRECTION_COMMENT} by {frappe.utils.get_fullname(frappe.session.user)}.")
+    comment = f"{CORRECTION_COMMENT} by {frappe.utils.get_fullname(frappe.session.user)}."
+    if system_manager_cash_correction:
+        comment += f" Reason: {reason.strip()}"
+    doc.add_comment("Comment", comment)
     return {"ok": True, "name": doc.name}

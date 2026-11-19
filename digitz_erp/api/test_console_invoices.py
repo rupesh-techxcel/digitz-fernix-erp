@@ -1,5 +1,6 @@
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import frappe
 from digitz_erp.api import sales_invoice_api as api
@@ -49,3 +50,75 @@ class TestConsoleInvoiceScope(unittest.TestCase):
         with self.assertRaises(ValueError):
             api.get_console_invoices.__wrapped__(scope='invalid')
         self.framework.get_list.assert_not_called()
+
+
+class TestInvoiceCorrection(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.object(api, 'frappe')
+        self.framework = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.framework.session.user = 'admin@example.com'
+        self.framework.get_roles.return_value = ['System Manager']
+        self.framework.throw.side_effect = ValueError
+        self.doc = SimpleNamespace(
+            name='SI-TEST-001',
+            docstatus=1,
+            credit_sale=0,
+            payment_mode='Cash',
+            paid_amount=100,
+            update_stock=0,
+            tab_sales=0,
+            project=None,
+            sales_order=None,
+            for_advance_payment=0,
+            delivery_notes=[],
+            customer='CUST-TEST-001',
+            meta=SimpleNamespace(get_table_fields=lambda: []),
+            add_comment=Mock(),
+            check_permission=lambda permission: None,
+            get=lambda fieldname: [],
+        )
+        self.framework.get_doc.return_value = self.doc
+        self.framework.db.get_value.return_value = 'Cash'
+        self.framework.db.exists.return_value = False
+        self.framework.get_all.return_value = []
+
+    @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
+    def test_system_manager_can_check_an_unlinked_cash_sale(self, _allocations):
+        result = api.correct_sales_invoice.__wrapped__(docname=self.doc.name, check_only=1)
+        self.assertEqual(result, {'ok': True})
+
+    @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
+    def test_system_manager_must_give_a_reason_before_reverting(self, _allocations):
+        with self.assertRaises(ValueError):
+            api.correct_sales_invoice.__wrapped__(docname=self.doc.name)
+        self.framework.db.delete.assert_not_called()
+
+    @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
+    def test_system_manager_cannot_use_cash_correction_for_non_cash_mode(self, _allocations):
+        self.framework.db.get_value.return_value = 'Bank'
+        with self.assertRaises(ValueError):
+            api.correct_sales_invoice.__wrapped__(docname=self.doc.name, check_only=1)
+
+    @patch('digitz_erp.selling.doctype.sales_invoice.sales_invoice.get_utilized_credit', return_value=0)
+    @patch('digitz_erp.api.gl_posting_api.update_accounts_for_doc_type')
+    @patch('digitz_erp.api.bank_reconciliation_api.cancel_bank_reconciliation')
+    @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
+    def test_system_manager_correction_records_reason(
+        self, _allocations, _cancel_reconciliation, _update_accounts, _utilized_credit
+    ):
+        self.framework.utils.get_fullname.return_value = 'Admin User'
+        result = api.correct_sales_invoice.__wrapped__(
+            docname=self.doc.name, reason='Correcting the recorded cash amount'
+        )
+        self.assertEqual(result, {'ok': True, 'name': self.doc.name})
+        self.doc.add_comment.assert_called_once_with(
+            'Comment',
+            'Taken back to draft for correction by Admin User. Reason: Correcting the recorded cash amount',
+        )
+
+    @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
+    def test_cashier_correction_still_rejects_cash_sales(self, _allocations):
+        self.framework.get_roles.return_value = ['Cashier']
+        with self.assertRaises(ValueError):
+            api.correct_sales_invoice.__wrapped__(docname=self.doc.name, check_only=1)
