@@ -5,8 +5,8 @@
 
 Frappe and the app's own doctypes create many roles (Accounts User, Blogger,
 Stock Manager, ...) that the Medical Center never assigns. They crowd the User
-form's role checkboxes and Role Permission Manager, so this disables them on
-every install and migrate. A disabled role is hidden from both and from role
+form's role checkboxes and Role Permission Manager, so this disables them when
+the app is installed (a live site can run it by hand). A disabled role is hidden from both and from role
 pickers; its permission rows stay in place and simply apply to no one.
 
 Disabling is the only hiding that lasts. The User form's role editor drops,
@@ -103,7 +103,7 @@ def hide_unused_roles(force=0):
 
 
 def apply():
-	"""after_migrate, and after_sync on install, once every doctype has created its roles."""
+	"""after_sync on install, once every doctype has created its roles."""
 	hide_unused_roles()
 
 

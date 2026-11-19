@@ -4,12 +4,12 @@
 """Images the app ships, made available as public File attachments.
 
 The blobs live in `digitz_erp/public/images/`, so they travel with the code.
-This copies them into the site's own files on install and on every migrate,
+This copies them into the site's own files on install,
 which is what makes them attachable and selectable in the desk -- an
 `/assets/...` path is served by the app but never appears in the file picker.
 
 Idempotent by design: a public File with the same name is left alone, so this
-is safe to run on every migration.
+is safe to run again by hand.
 """
 
 import os
@@ -52,7 +52,7 @@ def ensure_public_file(file_name):
 
 
 def ensure_bundled_files():
-	"""Install hook and after_migrate hook: keep BUNDLED_FILES present."""
+	"""Install hook: make BUNDLED_FILES present."""
 	results = {}
 
 	for file_name in BUNDLED_FILES:

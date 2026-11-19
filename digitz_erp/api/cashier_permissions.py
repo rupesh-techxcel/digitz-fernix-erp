@@ -1,27 +1,25 @@
 # Copyright (c) 2026, Rupesh P and contributors
 # For license information, please see license.txt
 
-"""What the Cashier role may do, enforced on every install and migrate.
+"""What the Cashier role may do, set up when the app is installed.
 
 A cashier works the counter: opens and closes the day, bills and prints invoices,
 collects payments on credit invoices (Receipt Entry), and adds and edits customers.
 They only pick items, never add or change one, never manage prices or other
 masters, and never cancel, amend or delete an invoice, a receipt or a customer.
 
-The permissions ship two ways: as rows in each doctype's own JSON, and as Custom
-DocPerm fixtures (Sales Invoice, Customer, ...). But once a site has a Custom
-DocPerm on a doctype -- anyone saving it in Role Permission Manager creates them
--- Frappe ignores that doctype's JSON rows there. So this runs after every
-migrate and install and makes the rule below true in whichever set is in effect,
-using the Role Permission Manager's own add_permission so the other roles'
-rights are kept.
+The permissions come two ways: as rows in each doctype's own JSON, and as Custom
+DocPerm records in install_data (Sales Invoice, Customer, ...). Once a site has a
+Custom DocPerm on a doctype -- anyone saving it in Role Permission Manager creates
+them -- Frappe ignores that doctype's JSON rows there. So this makes the rule
+below true in whichever set is in effect, using the Role Permission Manager's own
+add_permission so the other roles' rights are kept.
 
 Only the Cashier row is touched, and only the flags listed: other flags and other
 roles are left as the site has them.
 
-A fresh install gets every rule (apply, from after_sync). A migrate only grants
-the customer rights (apply_on_migrate): a live site keeps whatever its
-Role Permission Manager says for everything else, and nothing is taken away.
+A fresh install gets every rule (apply, from after_sync). A migrate changes
+nothing: a live site keeps whatever its Role Permission Manager says.
 
 Check a site with: bench --site <site> execute digitz_erp.api.cashier_permissions.report
 """
@@ -121,47 +119,9 @@ def ensure_cashier_permissions():
 		print("Cashier permissions corrected:\n  " + "\n  ".join(changed))
 
 
-# What a migrate adds on a live site: the customer rights, read on Item, and
-# the masters picked in those forms. Grant only (the patch
-# remove_cashier_item_edit takes the Item edit rights away once).
-MIGRATE_GRANTS = (
-	"Customer", "Item", "Customer Group", "Area", "Country", "Currency",
-	"Item Group", "Item Subgroup", "Brand", "Asset Category",
-)
-
-
-def grant_cashier_permissions(doctypes):
-	"""Give the Cashier the rights RULES grants on `doctypes`. Never removes one:
-	a flag RULES sets to 0 is left as the site has it."""
-	changed = []
-	for doctype in doctypes:
-		grants = {flag: 1 for flag, value in RULES[doctype].items() if value}
-		if not frappe.db.exists("DocType", doctype) or not grants:
-			continue
-		found = cashier_row(doctype)
-		if not found:
-			add_permission(doctype, ROLE, 0)
-			found = cashier_row(doctype)
-		table, name, row = found
-		updates = {flag: 1 for flag in grants if not row.get(flag)}
-		if updates:
-			frappe.db.set_value(table, name, updates, update_modified=False)
-			changed.append(f"{doctype}: {updates}")
-
-	if changed:
-		frappe.clear_cache()
-		print("Cashier permissions granted:\n  " + "\n  ".join(changed))
-
-
 def apply():
-	"""after_sync, on a fresh install: every rule, once the fixtures are in."""
+	"""after_sync, on a fresh install: every rule, once install_data is in."""
 	ensure_cashier_permissions()
-
-
-def apply_on_migrate():
-	"""after_migrate: only the customer grants and read on Item (see MIGRATE_GRANTS)."""
-	if frappe.db.exists("Role", ROLE):
-		grant_cashier_permissions(MIGRATE_GRANTS)
 
 
 @frappe.whitelist()

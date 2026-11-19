@@ -56,14 +56,9 @@ standard_help_items = [
 doctype_list_js = {"Role": "public/js/role_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
-fixtures = ["Custom Field", "Custom DocPerm",
-                {"doctype": "Role", "filters": [["role_name", "in", ["Cashier", "Cashier Approver"]]]},
-                {"doctype": "Custom DocPerm", "filters": [["role", "in", ["Cashier", "Cashier Approver"]]]},
-                # Ships the Medical Center workspace navigator with the app, so a
-                # fresh install gets it too (install_app calls sync_fixtures).
-                {"doctype": "Custom HTML Block", "filters": [["name", "in", ["Medical Center Navigator"]]]},
-                # The email Sales Invoice sends to the customer on submit
-                {"doctype": "Email Template", "filters": [["name", "in", ["Sales Invoice Submission"]]]}]
+# No fixtures: Frappe re-imports them with force on every migrate, overwriting a
+# live site's own settings (its permissions above all). The setup records are in
+# install_data and imported only on a fresh install (api/install_setup.py).
 # Home Pages
 # ----------
 
@@ -104,23 +99,17 @@ jinja = {
 
 # before_install = "digitz_erp.install.before_install"
 after_install = "digitz_erp.api.install_api.after_install"
-# Re-attaches the images the app ships (public/images) as public Files on
-# every migration, so they are always present and selectable in the desk,
-# and points Settings > Token URL at the right service for this site.
+# A migrate changes no permission, role or setup record. It only keeps
+# Settings > Token URL safe after a database is copied between sites (a live site
+# never polls the test token feed).
 after_migrate = [
-	"digitz_erp.api.bundled_files.ensure_bundled_files",
 	"digitz_erp.api.token_simulator.update_token_url_after_migrate",
-	# Adds the Cashier's customer rights and read on Item; never takes one away, so a
-	# live site keeps what its Role Permission Manager says for the rest
-	"digitz_erp.api.cashier_permissions.apply_on_migrate",
-	# Hides the roles the Medical Center never assigns (none still held by a user)
-	"digitz_erp.api.role_visibility.apply",
 ]
 
-# On a fresh install fixtures are imported after after_install, so the Cashier
-# rights are enforced here, once they are in -- and the unused roles, which the
-# doctypes create as they sync, are hidden then too
+# Fresh install only (after after_install): the setup records from install_data,
+# then the Cashier rights on top of them, then the unused roles hidden
 after_sync = [
+	"digitz_erp.api.install_setup.import_install_data",
 	"digitz_erp.api.cashier_permissions.apply",
 	"digitz_erp.api.role_visibility.apply",
 ]
