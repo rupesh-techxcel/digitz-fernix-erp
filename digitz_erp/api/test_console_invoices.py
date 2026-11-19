@@ -122,24 +122,101 @@ class TestInvoiceCorrection(unittest.TestCase):
             f'{CORRECTION_POSTING_DATETIME_MARKER}2026-11-18T12:34:56]',
         )
 
-    @patch(
-        'digitz_erp.selling.doctype.sales_invoice.sales_invoice.frappe.get_all',
-        return_value=[frappe._dict(content='Correction [invoice-correction-original-posting-datetime:2026-11-18T12:34:56]')],
-    )
-    def test_correction_restores_original_posting_date_and_time(self, _comments):
+    @patch('digitz_erp.selling.doctype.sales_invoice.sales_invoice.frappe')
+    def test_correction_restores_original_posting_date_time_and_modified_by(self, framework):
         from digitz_erp.selling.doctype.sales_invoice.sales_invoice import SalesInvoice
 
+        framework.db.get_value.return_value = 'cashier@example.com'
         doc = SimpleNamespace(
             name='SI-TEST-001',
             doctype='Sales Invoice',
             docstatus=0,
             posting_date='2026-11-19',
             posting_time='16:00:00',
+            flags=frappe._dict(),
             is_new=lambda: False,
+            get_pending_cash_correction_comment=lambda: frappe._dict(
+                content='Correction [invoice-correction-original-posting-datetime:2026-11-18T12:34:56]'
+            ),
         )
         self.assertTrue(SalesInvoice.preserve_correction_posting_datetime(doc))
         self.assertEqual(str(doc.posting_date), '2026-11-18')
         self.assertEqual(str(doc.posting_time), '12:34:56')
+        self.assertTrue(doc.flags.preserve_owner_for_cash_correction)
+        self.assertEqual(doc.flags.cash_correction_modified_by, 'cashier@example.com')
+
+    @patch('digitz_erp.selling.doctype.sales_invoice.sales_invoice.frappe')
+    def test_correction_preserves_metadata_during_resubmission(self, framework):
+        from digitz_erp.selling.doctype.sales_invoice.sales_invoice import SalesInvoice
+
+        framework.db.get_value.return_value = 'cashier@example.com'
+        doc = SimpleNamespace(
+            name='SI-TEST-001',
+            doctype='Sales Invoice',
+            docstatus=1,
+            posting_date='2026-11-19',
+            posting_time='16:00:00',
+            flags=frappe._dict(),
+            is_new=lambda: False,
+            get_pending_cash_correction_comment=lambda: frappe._dict(
+                content='Correction [invoice-correction-original-posting-datetime:2026-11-18T12:34:56]'
+            ),
+        )
+
+        self.assertTrue(SalesInvoice.preserve_correction_posting_datetime(doc))
+        self.assertEqual(str(doc.posting_date), '2026-11-18')
+        self.assertEqual(str(doc.posting_time), '12:34:56')
+        self.assertEqual(doc.flags.cash_correction_modified_by, 'cashier@example.com')
+
+    @patch('digitz_erp.selling.doctype.sales_invoice.sales_invoice.frappe')
+    def test_pending_correction_keeps_original_invoice_owner(self, framework):
+        from digitz_erp.selling.doctype.sales_invoice.sales_invoice import SalesInvoice
+
+        doc = SimpleNamespace(
+            flags=frappe._dict(
+                preserve_owner_for_cash_correction=True,
+                cash_correction_modified_by='cashier@example.com',
+            ),
+            owner='cashier@example.com',
+            name='SI-TEST-001',
+            modified_by='admin@example.com',
+        )
+        framework.session.user = 'admin@example.com'
+
+        SalesInvoice.take_ownership(doc)
+
+        self.assertEqual(doc.owner, 'cashier@example.com')
+        self.assertEqual(doc.modified_by, 'cashier@example.com')
+        framework.db.set_value.assert_called_once_with(
+            'Sales Invoice', 'SI-TEST-001', 'modified_by', 'cashier@example.com', update_modified=False
+        )
+
+    @patch('digitz_erp.selling.doctype.sales_invoice.sales_invoice.frappe')
+    def test_submitted_correction_logs_editor_and_consumes_marker(self, framework):
+        from digitz_erp.selling.doctype.sales_invoice.sales_invoice import (
+            CORRECTION_POSTING_DATETIME_MARKER,
+            SalesInvoice,
+        )
+
+        marker_comment = frappe._dict(
+            name='COMMENT-1',
+            content=f'Correction reason {CORRECTION_POSTING_DATETIME_MARKER}2026-11-18T12:34:56]',
+        )
+        doc = SimpleNamespace(
+            get_pending_cash_correction_comment=lambda: marker_comment,
+            add_comment=Mock(),
+        )
+        framework.session.user = 'admin@example.com'
+        framework.utils.get_fullname.return_value = 'Admin User'
+
+        SalesInvoice.finish_cash_correction_audit(doc)
+
+        framework.db.set_value.assert_called_once_with(
+            'Comment', 'COMMENT-1', 'content', 'Correction reason', update_modified=False
+        )
+        doc.add_comment.assert_called_once_with(
+            'Comment', 'Cash invoice correction submitted by Admin User.'
+        )
 
     @patch('digitz_erp.api.receipt_entry_api.get_allocations_for_sales_invoice', return_value=[])
     def test_cashier_correction_still_rejects_cash_sales(self, _allocations):

@@ -111,10 +111,9 @@ class SalesInvoice(Document):
 
         return files
 
-    def preserve_correction_posting_datetime(self):
-        """Restore the posted date/time during a System Manager cash correction."""
-        if self.is_new() or self.docstatus != 0:
-            return False
+    def get_pending_cash_correction_comment(self):
+        if self.is_new():
+            return None
 
         comments = frappe.get_all(
             "Comment",
@@ -123,14 +122,22 @@ class SalesInvoice(Document):
                 "reference_name": self.name,
                 "content": ["like", f"%{CORRECTION_POSTING_DATETIME_MARKER}%"],
             },
-            fields=["content"],
+            fields=["name", "content"],
             order_by="creation desc",
             limit=1,
         )
-        if not comments:
+        return comments[0] if comments else None
+
+    def preserve_correction_posting_datetime(self):
+        """Restore the posted date/time and owner during a System Manager correction."""
+        if self.is_new() or self.docstatus not in (0, 1):
             return False
 
-        content = comments[0].content or ""
+        comment = self.get_pending_cash_correction_comment()
+        if not comment:
+            return False
+
+        content = comment.content or ""
         start = content.rfind(CORRECTION_POSTING_DATETIME_MARKER)
         end = content.find("]", start)
         if start < 0 or end < 0:
@@ -144,6 +151,10 @@ class SalesInvoice(Document):
 
         self.posting_date = original_datetime.date()
         self.posting_time = original_datetime.time()
+        self.flags.preserve_owner_for_cash_correction = True
+        self.flags.cash_correction_modified_by = frappe.db.get_value(
+            self.doctype, self.name, "modified_by"
+        )
         return True
 
     def before_validate(self):
@@ -566,6 +577,31 @@ class SalesInvoice(Document):
         self.update_project_billed_amounts()
         self.update_project_advance_amount()
         self.send_submission_email()
+        self.finish_cash_correction_audit()
+
+    def finish_cash_correction_audit(self):
+        """Log who resubmitted the correction and consume its one-time marker."""
+        comment = self.get_pending_cash_correction_comment()
+        if not comment:
+            return
+
+        content = comment.content or ""
+        start = content.rfind(CORRECTION_POSTING_DATETIME_MARKER)
+        end = content.find("]", start)
+        if start < 0 or end < 0:
+            frappe.throw("The original posting date and time for this correction could not be read.")
+
+        frappe.db.set_value(
+            "Comment",
+            comment.name,
+            "content",
+            (content[:start] + content[end + 1:]).rstrip(),
+            update_modified=False,
+        )
+        self.add_comment(
+            "Comment",
+            f"Cash invoice correction submitted by {frappe.utils.get_fullname(frappe.session.user)}.",
+        )
 
     def do_postings_on_submit(self):
 
@@ -581,7 +617,7 @@ class SalesInvoice(Document):
         
 
     def take_ownership(self):
-        """Hand the invoice to whoever saved or submitted it.
+        """Hand the invoice to whoever saved it, except during an audited correction.
 
         `owner` is what the Sales Invoice list filters on
         (get_sales_invoice_permission_query) and what the counter reports group
@@ -592,11 +628,21 @@ class SalesInvoice(Document):
         `owner` is a set_only_once field, so changing it during a save raises
         CannotChangeConstantError. on_update runs after the row is written, for
         save and submit but not for cancel, so cancelling cannot move a sale.
+        A marked cash correction keeps the original owner; its editor is logged
+        separately in the invoice comments.
 
         The in-memory value is updated to match, otherwise a later save of the
         same object would compare a stale owner against the database and trip
         that same constant check.
         """
+        if getattr(self.flags, "preserve_owner_for_cash_correction", False):
+            modified_by = getattr(self.flags, "cash_correction_modified_by", None)
+            if modified_by and self.modified_by != modified_by:
+                frappe.db.set_value(
+                    "Sales Invoice", self.name, "modified_by", modified_by, update_modified=False
+                )
+                self.modified_by = modified_by
+            return
         if self.owner == frappe.session.user:
             return
 
