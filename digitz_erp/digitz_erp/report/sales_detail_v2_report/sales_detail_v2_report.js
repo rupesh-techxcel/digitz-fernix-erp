@@ -1,7 +1,12 @@
+// A cashier sees closed days only (the server enforces it), so start on yesterday
+const v2_default_date = frappe.user.has_role("Cashier") && !frappe.user.has_role(["System Manager", "Management"])
+    ? frappe.datetime.add_days(frappe.datetime.get_today(), -1)
+    : frappe.datetime.get_today();
+
 frappe.query_reports["Sales Detail V2 Report"] = {
     filters: [
-        {fieldname: "from_date", label: __("From Date"), fieldtype: "Date", default: frappe.datetime.get_today(), reqd: 1},
-        {fieldname: "to_date", label: __("To Date"), fieldtype: "Date", default: frappe.datetime.get_today(), reqd: 1},
+        {fieldname: "from_date", label: __("From Date"), fieldtype: "Date", default: v2_default_date, reqd: 1},
+        {fieldname: "to_date", label: __("To Date"), fieldtype: "Date", default: v2_default_date, reqd: 1},
         {fieldname: "invoice_number", label: __("Invoice Number"), fieldtype: "Link", options: "Sales Invoice", get_query: () => ({filters: {docstatus: 1}})},
         {fieldname: "customer_token", label: __("Qmatic / Customer Token"), fieldtype: "Data"},
         {fieldname: "applicant_name", label: __("Applicant / Display Customer"), fieldtype: "Data"},

@@ -2,7 +2,9 @@
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, get_time, today
+from frappe.utils import add_days, flt, getdate, get_time, today
+
+from digitz_erp.api.counter_api import is_supervisor
 
 
 # Keep logically mapped reference columns in their original order.
@@ -63,6 +65,18 @@ def execute(filters=None):
         if has_value(low) and has_value(high) and flt(low) > flt(high):
             frappe.throw(_("Minimum {0} cannot exceed maximum.").format(_(field.replace("_", " ").title())))
 
+    # A cashier closes the day blind: no live figures for today, or for a day
+    # still open or awaiting approval (it may hold back-dated invoices)
+    filters["hide_live"] = hides_live_day()
+    live_note = ""
+    if filters["hide_live"]:
+        yesterday = getdate(add_days(today(), -1))
+        if filters["to_date"] > yesterday:
+            filters["to_date"] = yesterday
+            live_note = _("Today's sales are not shown to cashiers, nor a day not yet closed. ")
+        if filters["from_date"] > filters["to_date"]:
+            return get_columns(), [], live_note + _("Choose dates up to yesterday."), None, []
+
     data = get_data(filters)
     # Invoice Total repeats on service lines, as in the source. Never auto-sum it.
     invoices = {r["invoice_number"]: r["invoice_total"] for r in data}
@@ -71,13 +85,18 @@ def execute(filters=None):
         {"label": _("Invoice Total"), "value": sum(invoices.values()), "datatype": "Currency"},
         {"label": _("VAT (Selected Lines)"), "value": sum(r["total_vat"] for r in data), "datatype": "Currency"},
     ]
-    message = _(
+    message = live_note + _(
         "Submitted Sales Invoices only. Invoice Total repeats on each service line; "
         "the summary counts each invoice once. Round Off and Invoice Additional Discount "
         "appear once per invoice. Created By identifies the user who created the invoice. "
         "Line Total excludes VAT; Net Service Charge also excludes government fees."
     )
     return get_columns(), data, message, None, summary
+
+
+def hides_live_day():
+    """A cashier who is not a supervisor sees only closed days."""
+    return "Cashier" in frappe.get_roles() and not is_supervisor()
 
 
 def get_columns():
@@ -118,6 +137,10 @@ def get_data(filters):
         conditions["credit_sale"] = int(filters["sale_type"] == "Credit")
     if filters.get("payment_mode"):
         conditions["payment_mode"] = filters["payment_mode"]
+    if filters.get("hide_live"):
+        live_days = frappe.get_all("Counter Session", filters={"docstatus": 0}, pluck="name")
+        if live_days:
+            conditions["counter_session"] = ["not in", live_days]
 
     # get_list applies Frappe's document and user permissions before any joins.
     invoices = frappe.get_list("Sales Invoice", filters=conditions, pluck="name", limit_page_length=0)

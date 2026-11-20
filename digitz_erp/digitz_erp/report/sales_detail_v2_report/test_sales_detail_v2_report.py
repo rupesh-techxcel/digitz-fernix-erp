@@ -50,7 +50,8 @@ class TestSalesDetailV2Report(unittest.TestCase):
     def test_summary_counts_invoice_once(self):
         data = [dict(invoice_number="SI-1", invoice_total=100, total_vat=2),
                 dict(invoice_number="SI-1", invoice_total=100, total_vat=3)]
-        with patch.object(report, "get_data", return_value=data), patch.object(report, "_", side_effect=lambda x: x):
+        with patch.object(report, "get_data", return_value=data), patch.object(report, "_", side_effect=lambda x: x), \
+                patch.object(report, "hides_live_day", return_value=False):
             columns, _, _, _, summary = report.execute({"from_date": "2026-11-01", "to_date": "2026-11-05"})
         self.assertEqual(len(columns), 30)
         self.assertEqual([s["value"] for s in summary], [1, 100, 5])
@@ -140,3 +141,39 @@ class TestSalesDetailV2Report(unittest.TestCase):
             ("SI-10", 1, True),
             ("SI-NEXT", 1, True),
         ])
+
+
+class TestCashierSeesClosedDaysOnly(unittest.TestCase):
+    def run_report(self, hide_live, from_date, to_date):
+        with patch.object(report, "hides_live_day", return_value=hide_live), \
+                patch.object(report, "today", return_value="2026-11-20"), \
+                patch.object(report, "get_data", return_value=[]) as get_data:
+            result = report.execute({"from_date": from_date, "to_date": to_date})
+        return result, get_data
+
+    def test_cashier_range_stops_at_yesterday(self):
+        result, get_data = self.run_report(True, "2026-11-18", "2026-11-20")
+        self.assertEqual(get_data.call_args.args[0]["to_date"], date(2026, 11, 19))
+        self.assertTrue(get_data.call_args.args[0]["hide_live"])
+        self.assertIn("not shown to cashiers", result[2])
+
+    def test_cashier_asking_for_today_gets_nothing(self):
+        result, get_data = self.run_report(True, "2026-11-20", "2026-11-20")
+        get_data.assert_not_called()
+        self.assertEqual(result[1], [])
+
+    def test_supervisor_sees_today(self):
+        _result, get_data = self.run_report(False, "2026-11-20", "2026-11-20")
+        self.assertEqual(get_data.call_args.args[0]["to_date"], date(2026, 11, 20))
+
+    def test_open_days_left_out_for_cashier(self):
+        with patch.object(report, "frappe") as framework:
+            framework.db.get_table_columns.return_value = []
+            framework.get_roles.return_value = ["Cashier"]
+            framework.session.user = "cashier@example.com"
+            framework.get_all.return_value = ["CS-OPEN"]
+            framework.get_list.return_value = []
+            report.get_data({"from_date": date(2026, 11, 18), "to_date": date(2026, 11, 19), "hide_live": True})
+            conditions = framework.get_list.call_args.kwargs["filters"]
+        self.assertEqual(conditions["counter_session"], ["not in", ["CS-OPEN"]])
+        self.assertEqual(conditions["owner"], "cashier@example.com")

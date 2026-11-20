@@ -6,6 +6,7 @@
  "doctype": "Report",
  "filters": [],
  "is_standard": "Yes",
+ "modified": "2026-11-20 13:45:00.000000",
  "module": "Digitz ERP",
  "name": "Sales Detail V2 Report",
  "owner": "Administrator",
@@ -13,6 +14,6 @@
  "ref_doctype": "Sales Invoice",
  "report_name": "Sales Detail V2 Report",
  "report_type": "Script Report",
- "roles": [{"role": "System Manager"}, {"role": "Management"}],
+ "roles": [{"role": "System Manager"}, {"role": "Management"}, {"role": "Cashier"}],
  "timeout": 0
 }
