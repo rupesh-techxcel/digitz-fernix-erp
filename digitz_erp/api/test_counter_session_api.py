@@ -93,6 +93,7 @@ class TestDayOverviewRecalculation(unittest.TestCase):
 						patch.object(api, 'nowdate', return_value='2026-11-16'), \
 						patch.object(model, 'get_takings_by_mode', return_value={'day-1': {}}), \
 						patch.object(model, 'get_document_dates', return_value=['2026-11-13']), \
+						patch.object(model, 'get_sales_by_type', return_value={'day-1': {'non_cash': 0, 'credit': 0}}), \
 						patch.object(model, 'frappe') as model_framework:
 					framework._dict = frappe._dict
 					framework.get_doc.return_value = doc
@@ -140,11 +141,14 @@ class TestDayOverviewInvoiceDates(unittest.TestCase):
 				patch.object(api, 'nowdate', return_value='2026-11-16'), \
 				patch.object(model, 'get_takings_by_mode', return_value={'day-1': {}}) as takings, \
 				patch.object(model, 'get_document_dates', return_value=['2026-11-13', '2026-11-14']), \
+				patch.object(model, 'get_sales_by_type', return_value={'day-1': {'non_cash': 30, 'credit': 70}}), \
 				patch.object(model, 'frappe') as model_framework:
 			framework._dict = frappe._dict
 			framework.get_doc.return_value = doc
 			model_framework.db.sql.side_effect = [[[50]], [[0]], [[0]], [[0]]]
-			session = api.build_day_overview('2026-11-13', include_later).sessions[0]
+			overview = api.build_day_overview('2026-11-13', include_later)
+			session = overview.sessions[0]
+			self.overview_lines = overview.lines
 			queries = [c.args for c in model_framework.db.sql.call_args_list]
 		return session, queries, takings
 
@@ -168,3 +172,70 @@ class TestDayOverviewInvoiceDates(unittest.TestCase):
 		self.assertEqual(takings.call_args.args[1:], (date(2026, 11, 13), True))
 		self.assertFalse(session.partial)
 		self.assertEqual((session.counted_cash, session.expected_cash, session.difference), (190, 140, 50))
+
+	def test_sales_rows_include_credit_and_total(self):
+		session, _queries, _takings = self.overview(0)
+		self.assertEqual((session.cash_sales, session.non_cash_sales, session.credit_sales), (50, 30, 70))
+		self.assertEqual(session.total_sales, 150)
+		rows = {ln["label"]: ln for ln in self.overview_lines if ln["kind"] != "section"}
+		self.assertEqual(rows["Credit Sales (not paid)"]["total"], 70)
+		self.assertEqual(rows["Total Sales"]["values"], [150])
+		self.assertEqual(rows["Total Sales"]["kind"], "strong")
+		self.assertEqual(session.total_collection, 80)
+		self.assertEqual(rows["Total Collection (all but credit)"]["values"], [80])
+
+	def test_recorded_entries_kept_when_grid_hides_them(self):
+		session, _queries, _takings = self.overview(0)
+		self.assertIsNone(session.counted_cash)
+		self.assertEqual(session.recorded, {"counted_cash": 190, "cash_expenditure": 10, "modes": {}})
+
+
+class TestSalesByType(unittest.TestCase):
+	def test_splits_non_cash_and_credit_for_the_date(self):
+		from digitz_erp.digitz_erp.doctype.counter_session import counter_session as model
+		with patch.object(model, "frappe") as framework:
+			framework.db.sql.return_value = [("day-1", 30, 70)]
+			sales = model.get_sales_by_type({"day-1": "day-1", "day-2": "day-2"}, "2026-11-13")
+			query, params = framework.db.sql.call_args.args
+		self.assertEqual(sales, {"day-1": {"non_cash": 30, "credit": 70}, "day-2": {"non_cash": 0, "credit": 0}})
+		self.assertIn("d.posting_date = %(posting_date)s", query)
+		self.assertIn("LEFT JOIN `tabPayment Mode`", query)
+		self.assertEqual(params["posting_date"], "2026-11-13")
+
+
+class TestPaymentModesRequired(unittest.TestCase):
+	"""Every non-cash mode must be given at a close, 0 included."""
+
+	def apply(self, totals):
+		session = frappe._dict()
+		session.set = session.__setitem__
+		modes = [frappe._dict(payment_mode="Card", mode="Card"), frappe._dict(payment_mode="Bank Transfer", mode="Bank")]
+		with patch.object(api, "get_non_cash_payment_modes", return_value=modes), \
+				patch.object(api, "frappe") as framework:
+			framework.throw.side_effect = Exception
+			api.apply_count(session, 100, [], 0, totals)
+		return session
+
+	def test_blank_mode_is_refused(self):
+		with self.assertRaises(Exception):
+			self.apply([{"payment_mode": "Card", "amount": 50}, {"payment_mode": "Bank Transfer", "amount": ""}])
+
+	def test_zero_counts_as_entered(self):
+		session = self.apply([{"payment_mode": "Card", "amount": 50}, {"payment_mode": "Bank Transfer", "amount": 0}])
+		self.assertEqual(
+			session.payment_mode_totals,
+			[{"payment_mode": "Card", "amount": 50}, {"payment_mode": "Bank Transfer", "amount": 0}],
+		)
+		self.assertEqual(session.counted_cash, 100)
+
+
+class TestCashierSales(unittest.TestCase):
+	def test_adds_each_cashiers_days_and_all_cashiers(self):
+		day = lambda cashier, sales, collection: frappe._dict(
+			cashier=cashier, cashier_name=cashier.title(), total_sales=sales, total_collection=collection)
+		rows, totals = api.cashier_sales([day("ali", 100, 60), day("sara", 50, 50), day("ali", 30, 30)])
+		self.assertEqual(
+			[(r.cashier, r.days, r.total_sales, r.total_collection) for r in rows],
+			[("ali", 2, 130, 90), ("sara", 1, 50, 50)],
+		)
+		self.assertEqual((totals.days, totals.total_sales, totals.total_collection), (3, 180, 140))

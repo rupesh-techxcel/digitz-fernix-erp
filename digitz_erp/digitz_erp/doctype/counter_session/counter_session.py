@@ -92,6 +92,43 @@ def get_takings_by_mode(sessions, posting_date=None, include_later=False):
 	return takings
 
 
+def get_sales_by_type(sessions, posting_date=None, include_later=False):
+	"""{session: {"non_cash": amount, "credit": amount}} of the submitted Sales
+	Invoices saved in `sessions`: those settled through a non-cash payment mode,
+	and the credit sales, which no payment row counts. With the cash sales these
+	make up every invoice of the day.
+
+	`sessions` maps names as in get_takings_by_mode; `posting_date` and
+	`include_later` limit the invoices as in posting_date_condition.
+	"""
+	sales = {name: {"non_cash": 0, "credit": 0} for name in sessions}
+	if not sessions:
+		return sales
+	reported_as = {}
+	for name, source in sessions.items():
+		reported_as.setdefault(source, []).append(name)
+
+	dated = posting_date_condition(posting_date, include_later)
+	rows = frappe.db.sql(
+		f"""
+		SELECT d.counter_session,
+			SUM(CASE WHEN IFNULL(d.credit_sale, 0) = 0 THEN d.rounded_total ELSE 0 END),
+			SUM(CASE WHEN IFNULL(d.credit_sale, 0) = 1 THEN d.rounded_total ELSE 0 END)
+		FROM `tabSales Invoice` d
+		LEFT JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
+		WHERE d.counter_session IN %(sources)s AND d.docstatus = 1
+			AND (IFNULL(d.credit_sale, 0) = 1 OR IFNULL(pm.mode, '') != 'Cash') {dated}
+		GROUP BY d.counter_session
+		""",
+		{"sources": list(reported_as), "posting_date": posting_date},
+	)
+	for source, non_cash, credit in rows:
+		for name in reported_as[source]:
+			sales[name]["non_cash"] += flt(non_cash)
+			sales[name]["credit"] += flt(credit)
+	return sales
+
+
 class CounterSession(Document):
 	def validate(self):
 		if self.is_new() and self.amended_from:

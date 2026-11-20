@@ -294,7 +294,14 @@ def apply_count(session, counted_cash, denominations, expenditure, payment_total
 	"""Put a till count -- the notes and coins (or the total), the cash paid out,
 	and the non-cash totals -- on `session`, without saving it."""
 	session.set("denominations", parse_denominations(denominations))
-	session.set("payment_mode_totals", parse_payment_totals(payment_totals))
+	totals = parse_payment_totals(payment_totals)
+	session.set("payment_mode_totals", totals)
+
+	# Every non-cash mode needs a figure, 0 included, so a blank is never read as nothing taken
+	entered = {row["payment_mode"] for row in totals}
+	missing = [m.payment_mode for m in get_non_cash_payment_modes() if m.payment_mode not in entered]
+	if missing:
+		frappe.throw(f"Enter the total for {', '.join(missing)} (0 if none).")
 
 	if not session.denominations and counted_cash in (None, ""):
 		frappe.throw("Enter the counted cash, or count the notes and coins.")
@@ -445,6 +452,7 @@ def build_day_overview(date=None, include_later=0):
 	`include_later` on `date` and the dates after it."""
 	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import (
 		get_document_dates,
+		get_sales_by_type,
 		get_takings_by_mode,
 	)
 
@@ -454,7 +462,9 @@ def build_day_overview(date=None, include_later=0):
 	names = get_invoice_day_sessions(date)
 	docs = [frappe.get_doc("Counter Session", name) for name in names]
 	modes = get_non_cash_payment_modes()
-	system = get_takings_by_mode({doc.name: doc.source_session() for doc in docs}, date, include_later)
+	sources = {doc.name: doc.source_session() for doc in docs}
+	system = get_takings_by_mode(sources, date, include_later)
+	sales = get_sales_by_type(sources, date, include_later)
 
 	sessions = []
 	for doc in docs:
@@ -488,11 +498,23 @@ def build_day_overview(date=None, include_later=0):
 			"close_remarks": doc.close_remarks,
 			"is_own": doc.cashier == frappe.session.user,
 			"denominations": [{"denomination": r.denomination, "count": r.count} for r in doc.denominations],
+			# What was entered at the close, whatever the date shown: the correction
+			# dialog starts from it, even where the grid hides it for part of a day
+			"recorded": {
+				"counted_cash": flt(doc.counted_cash),
+				"cash_expenditure": flt(doc.cash_expenditure),
+				"modes": entered,
+			} if doc.status != "Open" else None,
 			"opening_float": flt(doc.opening_float),
 			"cash_sales": flt(doc.cash_sales),
 			"cash_receipts": flt(doc.cash_receipts),
 			"cash_refunds": flt(doc.cash_refunds),
 			"cash_paid_out": flt(doc.cash_paid_out),
+			"non_cash_sales": sales[doc.name]["non_cash"],
+			"credit_sales": sales[doc.name]["credit"],
+			"total_sales": flt(doc.cash_sales) + sales[doc.name]["non_cash"] + sales[doc.name]["credit"],
+			# Money taken for the sales: every payment mode, cash or not, but not credit
+			"total_collection": flt(doc.cash_sales) + sales[doc.name]["non_cash"],
 			"cash_expenditure": None if partial else flt(doc.cash_expenditure),
 			"expected_cash": flt(doc.expected_cash),
 			# Not counted yet: nothing to show, rather than a misleading 0
@@ -516,7 +538,28 @@ def build_day_overview(date=None, include_later=0):
 		"denominations": DENOMINATIONS,
 	})
 	overview.lines = day_overview_lines(overview)
+	overview.cashiers, overview.cashier_totals = cashier_sales(sessions)
 	return overview
+
+
+def cashier_sales(sessions):
+	"""Total Sales and Total Collection per cashier (a cashier may have several
+	days on the board), in board order, and the grand total of all cashiers."""
+	by_cashier = {}
+	for s in sessions:
+		row = by_cashier.setdefault(s.cashier, frappe._dict(
+			cashier=s.cashier, cashier_name=s.cashier_name, days=0, total_sales=0, total_collection=0,
+		))
+		row.days += 1
+		row.total_sales += s.total_sales
+		row.total_collection += s.total_collection
+	rows = list(by_cashier.values())
+	totals = frappe._dict(
+		days=len(sessions),
+		total_sales=sum(r.total_sales for r in rows),
+		total_collection=sum(r.total_collection for r in rows),
+	)
+	return rows, totals
 
 
 def day_overview_lines(overview):
@@ -560,6 +603,14 @@ def day_overview_lines(overview):
 			line(f"{mode}: Entered", entered, "strong"),
 			line(f"{mode}: Difference", [less(e, sy) for e, sy in zip(entered, system)], "difference"),
 		]
+	lines += [
+		{"label": "Sales", "kind": "section"},
+		line("Cash Sales", field("cash_sales")),
+		line("Card / Bank Sales", field("non_cash_sales")),
+		line("Credit Sales (not paid)", field("credit_sales")),
+		line("Total Sales", field("total_sales"), "strong"),
+		line("Total Collection (all but credit)", field("total_collection"), "strong"),
+	]
 	return lines
 
 
@@ -743,6 +794,29 @@ def export_day_overview(date=None, include_later=0):
 				cell.font = Font(size=9, color="404040")
 		ws.row_dimensions[row].height = 45
 		row += 2
+
+		# Total Sales and Total Collection by cashier, then all cashiers
+		merged(row, "BY CASHIER", Font(bold=True, size=9, color=navy), blue)
+		ws.cell(row=row, column=1).alignment = Alignment(horizontal="left", vertical="center")
+		row += 1
+		by_cashier = [["Cashier", "Days", "Total Sales", "Total Collection"]]
+		by_cashier += [[c.cashier_name, c.days, c.total_sales, c.total_collection] for c in o.cashiers]
+		t = o.cashier_totals
+		by_cashier.append(["All Cashiers", t.days, t.total_sales, t.total_collection])
+		for i, values in enumerate(by_cashier):
+			head, last = i == 0, i == len(by_cashier) - 1
+			for col, value in enumerate(values, start=1):
+				cell = ws.cell(row=row, column=col, value=flt(value, 2) if col > 2 and not head else value)
+				cell.border = box
+				cell.font = Font(bold=head or last)
+				if col > 2 and not head:
+					cell.number_format = money_fmt
+				if col > 1:
+					cell.alignment = Alignment(horizontal="center" if head or col == 2 else "right")
+				if head or last:
+					cell.fill = fill(grey)
+			row += 1
+		row += 1
 
 		note = ws.cell(row=row, column=1, value="System: what the submitted documents add up to. Entered: what the cashier counted or typed at Day Close.")
 		note.font = Font(size=8, italic=True, color="7F7F7F")

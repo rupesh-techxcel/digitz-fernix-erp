@@ -335,7 +335,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				${modes.length ? `<div>
 					<div class="dayops-card">
 						<h4>${__("Card, Bank & Other Payments")}</h4>
-						<p class="text-muted small" style="margin: 0 0 8px;">${__("Enter today's total for each, from the card machine settlement or bank slips.")}</p>
+						<p class="text-muted small" style="margin: 0 0 8px;">${__("Enter today's total for each, from the card machine settlement or bank slips. Every one is required: enter 0 if none.")}</p>
 						<div class="dayops-modes"></div>
 					</div>
 				</div>` : ""}
@@ -352,18 +352,19 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				</div>
 			</div>`);
 
+		const save = () => this.save_draft();
 		this.mode_controls = modes.map((m) => ({
 			payment_mode: m.payment_mode,
 			control: frappe.ui.form.make_control({
 				parent: this.$body.find(".dayops-modes"),
-				df: { fieldtype: "Currency", fieldname: frappe.scrub(m.payment_mode), label: m.payment_mode },
+				df: { fieldtype: "Currency", fieldname: frappe.scrub(m.payment_mode), label: m.payment_mode, reqd: 1, change: save },
 				render_input: true,
 			}),
 		}));
 		this.expenditure = frappe.ui.form.make_control({
 			parent: this.$body.find(".expenditure-field"),
 			df: {
-				fieldtype: "Currency", fieldname: "expenditure", label: __("Expenditure"),
+				fieldtype: "Currency", fieldname: "expenditure", label: __("Expenditure"), change: save,
 				description: __("Cash paid out of the till today. Explain it in Remarks."),
 			},
 			render_input: true,
@@ -371,14 +372,14 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		this.counted = frappe.ui.form.make_control({
 			parent: this.$body.find(".counted-field"),
 			df: {
-				fieldtype: "Currency", fieldname: "counted_cash", label: __("Counted Cash"), reqd: 1,
+				fieldtype: "Currency", fieldname: "counted_cash", label: __("Counted Cash"), reqd: 1, change: save,
 				description: __("Filled from the count, or type the total."),
 			},
 			render_input: true,
 		});
 		this.remarks = frappe.ui.form.make_control({
 			parent: this.$body.find(".remarks-field"),
-			df: { fieldtype: "Small Text", fieldname: "remarks", label: __("Remarks"),
+			df: { fieldtype: "Small Text", fieldname: "remarks", label: __("Remarks"), change: save,
 				description: __("Anything the supervisor should know about the count.") },
 			render_input: true,
 		});
@@ -386,12 +387,75 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			if (total) {
 				this.counted.set_value(total);
 			}
+			save();
 		});
+		this.restore_draft();
 
 		this.set_primary(__("Close Day"), () => this.close_day(), "check");
 		this.$body.find(".dayops-submit").on("click", () => this.close_day());
 		this.$body.find(".dayops-handover").on("click", () => this.close_day(true));
 		this.set_secondary(__("Refresh"), () => this.load());
+	}
+
+	// What the cashier has typed so far, kept in this browser per session so a
+	// Refresh, a tab switch or a reload does not lose a half-done count. The
+	// counter is a registered device, so the cashier comes back to the same browser.
+	draft_key() {
+		return `digitz_erp:day_close_draft:${this.state.session.name}`;
+	}
+
+	save_draft() {
+		if (this.restoring) {
+			return;
+		}
+		const draft = {
+			counts: this.count.counted(),
+			counted_cash: this.counted.get_value(),
+			expenditure: this.expenditure.get_value(),
+			remarks: this.remarks.get_value(),
+			modes: Object.fromEntries(this.mode_controls.map((m) => [m.payment_mode, m.control.get_value()])),
+		};
+		try {
+			localStorage.setItem(this.draft_key(), JSON.stringify(draft));
+		} catch (e) {
+			// Storage blocked: the count still works, it just is not kept
+		}
+	}
+
+	async restore_draft() {
+		let draft;
+		try {
+			draft = JSON.parse(localStorage.getItem(this.draft_key()) || "null");
+		} catch (e) {
+			draft = null;
+		}
+		if (!draft) {
+			return;
+		}
+		const given = (v) => v !== undefined && v !== null && v !== "";
+		this.restoring = true;
+		try {
+			this.count.set_counts(draft.counts || []);
+			const pending = [];
+			given(draft.counted_cash) && pending.push(this.counted.set_value(draft.counted_cash));
+			given(draft.expenditure) && pending.push(this.expenditure.set_value(draft.expenditure));
+			given(draft.remarks) && pending.push(this.remarks.set_value(draft.remarks));
+			this.mode_controls.forEach((m) => {
+				const v = (draft.modes || {})[m.payment_mode];
+				given(v) && pending.push(m.control.set_value(v));
+			});
+			await Promise.all(pending);
+		} finally {
+			this.restoring = false;
+		}
+	}
+
+	clear_draft() {
+		try {
+			localStorage.removeItem(this.draft_key());
+		} catch (e) {
+			// Nothing to clear
+		}
 	}
 
 	// [{payment_mode, amount}] for the modes given an amount
@@ -413,6 +477,13 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			return;
 		}
 		const totals = this.payment_totals();
+		const missing = (this.mode_controls || [])
+			.map((m) => m.payment_mode)
+			.filter((mode) => !totals.some((t) => t.payment_mode === mode));
+		if (missing.length) {
+			frappe.msgprint(__("Enter the total for {0} (0 if none).", [missing.map((m) => this.esc(m)).join(", ")]));
+			return;
+		}
 		if (totals.some((m) => flt(m.amount) < 0)) {
 			frappe.msgprint(__("Payment totals cannot be negative."));
 			return;
@@ -437,6 +508,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					if (!r.message) {
 						return;
 					}
+					this.clear_draft();
 					this.changed();
 					this.show_closed(r.message, handover);
 				},
@@ -529,6 +601,11 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			}[x.status] || "";
 			return `<td class="dcb-actions">${buttons}</td>`;
 		}).join("");
+		const ct = o.cashier_totals || {};
+		const by_cashier = (o.cashiers || []).map((c) => `<tr><td>${this.esc(c.cashier_name)}</td><td class="dayops-num">${c.days}</td>
+				<td class="dayops-num">${this.money(c.total_sales)}</td><td class="dayops-num">${this.money(c.total_collection)}</td></tr>`).join("")
+			+ `<tr class="dcb-strong"><td>${__("All Cashiers")}</td><td class="dayops-num dcb-total">${ct.days || 0}</td>
+				<td class="dayops-num dcb-total">${this.money(ct.total_sales)}</td><td class="dayops-num dcb-total">${this.money(ct.total_collection)}</td></tr>`;
 		const remarks = sessions.map((x) => `<td class="dcb-remarks" title="${this.esc(x.close_remarks)}">${this.esc(x.close_remarks)}</td>`).join("");
 
 		this.$body.html(`
@@ -563,6 +640,16 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					</table>
 				</div>
 				<p class="text-muted small" style="margin: 8px 0 0;">${__("System is what the submitted documents add up to; Entered is what the cashier counted or typed at Day Close. A day still open shows its live figures, with nothing entered yet.")}</p>
+			</div>
+			<div class="dayops-card dcb-card">
+				<h4>${__("By Cashier")}</h4>
+				<div class="dcb-scroll">
+					<table class="dcb-grid">
+						<thead><tr><th>${__("Cashier")}</th><th class="dcb-col">${__("Days")}</th><th class="dcb-col">${__("Total Sales")}</th><th class="dcb-col">${__("Total Collection")}</th></tr></thead>
+						<tbody>${by_cashier}</tbody>
+					</table>
+				</div>
+				<p class="text-muted small" style="margin: 8px 0 0;">${__("Total Collection is the money taken for the sales through every payment mode (cash, card, bank and others). Credit sales are left out.")}</p>
 			</div>` : `
 			<div class="dayops-card dayops-state"><div class="dayops-big">${__("No days")}</div><p>${__("No day was opened on any counter on this date.")}</p></div>`}
 		`);
@@ -659,17 +746,17 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					options: `<p>${__("Expected cash in the till")}: <b class="sv-expected"></b>
 						<span class="text-muted">(${__("float")} ${this.money(x.opening_float)})</span></p>` },
 				{ fieldtype: "Currency", fieldname: "expenditure", label: __("Expenditure"),
-					default: editing ? x.cash_expenditure : undefined,
+					default: editing ? x.recorded.cash_expenditure : undefined,
 					description: __("Cash paid out of the till."), change: () => show_result() },
 				{ fieldtype: "HTML", fieldname: "count_wrap" },
 				{ fieldtype: "Column Break" },
 				{ fieldtype: "Currency", fieldname: "counted_cash", label: __("Counted Cash"), reqd: 1,
-					default: editing ? x.counted_cash : undefined,
+					default: editing ? x.recorded.counted_cash : undefined,
 					description: __("Filled from the count, or type the total."), change: () => show_result() },
 				{ fieldtype: "HTML", fieldname: "result" },
 				...modes.map((m, i) => ({
-					fieldtype: "Currency", fieldname: `mode_${i}`, label: m.payment_mode,
-					default: editing ? x.modes[m.payment_mode].entered : undefined,
+					fieldtype: "Currency", fieldname: `mode_${i}`, label: m.payment_mode, reqd: 1,
+					default: editing ? x.recorded.modes[m.payment_mode] : undefined,
 					description: __("System: {0}", [this.money(x.modes[m.payment_mode].system)]),
 				})),
 				{ fieldtype: "Small Text", fieldname: "remarks", label: editing ? __("Reason for the correction") : __("Reason"),
