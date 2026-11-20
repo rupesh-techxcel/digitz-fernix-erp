@@ -23,6 +23,7 @@
 	.grid td.short { color: #c00; }
 	.grid td.over { color: #b45309; }
 	.grid .total { background: #f2f2f2; font-weight: bold; }
+	table.by-cashier { width: auto; min-width: 50%; margin-top: 10px; }
 	.remarks { margin-top: 8px; }
 	.remarks p { margin: 2px 0; }
 	.sign { width: 100%; margin-top: 36px; border-collapse: collapse; }
@@ -66,6 +67,18 @@
 			</tr>
 			{% endif %}
 			{% endfor %}
+		</tbody>
+	</table>
+
+	<table class="grid by-cashier">
+		<thead>
+			<tr><th>Cashier</th><th>Days</th><th>Total Sales</th><th>Total Collection</th></tr>
+		</thead>
+		<tbody>
+			{% for c in o.cashiers %}
+			<tr><td>{{ c.cashier_name }}</td><td>{{ c.days }}</td><td>{{ money(c.total_sales) }}</td><td>{{ money(c.total_collection) }}</td></tr>
+			{% endfor %}
+			<tr class="strong"><td>All Cashiers</td><td>{{ o.cashier_totals.days }}</td><td>{{ money(o.cashier_totals.total_sales) }}</td><td>{{ money(o.cashier_totals.total_collection) }}</td></tr>
 		</tbody>
 	</table>
 

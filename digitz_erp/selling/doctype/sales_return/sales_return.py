@@ -54,6 +54,26 @@ class SalesReturn(Document):
         # else:
         #     # frappe.enqueue(self.do_postings_on_submit, queue="long")
         self.do_postings_on_submit()
+        self.refresh_invoice_prints()
+
+    def refresh_invoice_prints(self):
+        """Regenerate the PDFs of the invoices this return is against, so their
+        CREDIT NOTES block shows it (or, on cancel, no longer does). A PDF
+        failure is logged and reported but never blocks the return itself."""
+        failed = []
+        for invoice in dict.fromkeys(row.sales_invoice for row in self.get("invoices") or [] if row.sales_invoice):
+            if frappe.db.get_value("Sales Invoice", invoice, "docstatus") != 1:
+                continue
+            try:
+                frappe.get_doc("Sales Invoice", invoice).attach_print_pdfs()
+            except Exception:
+                frappe.log_error(title=f"Sales Return {self.name}: could not refresh the printout of {invoice}")
+                failed.append(invoice)
+        if failed:
+            frappe.msgprint(
+                f"The printout of {', '.join(failed)} could not be refreshed with this credit note. "
+                "Print the invoice again to update it; the error is in the Error Log.",
+                indicator="orange")
 
     def do_postings_on_submit(self):
         # Cost of goods sold need not include for Sales Return because it is not an expense but its only a reduction of sales revenue.
@@ -244,6 +264,7 @@ class SalesReturn(Document):
 
         cancel_bank_reconciliation("Sales Return", self.name)
         self.cancel_sales_return()
+        self.refresh_invoice_prints()
         # update_sales_order_quantities_for_sales_return_on_update(self,for_delete_or_cancel=True)
         # check_and_update_sales_order_status(self.name, "Sales Return")
 

@@ -190,6 +190,11 @@ scheduler_events = {
 		# scheduler only checks once a minute and the job runs once a minute.
 		"* * * * * */20": [
 			"digitz_erp.api.token_sync.enqueue_medical_token_sync"
+		],
+		# Drafts more than 48 hours old move to Archived Sales Invoice, at 02:00
+		# in the site's time zone, when no counter is busy
+		"0 2 * * *": [
+			"digitz_erp.api.draft_archive.archive_stale_drafts"
 		]
 	}
 	# "weekly": [

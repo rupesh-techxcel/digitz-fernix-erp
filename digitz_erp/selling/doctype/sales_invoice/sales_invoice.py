@@ -25,6 +25,48 @@ from digitz_erp.api.settings_api import get_customer_terms
 from digitz_erp.api.items_api import get_item_uoms 
 from digitz_erp.selling.doctype.quotation.quotation import generate_custom_invoice_pdf, pdf_file_stem
 from frappe.utils import today, getdate
+from frappe.model.naming import make_autoname, parse_naming_series
+
+# A draft is numbered on its naming series with a D in front (INV/.###### ->
+# DINV/.######, SI-.#####.-.MM.-.YYYY. -> DSI-...), a counter of its own. It takes
+# the next number of the naming series itself only when it is submitted
+# (assign_submitted_number), so abandoned drafts leave no gaps in the invoices.
+DRAFT_MARK = "D"
+
+
+def split_series(series, doc=None):
+    """(prefix, digits, suffix) of a naming series for `doc`: SI-.#####.-.MM.-.YYYY.
+    gives ("SI-", 5, "-11-2026"). The prefix is also its key in tabSeries."""
+    parts = series.split(".")
+    for i, part in enumerate(parts):
+        if part.startswith("#"):
+            prefix = parse_naming_series(parts[:i], doc=doc) if i else ""
+            suffix = parse_naming_series(parts[i + 1:], doc=doc) if parts[i + 1:] else ""
+            return prefix, len(part), suffix
+    frappe.throw(_("Naming series {0} has no number (#) part.").format(series))
+
+
+def starts_with(text):
+    """A LIKE pattern for names starting with `text`, its % and _ taken literally."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
+def last_submitted_number(prefix, digits):
+    """The highest number of the submitted (or cancelled) invoices on `prefix`, or 0.
+
+    Names on one series sort by their number (fixed width, right after the
+    prefix), so this reads the primary key backwards and stops at the first
+    submitted one: drafts are few, so it is quick even on a large table.
+    Hand-keyed names that do not fit the series are skipped.
+    """
+    for (name,) in frappe.db.sql(
+        "SELECT name FROM `tabSales Invoice` WHERE name LIKE %s AND docstatus > 0 ORDER BY name DESC LIMIT 50",
+        (starts_with(prefix),),
+    ):
+        number = name[len(prefix):len(prefix) + digits]
+        if len(number) == digits and number.isdigit():
+            return int(number)
+    return 0
 
 # Put on an invoice that needs a mobile number but has none yet -- a token that
 # came without one -- so the draft can be saved. It must be replaced with the
@@ -254,6 +296,90 @@ class SalesInvoice(Document):
         allow_edit_sales_invoice_no = frappe.get_value("Company", self.company, "allow_edit_sales_invoice_no")
         if self.sales_inv_no and allow_edit_sales_invoice_no:
             self.name = self.sales_inv_no
+            return
+        self.name = make_autoname(DRAFT_MARK + self.get_naming_series(), doc=self)
+
+    def get_naming_series(self):
+        if not self.naming_series:
+            self.naming_series = frappe.get_meta(self.doctype).get_field("naming_series").options.split("\n")[0]
+        return self.naming_series
+
+    def is_draft_numbered(self):
+        prefix = split_series(self.get_naming_series(), self)[0]
+        return self.name.startswith(DRAFT_MARK + prefix)
+
+    def next_submitted_name(self):
+        """The name this invoice takes on submit: the last submitted number on
+        its naming series + 1.
+
+        The series' tabSeries row is locked first (FOR UPDATE), so concurrent
+        submits queue here one at a time until each commits, and never read the
+        same last number. A number still held by an invoice saved before draft
+        numbering (an old draft) is skipped, as two invoices cannot share it.
+        """
+        prefix, digits, suffix = split_series(self.get_naming_series(), self)
+        if not frappe.db.sql("SELECT current FROM `tabSeries` WHERE name = %s FOR UPDATE", (prefix,)):
+            frappe.db.sql("INSERT INTO `tabSeries` (name, current) VALUES (%s, 0)", (prefix,))
+        number = last_submitted_number(prefix, digits) + 1
+        while frappe.db.sql("SELECT 1 FROM `tabSales Invoice` WHERE name LIKE %s LIMIT 1",
+                            (starts_with(f"{prefix}{number:0{digits}d}"),)):
+            number += 1
+        # Kept in step, for anything else that reads the counter
+        frappe.db.sql("UPDATE `tabSeries` SET current = GREATEST(current, %s) WHERE name = %s", (number, prefix))
+        return f"{prefix}{number:0{digits}d}{suffix}"
+
+    def assign_submitted_number(self):
+        """Give a D-numbered draft its invoice number, on submit (next_submitted_name).
+
+        Runs in before_submit, so the row is renamed before the GL, stock and
+        payment postings, which then carry the final number. Everything happens
+        in the submit's transaction: a submit that fails rolls the rename and the
+        number back, leaving no gap. Invoices saved before draft numbering,
+        amendments and hand-keyed numbers keep their name; submitted invoices are
+        never renamed.
+
+        The rename uses Frappe's link-updating steps, not rename_doc, which would
+        also clear the whole site cache and rebuild the search index on every
+        submit.
+        """
+        from frappe.model.rename_doc import (
+            get_link_fields,
+            rename_dynamic_links,
+            rename_parent_and_child,
+            rename_versions,
+            update_attachments,
+            update_link_field_values,
+        )
+
+        old = self.name
+        if not self.is_draft_numbered():
+            return
+
+        # Lock the draft: a second submit of it waits, then finds it renamed
+        if not frappe.db.sql("SELECT name FROM `tabSales Invoice` WHERE name = %s AND docstatus = 0 FOR UPDATE", old):
+            frappe.throw(_("{0} was changed or submitted by someone else. Reload it.").format(old))
+
+        new = self.next_submitted_name()
+
+        rename_parent_and_child(self.doctype, old, new, frappe.get_meta(self.doctype))
+        update_link_field_values(get_link_fields(self.doctype), old, new, self.doctype)
+        rename_dynamic_links(self.doctype, old, new)
+        update_attachments(self.doctype, old, new)
+        rename_versions(self.doctype, old, new)
+        frappe.clear_document_cache(self.doctype, old)
+
+        self.name = new
+        for child in self.get_all_children():
+            child.parent = new
+
+        # The draft's PDFs carry the draft number: removed once the submit is
+        # committed (deleting a file on disk cannot be rolled back), and printed
+        # again under the new number
+        frappe.enqueue(remove_draft_pdfs, invoice=new, draft=old, enqueue_after_commit=True)
+
+        # The desk form follows the rename (sales_invoice.js, after_save)
+        self.set_onload("renamed_from", old)
+        self.add_comment("Edit", _("Numbered {0} on submit (draft {1})").format(new, old))
 
     def update_sales_invoice_no(self):
         # Avoid renaming unsaved docs
@@ -490,6 +616,7 @@ class SalesInvoice(Document):
         if not self.invoice_fullfilled:
             frappe.throw(_("Please ensure Invoice  is fullfilled before submitting."))
             return   
+        self.assign_submitted_number()
     
     def validate_project_advance(self):
                 
@@ -1590,11 +1717,14 @@ class SalesInvoice(Document):
             # the console's print prompt
             if not frappe.db.exists("Email Account", {"enable_outgoing": 1, "default_outgoing": 1}):
                 return
-            attachments = frappe.get_all(
-                "File",
-                filters={"attached_to_doctype": "Sales Invoice", "attached_to_name": self.name},
-                fields=["file_url", "file_name"]
-            )
+            # Only PDFs under the invoice's own number: a draft numbered on submit
+            # still has its DINV- ones attached until the transaction commits
+            files_filter = {"attached_to_doctype": "Sales Invoice", "attached_to_name": self.name,
+                            "file_name": ["like", f"{pdf_file_stem(self.name)}%"]}
+            attachments = frappe.get_all("File", filters=files_filter, fields=["file_url", "file_name"])
+            if not attachments:
+                self.attach_print_pdfs()
+                attachments = frappe.get_all("File", filters=files_filter, fields=["file_url", "file_name"])
 
             # Build attachment objects
             files_to_attach = []
@@ -2321,3 +2451,12 @@ def get_customer_billing_details(customer):
     details = {"customer_company": "", "tax_id": ""} if is_walk_in or not customer else get_customer_company_and_trn(customer)
     details["is_walk_in"] = is_walk_in
     return details
+
+
+def remove_draft_pdfs(invoice, draft):
+    """Delete the PDFs a draft printed under its DINV- number, now attached to
+    `invoice`, the number it took on submit (assign_submitted_number)."""
+    for name in frappe.get_all("File", pluck="name", filters={
+            "attached_to_doctype": "Sales Invoice", "attached_to_name": invoice,
+            "file_name": ["like", f"{pdf_file_stem(draft)}%"]}):
+        frappe.delete_doc("File", name, ignore_permissions=True)

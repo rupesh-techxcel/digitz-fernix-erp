@@ -155,6 +155,13 @@ frappe.ui.form.on('Sales Invoice', {
 
 	},
 	after_save: function (frm) {
+		// A draft is numbered on submit (DINV-... -> SI-...): move the form to the new name
+		const renamed = Object.values(locals["Sales Invoice"] || {}).find(
+			(d) => d.name !== frm.docname && d.__onload && d.__onload.renamed_from === frm.docname
+		);
+		if (renamed) {
+			$(document).trigger("rename", ["Sales Invoice", frm.docname, renamed.name]);
+		}
 
 		 if (frm.doc.auto_save_delivery_note) {
 			// frm.call("auto_generate_delivery_note")
