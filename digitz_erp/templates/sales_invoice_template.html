@@ -366,6 +366,56 @@
 </div>
 {% endif %}
 
+<!-- Credit Notes issued against the invoice (submitted Sales Returns), and what
+     the customer has paid net of them -->
+{% if credit_notes %}
+<div style="margin-top: 12px; page-break-inside: avoid;">
+  <div style="font-size: 16px; color: #555; margin-bottom: 6px;">CREDIT NOTES <span style="direction: rtl;">إشعارات دائنة</span></div>
+  <table class="delivery-note-table" style="text-align: center;">
+    <thead>
+      <tr>
+        <th style="width: 30%;">CN No</th>
+        <th style="width: 20%;">Date</th>
+        <th style="width: 20%;">Amount</th>
+        <th style="width: 30%;">Refund Mode</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cn in credit_notes.rows %}
+      <tr>
+        <td>{{ cn.number }}</td>
+        <td>{{ cn.date }}</td>
+        <td>{{ "{:,.2f}".format(cn.amount) }}</td>
+        <td>{{ cn.refund_mode }}</td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <td colspan="2" style="text-align: right;"><strong>TOTAL REFUNDED</strong></td>
+        <td><strong>{{ "{:,.2f}".format(credit_notes.total_refunded) }}</strong></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <table style="width: 40%; margin: 8px 0 0 auto; border-collapse: collapse; font-size: 12px;">
+    <tr>
+      <td style="padding: 3px 0;"><strong>ORIGINAL PAID AMOUNT</strong></td>
+      <td style="width: 12px; text-align: center;">:</td>
+      <td style="text-align: right; white-space: nowrap;">{{ "{:,.2f}".format(credit_notes.original_paid) }} د.إ</td>
+    </tr>
+    <tr>
+      <td style="padding: 3px 0 7px; border-bottom: 1px solid #bbb;"><strong>LESS: TOTAL REFUNDED</strong></td>
+      <td style="width: 12px; text-align: center; border-bottom: 1px solid #bbb;">:</td>
+      <td style="text-align: right; white-space: nowrap; border-bottom: 1px solid #bbb;">{{ "{:,.2f}".format(credit_notes.total_refunded) }} د.إ</td>
+    </tr>
+    <tr>
+      <td style="padding: 7px 0 3px;"><strong>PAID AMOUNT AFTER CN</strong></td>
+      <td style="width: 12px; text-align: center;">:</td>
+      <td style="text-align: right; white-space: nowrap; font-size: 13px;"><strong>{{ "{:,.2f}".format(credit_notes.net_paid) }} د.إ</strong></td>
+    </tr>
+  </table>
+</div>
+{% endif %}
+
 <!-- Bottom Section -->
 <div style="margin-top: 20px; font-size: 12px; width: 100%; page-break-inside: avoid;">
   <table style="width: 100%; border-collapse: collapse; font-size: 12px;">

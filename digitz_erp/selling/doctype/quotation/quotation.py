@@ -414,6 +414,7 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	payment_terms = ""
 	receipt_number = ""
 	receipt_info = None
+	credit_notes = None
 	return_invoices = []
 	file_suffix = "document"
 
@@ -444,6 +445,7 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		trn_no = frappe.db.get_value("Company", doc.company, "tax_id")
 		receipt_info = get_sales_invoice_receipt_info(doc)
 		receipt_number = receipt_info.number if receipt_info else ""
+		credit_notes = get_sales_invoice_credit_notes(doc)
 
 	elif doc.doctype == "Sales Return":
 		customer_address = doc.customer_address
@@ -479,6 +481,7 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		"payment_terms": payment_terms,
 		"receipt_number": receipt_number,
 		"receipt_info": receipt_info,
+		"credit_notes": credit_notes,
 		"return_invoices": return_invoices,
 		# Receipt Info means the invoice is paid: the PAID stamp under the totals
 		"paid_stamp": get_paid_stamp() if receipt_info else None,
@@ -716,6 +719,54 @@ def get_sales_invoice_receipt_info(doc):
 		collected_by=username(receipt.owner),
 		payment_mode=receipt.payment_mode or "",
 		reference_no=receipt.reference_no or "",
+	)
+
+
+def get_sales_invoice_credit_notes(doc):
+	"""The submitted credit notes (Sales Returns) issued against the invoice, for
+	its CREDIT NOTES block, or None: {rows, total_refunded, original_paid, net_paid}.
+
+	A return lists the invoices its lines come from in `invoices`. One that
+	returns lines of several invoices is shared out by those lines' net amounts,
+	so each invoice shows only its part. Refund Mode is the return's payment
+	mode, or Credit when it is put on the customer's account instead of paid out.
+	"""
+	from frappe.utils import formatdate, flt
+
+	returns = frappe.db.sql("""
+		SELECT DISTINCT sr.name, sr.posting_date, sr.rounded_total, sr.credit_sale, sr.payment_mode
+		FROM `tabSales Return` sr
+		INNER JOIN `tabSales Return Invoices` sri ON sri.parent = sr.name AND sri.parenttype = 'Sales Return'
+		WHERE sri.sales_invoice = %(invoice)s AND sr.docstatus = 1
+		ORDER BY sr.posting_date, sr.creation
+		""", {"invoice": doc.name}, as_dict=True)
+	if not returns:
+		return None
+
+	rows = []
+	for ret in returns:
+		lines = frappe.db.sql("""
+			SELECT SUM(ri.net_amount) AS total,
+				SUM(CASE WHEN sii.parent = %(invoice)s THEN ri.net_amount ELSE 0 END) AS this_invoice
+			FROM `tabSales Return Item` ri
+			LEFT JOIN `tabSales Invoice Item` sii ON sii.name = ri.si_item_reference
+			WHERE ri.parent = %(name)s AND ri.parenttype = 'Sales Return'
+			""", {"invoice": doc.name, "name": ret.name}, as_dict=True)[0]
+		share = flt(lines.this_invoice) / flt(lines.total) if flt(lines.total) else 1
+		rows.append(frappe._dict(
+			number=ret.name,
+			date=formatdate(ret.posting_date, "dd-mm-yyyy"),
+			amount=flt(flt(ret.rounded_total) * share, 2),
+			refund_mode="Credit" if ret.credit_sale else (ret.payment_mode or ""),
+		))
+
+	total_refunded = sum(row.amount for row in rows)
+	original_paid = flt(doc.paid_amount)
+	return frappe._dict(
+		rows=rows,
+		total_refunded=total_refunded,
+		original_paid=original_paid,
+		net_paid=max(original_paid - total_refunded, 0),
 	)
 
 
