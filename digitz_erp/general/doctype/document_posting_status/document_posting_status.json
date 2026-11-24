@@ -87,7 +87,8 @@
    "fieldname": "document_name",
    "fieldtype": "Dynamic Link",
    "label": "Document Name",
-   "options": "document_type"
+   "options": "document_type",
+   "search_index": 1
   },
   {
    "default": "0",
@@ -115,7 +116,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-01-14 22:12:53.799772",
+ "modified": "2026-11-24 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "General",
  "name": "Document Posting Status",

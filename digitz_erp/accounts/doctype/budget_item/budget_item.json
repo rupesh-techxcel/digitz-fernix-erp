@@ -32,7 +32,8 @@
    "fieldtype": "Dynamic Link",
    "in_list_view": 1,
    "label": "Reference Value",
-   "options": "link_field_hidden"
+   "options": "link_field_hidden",
+   "search_index": 1
   },
   {
    "fieldname": "link_field_hidden",
@@ -51,7 +52,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2024-12-02 18:07:14.197453",
+ "modified": "2026-11-24 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Budget Item",
