@@ -312,7 +312,8 @@
    "no_copy": 1,
    "options": "Sales Invoice",
    "print_hide": 1,
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "section_break_25",
@@ -490,7 +491,8 @@
    "no_copy": 1,
    "options": "Sales Invoice",
    "print_hide": 1,
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "sales_invoice_no_ref",
@@ -569,7 +571,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2025-05-18 08:58:11.284499",
+ "modified": "2026-11-24 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Tab Sales",

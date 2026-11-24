@@ -49,7 +49,8 @@
    "fieldtype": "Dynamic Link",
    "label": "Document Name",
    "options": "document_type",
-   "reqd": 1
+   "reqd": 1,
+   "search_index": 1
   },
   {
    "fieldname": "reference_no",
@@ -67,7 +68,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-03-22 09:30:32.266089",
+ "modified": "2026-11-24 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Bank Reconciliation",

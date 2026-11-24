@@ -340,30 +340,30 @@ class SalesInvoice(Document):
 
         The rename uses Frappe's link-updating steps, not rename_doc, which would
         also clear the whole site cache and rebuild the search index on every
-        submit.
+        submit. Links are updated only in the tables that hold one
+        (rename_links), not by an UPDATE on every linking table.
         """
         from frappe.model.rename_doc import (
-            get_link_fields,
-            rename_dynamic_links,
             rename_parent_and_child,
             rename_versions,
             update_attachments,
-            update_link_field_values,
         )
 
         old = self.name
         if not self.is_draft_numbered():
             return
 
-        # Lock the draft: a second submit of it waits, then finds it renamed
+        # Lock the draft: a second submit of it waits, then finds it renamed.
+        # Locks are always taken draft first, then the series row (Frappe's
+        # submit has already read the draft FOR UPDATE), so two submits of
+        # different drafts queue at the series row and never cross.
         if not frappe.db.sql("SELECT name FROM `tabSales Invoice` WHERE name = %s AND docstatus = 0 FOR UPDATE", old):
             frappe.throw(_("{0} was changed or submitted by someone else. Reload it.").format(old))
 
         new = self.next_submitted_name()
 
         rename_parent_and_child(self.doctype, old, new, frappe.get_meta(self.doctype))
-        update_link_field_values(get_link_fields(self.doctype), old, new, self.doctype)
-        rename_dynamic_links(self.doctype, old, new)
+        rename_links(self.doctype, old, new)
         update_attachments(self.doctype, old, new)
         rename_versions(self.doctype, old, new)
         frappe.clear_document_cache(self.doctype, old)
@@ -2451,6 +2451,76 @@ def get_customer_billing_details(customer):
     details = {"customer_company": "", "tax_id": ""} if is_walk_in or not customer else get_customer_company_and_trn(customer)
     details["is_walk_in"] = is_walk_in
     return details
+
+
+DEADLOCK_RETRIES = 2
+
+
+@frappe.whitelist(methods=["POST", "PUT"])
+def save_with_retry(doc, action):
+    """Frappe's savedocs, run again (up to DEADLOCK_RETRIES times) when the
+    database ends it on a deadlock with another counter's save or submit.
+
+    A deadlock rolls the whole transaction back, so nothing of the first try is
+    left behind and the same request can simply be run again; the cashier only
+    sees an error if every try deadlocks.
+    """
+    import random
+    import time
+
+    from frappe.desk.form.save import savedocs
+
+    for attempt in range(DEADLOCK_RETRIES + 1):
+        try:
+            return savedocs(doc, action)
+        except frappe.QueryDeadlockError:
+            if attempt == DEADLOCK_RETRIES:
+                raise
+            frappe.db.rollback()
+            frappe.local.message_log = []
+            frappe.logger().info(f"Sales Invoice {action}: deadlock, try {attempt + 2}")
+            # A short random wait, so the two requests do not meet again
+            time.sleep(0.2 * (attempt + 1) + random.random() * 0.3)
+
+
+def rename_links(doctype, old, new):
+    """Point the Link and Dynamic Link fields that hold `old` at `new`.
+
+    Frappe's update_link_field_values and rename_dynamic_links run an UPDATE on
+    every table that can link here. On a column with no index that UPDATE locks
+    the whole table (all of Sales Invoice, for amended_from), and two counters
+    saving and submitting at once then deadlock. A draft being submitted is
+    linked from almost nowhere, so each table is first checked with a plain
+    read, which takes no locks, and updated only when it holds the old name.
+    """
+    from frappe.model.dynamic_links import get_dynamic_links
+    from frappe.model.rename_doc import get_link_fields, update_link_field_values
+
+    def holds(table, conditions, values):
+        try:
+            return frappe.db.sql(f"SELECT 1 FROM `tab{table}` WHERE {conditions} LIMIT 1", values)
+        except frappe.db.TableMissingError:
+            return False
+
+    # Singles go through Frappe (one value each, no table scan)
+    update_link_field_values(
+        [f for f in get_link_fields(doctype)
+         if f["issingle"] or holds(f["parent"], f"`{f['fieldname']}` = %s", (old,))],
+        old, new, doctype,
+    )
+
+    for df in get_dynamic_links():
+        meta = frappe.get_meta(df.parent)
+        if meta.is_virtual:
+            continue
+        if meta.issingle:
+            values = frappe.db.get_singles_dict(df.parent)
+            if values.get(df.options) == doctype and values.get(df.fieldname) == old:
+                frappe.db.set_single_value(df.parent, df.fieldname, new)
+            continue
+        where = f"`{df.options}` = %s AND `{df.fieldname}` = %s"
+        if holds(df.parent, where, (doctype, old)):
+            frappe.db.sql(f"UPDATE `tab{df.parent}` SET `{df.fieldname}` = %s WHERE {where}", (new, doctype, old))
 
 
 def remove_draft_pdfs(invoice, draft):

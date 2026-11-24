@@ -139,14 +139,16 @@
    "fieldtype": "Dynamic Link",
    "label": "Source Document Id",
    "options": "source",
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "voucher_no",
    "fieldtype": "Dynamic Link",
    "label": "Voucher No",
    "options": "voucher",
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "change_in_stock_value",
@@ -201,7 +203,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-01-24 18:18:30.382089",
+ "modified": "2026-11-24 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Stock Ledger",

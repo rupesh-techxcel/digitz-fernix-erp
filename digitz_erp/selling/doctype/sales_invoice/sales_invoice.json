@@ -233,7 +233,8 @@
    "no_copy": 1,
    "options": "Sales Invoice",
    "print_hide": 1,
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "section_break_25",
@@ -562,10 +563,10 @@
   },
   {
    "depends_on": "eval:doc.mode==\"Bank\"",
+   "description": "Optional. Left empty, it takes the posting date.",
    "fieldname": "reference_date",
    "fieldtype": "Date",
-   "label": "Reference Date",
-   "description": "Optional. Left empty, it takes the posting date."
+   "label": "Reference Date"
   },
   {
    "fieldname": "in_words",
@@ -755,8 +756,8 @@
   {
    "fieldname": "customer_token",
    "fieldtype": "Data",
-   "label": "Customer Token",
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "label": "Customer Token"
   },
   {
    "description": "The Medical Services record this invoice was raised from. Written by the Sales Invoice Board so takings can be reported by service.",
@@ -802,8 +803,8 @@
    "description": "Set from the customer. Editable only for the Default Walk-in Customer.",
    "fieldname": "customer_company",
    "fieldtype": "Data",
-   "label": "Customer Company",
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "label": "Customer Company"
   },
   {
    "allow_on_submit": 1,
@@ -900,7 +901,7 @@
    "table_fieldname": "receipt_allocation"
   }
  ],
- "modified": "2026-10-16 13:00:00.000000",
+ "modified": "2026-11-24 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "Selling",
  "name": "Sales Invoice",
@@ -921,9 +922,9 @@
   }
  ],
  "row_format": "Dynamic",
+ "search_fields": "customer,customer_company,customer_token",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "track_changes": 1,
- "search_fields": "customer,customer_company,customer_token"
+ "track_changes": 1
 }

@@ -1739,7 +1739,8 @@ frappe.provide("digitz_erp");
 				const old_name = doc.name;
 				try {
 					const r = await frappe.call({
-						method: "frappe.desk.form.save.savedocs",
+						// savedocs, run again if it meets another counter's save in a deadlock
+						method: "digitz_erp.selling.doctype.sales_invoice.sales_invoice.save_with_retry",
 						args: { doc, action },
 						freeze: true,
 						freeze_message: action === "Submit" ? __("Submitting...") : __("Saving..."),

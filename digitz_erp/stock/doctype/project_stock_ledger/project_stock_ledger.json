@@ -131,7 +131,8 @@
    "fieldtype": "Dynamic Link",
    "label": "Voucher No",
    "options": "voucher",
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "fieldname": "source",
@@ -145,7 +146,8 @@
    "fieldtype": "Dynamic Link",
    "label": "Source Document Id",
    "options": "source",
-   "read_only": 1
+   "read_only": 1,
+   "search_index": 1
   },
   {
    "default": "0",
@@ -215,7 +217,7 @@
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-08-29 09:59:02.866787",
+ "modified": "2026-11-24 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "Stock",
  "name": "Project Stock Ledger",

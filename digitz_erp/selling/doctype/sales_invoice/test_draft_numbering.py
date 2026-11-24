@@ -58,6 +58,77 @@ class TestDraftNumbering(unittest.TestCase):
 		self.assertEqual(si.starts_with("A_B%"), "A\\_B\\%%")
 
 
+class TestRenameLinks(unittest.TestCase):
+	"""rename_links updates only the tables that hold the draft's name, so a
+	submit no longer locks whole tables (the cause of the counter deadlocks)."""
+
+	def test_updates_only_tables_that_hold_the_old_name(self):
+		link_fields = [
+			{"parent": "Receipt Allocation", "fieldname": "reference_name", "issingle": 0},
+			{"parent": "Stock Ledger", "fieldname": "voucher_no", "issingle": 0},
+			{"parent": "Some Settings", "fieldname": "last_invoice", "issingle": 1},
+		]
+		dynamic = [
+			frappe._dict(parent="Comment", fieldname="reference_name", options="reference_doctype"),
+			frappe._dict(parent="Activity Log", fieldname="link_name", options="link_doctype"),
+		]
+		statements = []
+
+		def sql(query, values=None):
+			statements.append((query, values))
+			if query.startswith("SELECT 1"):
+				# The draft is referenced only from Receipt Allocation and Comment
+				return [(1,)] if ("Receipt Allocation" in query or "Comment" in query) else []
+			return []
+
+		with patch.object(si.frappe.db, "sql", side_effect=sql), \
+				patch.object(si.frappe, "get_meta", return_value=frappe._dict(is_virtual=0, issingle=0)), \
+				patch("frappe.model.rename_doc.get_link_fields", return_value=link_fields), \
+				patch("frappe.model.rename_doc.update_link_field_values") as update_links, \
+				patch("frappe.model.dynamic_links.get_dynamic_links", return_value=dynamic):
+			si.rename_links("Sales Invoice", "DINV/000007", "INV/452598")
+
+		updated = [f["parent"] for f in update_links.call_args.args[0]]
+		self.assertEqual(updated, ["Receipt Allocation", "Some Settings"])
+		updates = [(q, v) for q, v in statements if q.startswith("UPDATE")]
+		self.assertEqual(len(updates), 1)
+		self.assertIn("`tabComment`", updates[0][0])
+		self.assertEqual(updates[0][1], ("INV/452598", "Sales Invoice", "DINV/000007"))
+		self.assertTrue(all("FOR UPDATE" not in q for q, _ in statements))
+
+
+class TestSaveWithRetry(unittest.TestCase):
+	def test_runs_again_after_a_deadlock(self):
+		tries = []
+
+		def savedocs(doc, action):
+			tries.append(action)
+			if len(tries) == 1:
+				raise frappe.QueryDeadlockError("1213")
+			return "saved"
+
+		with patch("frappe.desk.form.save.savedocs", side_effect=savedocs), \
+				patch.object(si.frappe.db, "rollback") as rollback, \
+				patch("time.sleep"):
+			self.assertEqual(si.save_with_retry("{}", "Submit"), "saved")
+		self.assertEqual(tries, ["Submit", "Submit"])
+		rollback.assert_called_once()
+
+	def test_gives_up_after_the_last_try(self):
+		with patch("frappe.desk.form.save.savedocs", side_effect=frappe.QueryDeadlockError("1213")) as savedocs, \
+				patch.object(si.frappe.db, "rollback"), \
+				patch("time.sleep"):
+			with self.assertRaises(frappe.QueryDeadlockError):
+				si.save_with_retry("{}", "Save")
+		self.assertEqual(savedocs.call_count, si.DEADLOCK_RETRIES + 1)
+
+	def test_other_errors_are_not_retried(self):
+		with patch("frappe.desk.form.save.savedocs", side_effect=frappe.ValidationError("bad")) as savedocs:
+			with self.assertRaises(frappe.ValidationError):
+				si.save_with_retry("{}", "Submit")
+		self.assertEqual(savedocs.call_count, 1)
+
+
 def _bind(doc):
 	"""A plain dict standing in for the document, with the methods the tests call."""
 	doc.get_naming_series = lambda: doc.naming_series
