@@ -11,7 +11,9 @@
 //
 // A cashier on an unregistered PC asks for it to be registered instead. A counter
 // with no PC is theirs at once; taking over a counter that has one waits for a
-// supervisor, who sees the requests on the badge and approves or rejects them.
+// supervisor, who sees the requests on the badge and approves or rejects them. A PC
+// that was on a counter is offered that counter again; moving it to any other
+// counter waits for a supervisor too (counter_api.get_previous_counter).
 
 (function () {
 	const DEVICE_API = "digitz_erp.api.counter_api.";
@@ -140,7 +142,8 @@
 						...counters.map((c) => ({ label: c, value: c })),
 						{ label: __("+ New counter"), value: NEW_COUNTER },
 					],
-					default: state.counter || counters[0] || NEW_COUNTER,
+					// The counter this PC is, or was before it lost its registration
+					default: state.counter || state.previous_counter || counters[0] || NEW_COUNTER,
 					change: () => show_replaced(),
 				},
 				{
@@ -257,23 +260,31 @@
 				const rejected = state.registration_request && state.registration_request.approval_status === "Rejected"
 					? `<p class="small" style="color: var(--red-600, #dc2626);">${esc(__("Your last request for {0} was rejected. Ask a supervisor why before asking again.", [state.registration_request.counter]))}</p>`
 					: "";
+				// The counter this PC was on: it may have it back; any other moves the PC
+				const previous = options.find((o) => o.previous);
+				const label = (o) => {
+					if (o.moves) {
+						return __("{0} · moves this PC, needs approval", [o.counter]);
+					}
+					const mine = o.previous ? " · " + __("this PC's counter") : "";
+					return o.device
+						? __("{0}{1} · has a PC ({2}), needs approval", [o.counter, mine, o.device])
+						: __("{0}{1} · free, ready at once", [o.counter, mine]);
+				};
 				const d = new frappe.ui.Dialog({
 					title: __("Ask to register this PC"),
 					fields: [
 						{ fieldtype: "HTML", options: rejected },
 						{
 							fieldname: "counter", fieldtype: "Select", label: __("Counter"), reqd: 1,
-							options: options.map((o) => ({
-								value: o.counter,
-								label: o.device
-									? __("{0} · has a PC ({1}), needs approval", [o.counter, o.device])
-									: __("{0} · free, ready at once", [o.counter]),
-							})),
-							default: (options.find((o) => !o.device) || options[0]).counter,
+							options: options.map((o) => ({ value: o.counter, label: label(o) })),
+							default: (previous || options.find((o) => !o.device) || options[0]).counter,
+							change: () => show_move(),
 						},
+						{ fieldname: "move", fieldtype: "HTML" },
 						{
 							fieldtype: "HTML",
-							options: `<p class="text-muted small">${__("A free counter becomes this PC's at once. A counter that already has a PC needs a supervisor's approval, because this PC would replace it.")}</p>`,
+							options: `<p class="text-muted small">${__("A free counter becomes this PC's at once. A counter that already has a PC needs a supervisor's approval, because this PC would replace it. A PC is not moved to another counter without a supervisor.")}</p>`,
 						},
 					],
 					primary_action_label: __("Ask"),
@@ -300,7 +311,19 @@
 						});
 					},
 				});
+				// Choosing another counter than this PC's: say it waits for a supervisor
+				function show_move() {
+					const chosen = options.find((o) => o.counter === d.get_value("counter"));
+					const from = previous ? previous.counter : null;
+					d.fields_dict.move.$wrapper.html(chosen && chosen.moves
+						? `<p class="small" style="color: var(--orange-600, #ea580c);">${esc(from
+							? __("This PC was {0}. Moving it to {1} needs a supervisor's approval.", [from, chosen.counter])
+							: __("This PC was on another counter. Moving it to {0} needs a supervisor's approval.", [chosen.counter]))}</p>`
+						: "");
+				}
+
 				d.show();
+				show_move();
 			},
 		});
 	}
@@ -329,9 +352,13 @@
 								<thead><tr><th>${__("Counter")}</th><th>${__("Asked by")}</th><th>${__("Replaces")}</th><th></th></tr></thead>
 								<tbody>${rows.map((row) => `
 									<tr data-device="${esc(row.device)}">
-										<td><b>${esc(row.counter)}</b><div class="text-muted small">${esc(row.device)} · ${esc(frappe.datetime.str_to_user(row.registered_on))}</div></td>
+										<td><b>${esc(row.counter)}</b>${row.previous_counter && row.previous_counter !== row.counter
+											? `<div class="small" style="color: var(--orange-600, #ea580c);">${esc(__("Moves this PC from {0}", [row.previous_counter]))}</div>`
+											: ""}<div class="text-muted small">${esc(row.device)} · ${esc(frappe.datetime.str_to_user(row.registered_on))}</div></td>
 										<td>${esc(row.requested_by_name)}<div class="text-muted small" title="${esc(row.user_agent)}">${esc((row.user_agent || "").slice(0, 40))}</div></td>
-										<td>${esc(row.replaces || __("nothing"))}${row.open_session
+										<td>${esc(row.replaces || __("nothing"))}${row.replaces_last_seen
+											? `<div class="text-muted small">${esc(__("Last seen {0}", [frappe.datetime.prettyDate(row.replaces_last_seen)]))}</div>`
+											: ""}${row.open_session
 											? `<div class="small" style="color: var(--orange-600, #ea580c);">${esc(__("{0}'s day {1} is open", [row.cashier_name, row.open_session]))}</div>`
 											: ""}</td>
 										<td class="text-right" style="white-space: nowrap;">
