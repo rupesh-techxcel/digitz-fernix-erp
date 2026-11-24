@@ -24,6 +24,13 @@ A PC is registered in one of two ways:
   take it over, so it waits, Pending, until a supervisor approves or rejects it
   (approve_device_request / reject_device_request) from the counter badge.
 
+A PC stays on its counter. A PC that lost its registration (its device disabled or
+replaced) still has its old secret, which tells which counter it was on
+(get_previous_counter). Its cashier may ask for that counter back as above, but a
+request that moves the PC to another counter always waits for a supervisor, even
+when that counter is free. Only the PC's own history counts, never the cashier's,
+so a cashier on someone else's PC does not pull it to their usual counter.
+
 A counter has one enabled device at a time. Registering or approving a device for
 a counter disables the counter's other devices (and whatever the browser was
 before), recording who did it and which device replaced them.
@@ -97,6 +104,31 @@ def get_pending_for_secret(secret):
 		["name as device", "counter", "registered_on"],
 		as_dict=True,
 	)
+
+
+def get_previous_counter(secret):
+	"""The counter this browser's PC was on, from its secret: {device, counter, enabled}, else None.
+
+	A device a supervisor or the system approved was on its counter, even if it has
+	since been disabled or replaced. A request (Pending or Rejected) records the
+	counter the PC was on when it was made, so asking once does not wipe the memory.
+	"""
+	if not secret:
+		return None
+	row = frappe.db.get_value(
+		"Counter Device",
+		{"secret_hash": hash_secret(secret)},
+		["name", "counter", "enabled", "approval_status", "previous_counter"],
+		as_dict=True,
+		order_by="registered_on desc",
+	)
+	if not row:
+		return None
+	if (row.approval_status or "Approved") == "Approved":
+		return frappe._dict(device=row.name, counter=row.counter, enabled=row.enabled)
+	if row.previous_counter:
+		return frappe._dict(device=None, counter=row.previous_counter, enabled=0)
+	return None
 
 
 def request_secret():
@@ -291,10 +323,11 @@ def register_device(counter=None, new_counter=None):
 
 	lock_counter(counter)
 	current = get_request_device()
+	previous = get_previous_counter(request_secret())
 	reject_own_pending(request_secret(), "Withdrawn: a supervisor registered this PC instead.")
 
 	secret = secrets.token_urlsafe(32)
-	doc = new_device(counter, secret)
+	doc = new_device(counter, secret, previous_counter=previous.counter if previous else None)
 	if current and current.counter != counter:
 		disable_device(current.device, replaced_by=doc.name)
 	take_over_counter(doc)
@@ -311,9 +344,20 @@ def register_device(counter=None, new_counter=None):
 
 @frappe.whitelist()
 def get_request_options():
-	"""The counters a cashier may ask for, each with the PC it has now (if any)."""
+	"""The counters a cashier may ask for, each with the PC it has now (if any).
+	`previous` marks the counter this PC was on, which it may have back."""
+	previous = get_previous_counter(request_secret())
 	rows = frappe.get_all("Counter", filters={"enabled": 1}, pluck="name", order_by="name")
-	return [{"counter": counter, "device": get_active_device(counter)} for counter in rows]
+	return [
+		{
+			"counter": counter,
+			"device": get_active_device(counter),
+			"previous": bool(previous and previous.counter == counter),
+			# Asking for any other counter moves this PC: a supervisor must approve it
+			"moves": bool(previous and previous.counter != counter),
+		}
+		for counter in rows
+	]
 
 
 @frappe.whitelist()
@@ -321,8 +365,10 @@ def request_device(counter):
 	"""A cashier asks for the browser making this request to be `counter`'s PC.
 
 	A counter with no PC is the cashier's at once. A counter that has one would be
-	taken over, so the request waits for a supervisor. Either way the browser gets
-	its secret now; it identifies the PC only once the request is approved.
+	taken over, so the request waits for a supervisor. A PC that was on another
+	counter (get_previous_counter) is not moved without a supervisor either, even
+	to a free counter. Either way the browser gets its secret now; it identifies
+	the PC only once the request is approved.
 	"""
 	if "Cashier" not in frappe.get_roles() and not is_supervisor():
 		frappe.throw("Only a cashier can ask for this PC to be registered.", frappe.PermissionError)
@@ -334,14 +380,20 @@ def request_device(counter):
 		frappe.throw("This PC is already registered. Ask a supervisor to move it to another counter.")
 
 	lock_counter(counter)
+	previous = get_previous_counter(request_secret())
 	reject_own_pending(request_secret(), "Withdrawn: a newer request was made from this PC.")
 
 	secret = secrets.token_urlsafe(32)
 	takeover = get_active_device(counter)
+	moves = bool(previous and previous.counter != counter)
 	doc = new_device(
-		counter, secret, requested_by=frappe.session.user, approval_status="Pending" if takeover else "Approved"
+		counter, secret, requested_by=frappe.session.user,
+		approval_status="Pending" if takeover or moves else "Approved",
+		previous_counter=previous.counter if previous else None,
 	)
-	if not takeover:
+	if moves:
+		doc.add_comment("Info", f"Moves this PC from {previous.counter}: a supervisor must approve it.")
+	elif not takeover:
 		take_over_counter(doc)
 		doc.add_comment("Info", f"Approved automatically: {counter} had no PC.")
 
@@ -363,12 +415,14 @@ def get_device_requests():
 	rows = frappe.get_all(
 		"Counter Device",
 		filters={"approval_status": "Pending"},
-		fields=["name as device", "counter", "requested_by", "registered_on", "user_agent"],
+		fields=["name as device", "counter", "previous_counter", "requested_by", "registered_on", "user_agent"],
 		order_by="registered_on",
 	)
 	for row in rows:
 		row.requested_by_name = frappe.utils.get_fullname(row.requested_by)
 		row.replaces = get_active_device(row.counter)
+		# A PC seen moments ago is still working: approving would knock it out
+		row.replaces_last_seen = frappe.db.get_value("Counter Device", row.replaces, "last_seen") if row.replaces else None
 		row.update(open_session_on(row.replaces) if row.replaces else {"open_session": None, "cashier_name": None})
 	return rows
 
@@ -419,13 +473,15 @@ def resolve_device(secret=None):
 
 	The cookie is the source of truth. `secret` is the desk script's localStorage
 	copy: when the cookie was lost but that copy is still valid (as a device or as
-	a request still waiting), the cookie is restored from it.
+	a request still waiting), the cookie is restored from it. It is also restored
+	for a device since disabled, so the PC still knows which counter it was on
+	(get_previous_counter); such a cookie identifies no counter.
 	"""
 	cookie_secret = request_secret()
 
 	device = get_device_for_secret(cookie_secret)
 	if not device and secret and secret != cookie_secret:
-		if get_device_for_secret(secret) or get_pending_for_secret(secret):
+		if get_device_for_secret(secret) or get_pending_for_secret(secret) or get_previous_counter(secret):
 			set_device_cookie(secret)
 			device = get_device_for_secret(secret)
 

@@ -21,7 +21,13 @@ import json
 import frappe
 from frappe.utils import add_days, cint, date_diff, flt, getdate, now_datetime, nowdate
 
-from digitz_erp.api.counter_api import get_request_device, get_request_registration, is_supervisor
+from digitz_erp.api.counter_api import (
+	get_previous_counter,
+	get_request_device,
+	get_request_registration,
+	is_supervisor,
+	request_secret,
+)
 from digitz_erp.digitz_erp.doctype.counter_session.counter_session import TOLERANCE
 
 # The day's sales and what the till should hold: shown to supervisors only. The
@@ -177,6 +183,8 @@ def get_state():
 		"device_requests": frappe.db.count("Counter Device", {"approval_status": "Pending"}) if supervisor else 0,
 		# This browser's own request, while it waits or after it was rejected
 		"registration_request": get_request_registration() if not device else None,
+		# The counter this PC was on before it lost its registration: the dialogs offer it first
+		"previous_counter": (get_previous_counter(request_secret()) or {}).get("counter") if not device else None,
 		"is_cashier": "Cashier" in frappe.get_roles(),
 		"counters": frappe.get_all("Counter", filters={"enabled": 1}, pluck="name", order_by="name") if supervisor else [],
 		"denominations": DENOMINATIONS,

@@ -18,6 +18,7 @@
   "secret_hash",
   "approval_section",
   "requested_by",
+  "previous_counter",
   "column_break_approval",
   "reviewed_by",
   "reviewed_on",
@@ -109,6 +110,13 @@
    "read_only": 1
   },
   {
+   "description": "The counter this PC was on before. A cashier moving a PC to another counter needs a supervisor's approval.",
+   "fieldname": "previous_counter",
+   "fieldtype": "Data",
+   "label": "Previous Counter",
+   "read_only": 1
+  },
+  {
    "fieldname": "column_break_approval",
    "fieldtype": "Column Break"
   },
@@ -161,7 +169,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-08 12:00:00.000000",
+ "modified": "2026-11-24 18:45:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Counter Device",
