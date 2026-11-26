@@ -127,7 +127,7 @@ def get_last_close(counter):
 	"""The last counted session on `counter`, or None.
 
 	{name, cashier, cashier_name, closed_on, counted_cash, difference, status,
-	denominations}. A close still waiting for approval counts: its till was
+	denominations}; `difference` for supervisors only. A close still waiting for approval counts: its till was
 	counted and handed over, so it is what the next day starts from.
 	"""
 	if not counter:
@@ -147,13 +147,25 @@ def get_last_close(counter):
 	if not rows:
 		return None
 	last = rows[0]
+	# The till was handed over with the count of its last date
+	handover = frappe.get_all(
+		"Counter Session Date Close",
+		filters={"parent": last.name, "parenttype": "Counter Session"},
+		fields=["close_date", "counted_cash", "difference"],
+		order_by="close_date desc, closed_on desc",
+		limit=1,
+	)
+	denomination_filters = {"parent": last.name, "parenttype": "Counter Session", "parentfield": "denominations"}
+	if handover:
+		last.counted_cash, last.difference = flt(handover[0].counted_cash), flt(handover[0].difference)
+		denomination_filters["close_date"] = handover[0].close_date
+	# A blind close: the difference with the count gives the expected cash
+	if not is_supervisor():
+		last.pop("difference")
 	last.cashier_name = frappe.utils.get_fullname(last.cashier)
 	last.closed_by_name = frappe.utils.get_fullname(last.closed_by) if last.closed_by else None
 	last.denominations = frappe.get_all(
-		"Cash Denomination Count",
-		filters={"parent": last.name, "parenttype": "Counter Session", "parentfield": "denominations"},
-		fields=["denomination", "count"],
-		order_by="idx",
+		"Cash Denomination Count", filters=denomination_filters, fields=["denomination", "count"], order_by="idx",
 	)
 	return last
 
@@ -298,12 +310,13 @@ def get_own_open_session_doc():
 	return frappe.get_doc("Counter Session", name)
 
 
-def apply_count(session, counted_cash, denominations, expenditure, payment_totals):
-	"""Put a till count -- the notes and coins (or the total), the cash paid out,
-	and the non-cash totals -- on `session`, without saving it."""
-	session.set("denominations", parse_denominations(denominations))
+def apply_count(session, date, counted_cash, denominations, expenditure, payment_totals):
+	"""Put the count of `date` -- the notes and coins (or the total), the cash
+	paid out, and the non-cash totals -- on `session`, without saving it. Only
+	that date's rows are replaced. Returns the date's close row."""
+	date = getdate(date)
+	counted = parse_denominations(denominations)
 	totals = parse_payment_totals(payment_totals)
-	session.set("payment_mode_totals", totals)
 
 	# Every non-cash mode needs a figure, 0 included, so a blank is never read as nothing taken
 	entered = {row["payment_mode"] for row in totals}
@@ -311,56 +324,84 @@ def apply_count(session, counted_cash, denominations, expenditure, payment_total
 	if missing:
 		frappe.throw(f"Enter the total for {', '.join(missing)} (0 if none).")
 
-	if not session.denominations and counted_cash in (None, ""):
+	if not counted and counted_cash in (None, ""):
 		frappe.throw("Enter the counted cash, or count the notes and coins.")
 
 	if flt(expenditure) < 0:
 		frappe.throw("Expenditure cannot be negative.")
 
-	session.counted_cash = flt(counted_cash)
-	session.cash_expenditure = flt(expenditure)
+	def others(rows):
+		return [row for row in rows if not (row.close_date and getdate(row.close_date) == date)]
+
+	session.set("denominations", others(session.denominations) + [dict(row, close_date=date) for row in counted])
+	session.set("payment_mode_totals", others(session.payment_mode_totals) + [dict(row, close_date=date) for row in totals])
+
+	row = session.date_close(date) or session.append("date_closes", {"close_date": date})
+	row.counted_cash = sum(r["denomination"] * r["count"] for r in counted) if counted else flt(counted_cash)
+	row.cash_expenditure = flt(expenditure)
+	return row
 
 
-def count_and_close(session, counted_cash, denominations, remarks, closed_by, expenditure=None, payment_totals=None):
-	"""Record the till count (and the cash paid out of the till, `expenditure`,
-	and the non-cash totals, `payment_totals`) on `session` and close it.
+def record_close(session, date, counted_cash, denominations, expenditure, payment_totals, remarks, closed_by, approve):
+	"""Count `date` on `session` and mark its close: approved by `closed_by`
+	(a supervisor) or waiting for approval. Returns the date's close row."""
+	row = apply_count(session, date, counted_cash, denominations, expenditure, payment_totals)
+	if closed_by:
+		row.closed_by = closed_by
+		row.closed_on = now_datetime()
+	if (remarks or "").strip():
+		row.remarks = "\n".join(r for r in (row.remarks, remarks.strip()) if r)
+	row.status = "Closed" if approve else "Closing"
+	row.approved_by = frappe.session.user if approve else None
+	return row
 
-	A clean count submits the session. Otherwise it stays in Closing for a
-	supervisor -- unless a supervisor is closing someone else's day, when their
-	close is its own approval. Either way the counter is free from here on.
+
+def finish_if_complete(session):
+	"""Submit (finish) `session` once its till is closed and every date of it
+	is closed and approved. True when it was finished."""
+	if session.docstatus != 0 or session.status != "Closing" or session.unclosed_dates():
+		return False
+	if is_supervisor():
+		session.approved_by = frappe.session.user
+	session.flags.ignore_permissions = True
+	session.submit()
+	return True
+
+
+def count_and_close(session, counted_cash, denominations, remarks, closed_by, expenditure=None, payment_totals=None, date=None):
+	"""Record the count of `date` (today by default) -- the cash paid out of the
+	till, `expenditure`, and the non-cash totals, `payment_totals` -- on
+	`session`. Counting today on an open day also closes the till.
+
+	Every close waits (Closing) for a supervisor to approve it, with or without
+	a difference, so no date closes unseen -- unless a supervisor is closing
+	someone else's day, when their close is its own approval. Either way the
+	counter is free once the till is closed.
 	"""
-	apply_count(session, counted_cash, denominations, expenditure, payment_totals)
-	session.close_remarks = remarks
-	session.status = "Closing"
-	session.closed_on = now_datetime()
-	session.closed_by = closed_by
+	date = getdate(date or nowdate())
+	approve = closed_by != session.cashier and is_supervisor(closed_by)
+	row = record_close(session, date, counted_cash, denominations, expenditure, payment_totals, remarks, closed_by, approve)
+	if session.status == "Open" and date == getdate(nowdate()):
+		session.close_remarks = remarks
+		session.status = "Closing"
+		session.closed_on = now_datetime()
+		session.closed_by = closed_by
 	session.save(ignore_permissions=True)
-
-	if (
-		abs(flt(session.difference)) >= TOLERANCE
-		and closed_by != session.cashier
-		and is_supervisor(closed_by)
-	):
-		session.approved_by = closed_by
-		session.save(ignore_permissions=True)
-
-	if abs(flt(session.difference)) < TOLERANCE or session.approved_by:
-		session.flags.ignore_permissions = True
-		session.submit()
-		return {"session": session.name, "status": "Closed", "difference": flt(session.difference)}
-
-	return {"session": session.name, "status": "Closing", "difference": session.difference}
+	finish_if_complete(session)
+	row = session.date_close(date)
+	return {"session": session.name, "close_date": str(date), "status": row.status, "difference": flt(row.difference)}
 
 
 @frappe.whitelist()
 def close_day(counted_cash=None, denominations=None, remarks=None, expenditure=None, payment_totals=None):
-	"""Close the user's open day with the counted cash.
+	"""Close the user's open day: count today's cash and close the till.
 
-	A clean count closes (submits) the session. A count that differs from the
-	expected cash leaves it in Closing until a supervisor approves it (approve_close).
-	`denominations` is a list of {denomination, count}; when given, it makes up the
-	counted cash. `payment_totals` is a list of {payment_mode, amount} for the
-	non-cash modes, recorded for the supervisor's day verification.
+	Today's close waits (Closing) until a supervisor approves it
+	(approve_close), whether or not it differs from the expected cash; any
+	earlier date of the day is closed by a supervisor. `denominations` is a
+	list of {denomination, count}; when given, it makes up the counted cash.
+	`payment_totals` is a list of {payment_mode, amount} for the non-cash modes,
+	recorded for the supervisor's day verification.
 
 	A blind close: the cashier is never told the expected cash, so the difference
 	is not sent back.
@@ -368,6 +409,9 @@ def close_day(counted_cash=None, denominations=None, remarks=None, expenditure=N
 	session = get_own_open_session_doc()
 	if session.status != "Open":
 		frappe.throw(f"{session.name} is already counted and waiting for approval.")
+	today = session.date_close(nowdate())
+	if today and today.status == "Closed":
+		frappe.throw("A supervisor has already closed today on this day. Ask them to close the till.")
 
 	result = count_and_close(
 		session, counted_cash, denominations, remarks, frappe.session.user, expenditure, payment_totals
@@ -377,41 +421,60 @@ def close_day(counted_cash=None, denominations=None, remarks=None, expenditure=N
 
 
 @frappe.whitelist()
-def supervisor_close(session, counted_cash=None, denominations=None, remarks=None, expenditure=None, payment_totals=None):
-	"""A supervisor counts the till and closes an open day from the Day Close grid.
+def supervisor_close(session, date=None, counted_cash=None, denominations=None, remarks=None, expenditure=None, payment_totals=None):
+	"""A supervisor counts and closes a date of a day from the Day Close board.
 
-	For a cashier who left without closing, which would otherwise hold the counter,
-	or the supervisor's own day. The supervisor is recorded as closed_by; closing
-	another cashier's day approves any difference in the same step and needs a reason.
+	Any date of the day's documents not counted yet, or today on a day still
+	open (which also closes its till: for a cashier who left without closing, or
+	the supervisor's own day). Closing another cashier's date approves it in the
+	same step and needs a reason.
 	"""
 	if not is_supervisor():
 		frappe.throw("Only a supervisor can close another cashier's day.", frappe.PermissionError)
 
 	doc = frappe.get_doc("Counter Session", session)
-	if doc.docstatus != 0 or doc.status != "Open":
-		frappe.throw(f"{session} is not an open day.")
+	if doc.docstatus != 0:
+		frappe.throw(f"{session} is closed. Use Edit to correct it.")
+	date = getdate(date or nowdate())
+	if doc.date_close(date):
+		frappe.throw(f"{frappe.utils.formatdate(date)} is already counted on {session}. Use Edit to correct it.")
+	if date not in doc.document_dates() and not (doc.status == "Open" and date == getdate(nowdate())):
+		frappe.throw(f"{session} has no documents on {frappe.utils.formatdate(date)}.")
 
 	if doc.cashier != frappe.session.user and not (remarks or "").strip():
 		frappe.throw("Give a reason for closing this day on the cashier's behalf.")
 
-	return count_and_close(doc, counted_cash, denominations, remarks, frappe.session.user, expenditure, payment_totals)
+	return count_and_close(doc, counted_cash, denominations, remarks, frappe.session.user, expenditure, payment_totals, date)
+
+
+def waiting_close(doc, date=None):
+	"""The close of `date` waiting for approval on `doc`; with no date, its only one."""
+	if date:
+		row = doc.date_close(date)
+		return row if row and row.status == "Closing" else None
+	waiting = [row for row in doc.date_closes if row.status == "Closing"]
+	return waiting[0] if len(waiting) == 1 else None
 
 
 @frappe.whitelist()
-def approve_close(session):
-	"""A supervisor signs off a close with a difference, which closes the session."""
+def approve_close(session, date=None):
+	"""A supervisor signs off a date's close. The day finishes once every date
+	of it is approved and its till is closed."""
 	if not is_supervisor():
-		frappe.throw("Only a supervisor can approve a cash difference.", frappe.PermissionError)
+		frappe.throw("Only a supervisor can approve a day's close.", frappe.PermissionError)
 
 	doc = frappe.get_doc("Counter Session", session)
-	if doc.docstatus != 0 or doc.status != "Closing":
-		frappe.throw(f"{session} is not waiting for approval.")
+	row = waiting_close(doc, date) if doc.docstatus == 0 else None
+	if not row:
+		when = f" for {frappe.utils.formatdate(date)}" if date else ""
+		frappe.throw(f"{session} has no close waiting for approval{when}.")
 
-	doc.approved_by = frappe.session.user
+	row.status = "Closed"
+	row.approved_by = frappe.session.user
 	doc.save(ignore_permissions=True)
-	doc.flags.ignore_permissions = True
-	doc.submit()
-	return {"session": doc.name, "status": doc.status, "difference": doc.difference}
+	finish_if_complete(doc)
+	row = doc.date_close(row.close_date)
+	return {"session": doc.name, "close_date": str(row.close_date), "status": row.status, "difference": flt(row.difference)}
 
 
 # ------------------------------------------------------------ supervisor's day close
@@ -454,83 +517,125 @@ def get_invoice_day_sessions(date):
 	return names
 
 
+def get_day_sessions(date):
+	"""The days on the board for `date`: those with an invoice of that date, and
+	those counted for it (a close row on that date)."""
+	names = get_invoice_day_sessions(date)
+	counted = frappe.get_all(
+		"Counter Session Date Close",
+		filters={"close_date": date, "parenttype": "Counter Session"},
+		pluck="parent",
+	)
+	for name in counted:
+		if name not in names and frappe.db.get_value("Counter Session", name, "docstatus") != 2:
+			names.append(name)
+	return names
+
+
+# A date's state on the board: its close row's status, or why it has none
+DAY_STATUS_LABELS = {
+	"Open": "Open",
+	"Not Closed": "Not Closed",
+	"Closing": "Awaiting Approval",
+	"Closed": "Closed",
+	"Counted": "Counted with the Day",
+}
+
+
 def build_day_overview(date=None, include_later=0):
-	"""The Day Close board for `date`. A day can run past midnight, so each
-	session's figures cover only the documents posted on `date`, or with
-	`include_later` on `date` and the dates after it."""
+	"""The Day Close board for `date`: every day with documents of that date or a
+	close for it, its figures from that date's documents only, set against the
+	count entered for that date (its close row). `include_later` is no longer
+	used: each date is closed on its own."""
 	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import (
-		get_document_dates,
+		get_cash_movements,
 		get_sales_by_type,
 		get_takings_by_mode,
 	)
 
 	date = getdate(date or nowdate())
-	include_later = bool(cint(include_later))
 	is_today = date == getdate(nowdate())
-	names = get_invoice_day_sessions(date)
-	docs = [frappe.get_doc("Counter Session", name) for name in names]
+	docs = [frappe.get_doc("Counter Session", name) for name in get_day_sessions(date)]
 	modes = get_non_cash_payment_modes()
 	sources = {doc.name: doc.source_session() for doc in docs}
-	system = get_takings_by_mode(sources, date, include_later)
-	sales = get_sales_by_type(sources, date, include_later)
+	system = get_takings_by_mode(sources, date)
+	sales = get_sales_by_type(sources, date)
 
 	sessions = []
 	for doc in docs:
-		# Display current submitted transactions even after a close was approved.
-		# Recalculate in memory: preserve the recorded count and approval history.
-		doc.calculate_cash(posting_date=date, include_later=include_later)
-		dates = [getdate(d) for d in get_document_dates(doc.source_session())]
-		later_dates = [d for d in dates if d > date]
-		# The count, the entered totals and the expenditure belong to the whole
-		# day: shown only when the figures cover all of its documents
-		partial = any(d < date or (d > date and not include_later) for d in dates)
-		if partial:
-			doc.expected_cash = flt(doc.expected_cash) + flt(doc.cash_expenditure)
-		counted = doc.status != "Open" and not partial
-		entered = {row.payment_mode: flt(row.amount) for row in doc.payment_mode_totals}
+		row = doc.date_close(date)
+		whole_day = next((r for r in doc.date_closes if r.covers_whole_day), None)
+		if row and row.covers_whole_day:
+			# A count from before date-by-date closes: its figures are the day's
+			movements = get_cash_movements(doc.source_session(), date)
+			figures = frappe._dict(movements, opening_float=flt(row.opening_float), expected_cash=flt(row.expected_cash))
+			difference = flt(row.difference)
+		else:
+			figures = doc.calculate_date_cash(date, row.cash_expenditure if row else 0)
+			difference = flt(row.counted_cash) - flt(figures.expected_cash) if row else None
+
+		if row:
+			day_status = row.status
+		elif whole_day:
+			day_status = "Counted"
+		elif doc.status == "Open":
+			day_status = "Open"
+		else:
+			day_status = "Not Closed"
+
+		entered = {
+			r.payment_mode: flt(r.amount)
+			for r in doc.payment_mode_totals
+			if r.close_date and getdate(r.close_date) == date
+		}
+		cash_sales = flt(figures.cash_sales)
 		sessions.append(frappe._dict({
 			"name": doc.name,
 			"counter": doc.counter,
 			"cashier": doc.cashier,
 			"cashier_name": frappe.utils.get_fullname(doc.cashier),
 			"status": doc.status,
+			"day_status": day_status,
+			"day_status_label": DAY_STATUS_LABELS[day_status],
 			"docstatus": doc.docstatus,
 			"opened_on": doc.opened_on,
 			"closed_on": doc.closed_on,
 			"carried_over": getdate(doc.opened_on) != date,
-			"partial": partial,
-			"continues_to": max(later_dates) if later_dates else None,
+			"counted_with": str(whole_day.close_date) if day_status == "Counted" else None,
 			"amended_from": doc.amended_from,
-			"closed_by_name": frappe.utils.get_fullname(doc.closed_by) if doc.closed_by else None,
-			"approved_by_name": frappe.utils.get_fullname(doc.approved_by) if doc.approved_by else None,
-			"close_remarks": doc.close_remarks,
+			"closed_by_name": frappe.utils.get_fullname(row.closed_by) if row and row.closed_by else None,
+			"approved_by_name": frappe.utils.get_fullname(row.approved_by) if row and row.approved_by else None,
+			"close_remarks": row.remarks if row else None,
 			"is_own": doc.cashier == frappe.session.user,
-			"denominations": [{"denomination": r.denomination, "count": r.count} for r in doc.denominations],
-			# What was entered at the close, whatever the date shown: the correction
-			# dialog starts from it, even where the grid hides it for part of a day
+			"denominations": [
+				{"denomination": r.denomination, "count": r.count}
+				for r in doc.denominations
+				if r.close_date and getdate(r.close_date) == date
+			],
+			# This date's count: the correction dialog starts from it
 			"recorded": {
-				"counted_cash": flt(doc.counted_cash),
-				"cash_expenditure": flt(doc.cash_expenditure),
+				"counted_cash": flt(row.counted_cash),
+				"cash_expenditure": flt(row.cash_expenditure),
 				"modes": entered,
-			} if doc.status != "Open" else None,
-			"opening_float": flt(doc.opening_float),
-			"cash_sales": flt(doc.cash_sales),
-			"cash_receipts": flt(doc.cash_receipts),
-			"cash_refunds": flt(doc.cash_refunds),
-			"cash_paid_out": flt(doc.cash_paid_out),
+			} if row else None,
+			"opening_float": flt(figures.opening_float),
+			"cash_sales": cash_sales,
+			"cash_receipts": flt(figures.cash_receipts),
+			"cash_refunds": flt(figures.cash_refunds),
+			"cash_paid_out": flt(figures.cash_paid_out),
 			"non_cash_sales": sales[doc.name]["non_cash"],
 			"credit_sales": sales[doc.name]["credit"],
-			"total_sales": flt(doc.cash_sales) + sales[doc.name]["non_cash"] + sales[doc.name]["credit"],
+			"total_sales": cash_sales + sales[doc.name]["non_cash"] + sales[doc.name]["credit"],
 			# Money taken for the sales: every payment mode, cash or not, but not credit
-			"total_collection": flt(doc.cash_sales) + sales[doc.name]["non_cash"],
-			"cash_expenditure": None if partial else flt(doc.cash_expenditure),
-			"expected_cash": flt(doc.expected_cash),
+			"total_collection": cash_sales + sales[doc.name]["non_cash"],
+			"cash_expenditure": flt(row.cash_expenditure) if row else None,
+			"expected_cash": flt(figures.expected_cash),
 			# Not counted yet: nothing to show, rather than a misleading 0
-			"counted_cash": flt(doc.counted_cash) if counted else None,
-			"difference": flt(doc.difference) if counted else None,
+			"counted_cash": flt(row.counted_cash) if row else None,
+			"difference": difference,
 			"modes": {
 				m.payment_mode: {
-					"entered": entered.get(m.payment_mode) if counted else None,
+					"entered": entered.get(m.payment_mode) if row else None,
 					"system": flt(system[doc.name].get(m.payment_mode)),
 				}
 				for m in modes
@@ -539,7 +644,7 @@ def build_day_overview(date=None, include_later=0):
 
 	overview = frappe._dict({
 		"date": date,
-		"include_later": include_later,
+		"include_later": False,
 		"is_today": is_today,
 		"modes": modes,
 		"sessions": sessions,
@@ -547,7 +652,60 @@ def build_day_overview(date=None, include_later=0):
 	})
 	overview.lines = day_overview_lines(overview)
 	overview.cashiers, overview.cashier_totals = cashier_sales(sessions)
+	overview.by_cashier = cashier_grid(overview)
 	return overview
+
+
+def cashier_grid(overview):
+	"""The Day Close summary: the detail grid's rows with one column per cashier,
+	all of the cashier's days (sessions) added together, so the supervisor sees
+	each cashier once. A cashier's figure is the sum of what their days show in
+	the detail grid; a figure none of their days has (nothing counted yet) stays
+	None. The Total column is the detail grid's own.
+
+	{cashiers: [{cashier, cashier_name, days, open_days, awaiting (the days
+	whose close of this date waits for approval), awaiting_difference, counted
+	(the days counted for this date, which Edit corrects, with their status),
+	closable (the days Count & Close can count for this date), remarks}],
+	lines: [{label, kind,
+	values (one per cashier), total}]}
+	"""
+	groups = {}
+	for i, s in enumerate(overview.sessions):
+		g = groups.setdefault(s.cashier, frappe._dict(
+			cashier=s.cashier, cashier_name=s.cashier_name, days=0, open_days=0,
+			awaiting=[], awaiting_difference=0, counted=[], closable=[], remarks=[], index=[],
+		))
+		g.index.append(i)
+		g.days += 1
+		day_status = s.get("day_status") or s.status
+		if day_status == "Open":
+			g.open_days += 1
+		if day_status in ("Closing", "Closed"):
+			g.counted.append({"name": s.name, "status": day_status, "docstatus": s.get("docstatus", 0)})
+		if day_status in ("Open", "Not Closed") and not s.get("docstatus"):
+			g.closable.append({"name": s.name, "status": day_status})
+		if day_status == "Closing":
+			g.awaiting.append(s.name)
+			g.awaiting_difference += flt(s.get("difference"))
+		s.get("close_remarks") and g.remarks.append(s.close_remarks)
+
+	def merged(values, index):
+		known = [values[i] for i in index if values[i] is not None]
+		return sum(known) if known else None
+
+	lines = []
+	for ln in overview.lines:
+		if ln["kind"] == "section":
+			lines.append(ln)
+			continue
+		lines.append(dict(ln, values=[merged(ln["values"], g.index) for g in groups.values()]))
+
+	cashiers = []
+	for g in groups.values():
+		g.pop("index")
+		cashiers.append(g)
+	return frappe._dict(cashiers=cashiers, lines=lines)
 
 
 def cashier_sales(sessions):
@@ -575,13 +733,20 @@ def day_overview_lines(overview):
 
 	kind: "section" (a heading), "money", "strong", "difference" (coloured).
 	A value of None is a figure not there yet (a day still open).
+
+	The cash and payment-mode totals cover the counted days only: a day still
+	open, or only partly on this date, has system figures but nothing entered,
+	so totalling it on one side only would leave Expected and Counted (System
+	and Entered) out of step with the Difference. The sales totals cover every day.
 	"""
-	def total(values):
-		known = [v for v in values if v is not None]
+	counted = [s.counted_cash is not None for s in overview.sessions]
+
+	def total(values, counted_only):
+		known = [v for v, c in zip(values, counted) if v is not None and (c or not counted_only)]
 		return sum(known) if known else None
 
-	def line(label, values, kind="money"):
-		return {"label": label, "kind": kind, "values": values, "total": total(values)}
+	def line(label, values, kind="money", counted_only=True):
+		return {"label": label, "kind": kind, "values": values, "total": total(values, counted_only)}
 
 	def field(name):
 		return [s[name] for s in overview.sessions]
@@ -613,25 +778,40 @@ def day_overview_lines(overview):
 		]
 	lines += [
 		{"label": "Sales", "kind": "section"},
-		line("Cash Sales", field("cash_sales")),
-		line("Card / Bank Sales", field("non_cash_sales")),
-		line("Credit Sales (not paid)", field("credit_sales")),
-		line("Total Sales", field("total_sales"), "strong"),
-		line("Total Collection (all but credit)", field("total_collection"), "strong"),
+		line("Cash Sales", field("cash_sales"), counted_only=False),
+		line("Card / Bank Sales", field("non_cash_sales"), counted_only=False),
+		line("Total Collection (all but credit)", field("total_collection"), "strong", counted_only=False),
+		# Credit and the total with it: shown on the board only when asked for ("credit")
+		dict(line("Credit Sales (not paid)", field("credit_sales"), counted_only=False), credit=True),
+		dict(line("Total Sales", field("total_sales"), "strong", counted_only=False), credit=True),
 	]
 	return lines
 
 
-def get_slip_payment_rows(doc):
-	"""Day Close Slip: the non-cash lines of `doc`. A supervisor gets the system
-	figure and the difference too; a cashier only what they entered."""
+def get_slip_close(doc):
+	"""The date close a Day Close Slip prints: the one asked for in the print
+	URL (`close_date`), else the last date's; None for a day not counted yet."""
+	date = frappe.form_dict.get("close_date")
+	row = doc.date_close(date) if date else None
+	return row or doc.handover_close()
+
+
+def get_slip_payment_rows(doc, close=None):
+	"""Day Close Slip: the non-cash lines of `doc` for the date of `close`. A
+	supervisor gets the system figure and the difference too; a cashier only
+	what they entered."""
 	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import get_takings_by_mode
 
-	entered = {row.payment_mode: flt(row.amount) for row in doc.payment_mode_totals}
+	date = getdate(close.close_date) if close and not close.covers_whole_day else None
+	entered = {
+		row.payment_mode: flt(row.amount)
+		for row in doc.payment_mode_totals
+		if not close or not row.close_date or getdate(row.close_date) == getdate(close.close_date)
+	}
 	if not is_supervisor():
 		return [{"payment_mode": mode, "entered": amount} for mode, amount in entered.items()]
 
-	system = get_takings_by_mode({doc.name: doc.source_session()})[doc.name]
+	system = get_takings_by_mode({doc.name: doc.source_session()}, date)[doc.name]
 	rows = []
 	for m in get_non_cash_payment_modes():
 		mode = m.payment_mode
@@ -652,8 +832,9 @@ def get_day_overview(date=None, include_later=0):
 
 
 @frappe.whitelist()
-def get_day_summary_html(date=None, include_later=0):
-	"""The Day Close Summary print: the grid of a date, landscape, with signatures."""
+def get_day_summary_html(date=None, include_later=0, view="summary", show_credit=0):
+	"""The Day Close Summary print, landscape, with signatures: the cashier
+	summary (`view` "summary") or the session grid ("detail") of a date."""
 	if not is_supervisor():
 		frappe.throw("Only a supervisor can print the Day Close Summary.", frappe.PermissionError)
 	overview = build_day_overview(date, include_later)
@@ -662,6 +843,9 @@ def get_day_summary_html(date=None, include_later=0):
 		"digitz_erp/templates/day_close_summary.html",
 		{
 			"o": overview,
+			"view": "detail" if view == "detail" else "summary",
+			# Credit Sales and Total Sales, as the board shows them
+			"show_credit": bool(cint(show_credit)),
 			"company": default_company,
 			"currency": frappe.db.get_value("Company", default_company, "default_currency") if default_company else None,
 			"printed_by": frappe.utils.get_fullname(frappe.session.user),
@@ -695,7 +879,7 @@ def export_day_overview(date=None, include_later=0):
 	thin = Side(style="thin", color="BFBFBF")
 	box = Border(left=thin, right=thin, top=thin, bottom=thin)
 	money_fmt = '#,##0.00;-#,##0.00;"-"'
-	status_fill = {"Open": "D9F2E3", "Closing": "FCE8C8", "Closed": "DCE6F1"}
+	status_fill = {"Open": "D9F2E3", "Not Closed": "FCE8C8", "Closing": "FCE8C8", "Closed": "DCE6F1"}
 
 	def fill(colour):
 		return PatternFill("solid", start_color=colour, end_color=colour)
@@ -734,7 +918,7 @@ def export_day_overview(date=None, include_later=0):
 			("", [f"{s.counter}\n{s.cashier_name}" for s in sessions], "TOTAL"),
 			("Session", [s.name + (f" (corrects {s.amended_from})" if s.amended_from else "") for s in sessions], ""),
 			("Opened → Closed", [f"{time(s.opened_on)} → {time(s.closed_on)}" for s in sessions], ""),
-			("Status", ["Awaiting Approval" if s.status == "Closing" else s.status for s in sessions], ""),
+			("Status", [s.day_status_label for s in sessions], ""),
 		]
 		row = 4
 		for i, (label, values, total) in enumerate(heads):
@@ -747,7 +931,7 @@ def export_day_overview(date=None, include_later=0):
 					cell.fill = fill(navy)
 				else:
 					cell.font = Font(size=9, color="404040", bold=col == 1)
-					cell.fill = fill(status_fill.get(sessions[col - 2].status, light) if i == 3 and 1 < col < last_col else light)
+					cell.fill = fill(status_fill.get(sessions[col - 2].day_status, light) if i == 3 and 1 < col < last_col else light)
 			row += 1
 		ws.row_dimensions[4].height = 32
 		if any(s.amended_from for s in sessions):
@@ -871,13 +1055,14 @@ def get_live_session(name: str | None) -> str | None:
 
 
 @frappe.whitelist()
-def edit_close(session, counted_cash=None, denominations=None, remarks=None, expenditure=None, payment_totals=None):
-	"""A supervisor corrects a counted day: the count, the expenditure and the
-	non-cash totals. Their correction is its own approval, so the day closes.
+def edit_close(session, date=None, counted_cash=None, denominations=None, remarks=None, expenditure=None, payment_totals=None):
+	"""A supervisor corrects a counted date: the count, the expenditure and the
+	non-cash totals. Their correction is its own approval.
 
-	A close still waiting for approval is corrected in place. A closed day is
-	reopened: it is cancelled and an amended copy takes the corrected count, so
-	the original stays on record. The cashier's day stays closed either way.
+	A day not finished yet is corrected in place. A finished day is reopened:
+	it is cancelled and an amended copy takes the corrected count, so the
+	original stays on record; the copy finishes again once every date is
+	approved. The cashier's till stays closed either way.
 	"""
 	if not is_supervisor():
 		frappe.throw("Only a supervisor can correct a closed day.", frappe.PermissionError)
@@ -885,7 +1070,11 @@ def edit_close(session, counted_cash=None, denominations=None, remarks=None, exp
 		frappe.throw("Give a reason for the correction.")
 
 	doc = frappe.get_doc("Counter Session", session)
-	if doc.docstatus == 0 and doc.status == "Closing":
+	date = getdate(date) if date else (doc.handover_close().close_date if doc.date_closes else None)
+	if not date or not doc.date_close(date):
+		frappe.throw(f"{session} is not counted for that date: close it first.")
+
+	if doc.docstatus == 0 and doc.status in ("Open", "Closing"):
 		target = doc
 	elif doc.docstatus == 1:
 		# The documents of the day link to this session; they stay with it
@@ -895,23 +1084,30 @@ def edit_close(session, counted_cash=None, denominations=None, remarks=None, exp
 		target = frappe.copy_doc(doc)
 		target.amended_from = doc.name
 	else:
-		frappe.throw(f"{session} is not counted yet: close it first.")
+		frappe.throw(f"{session} cannot be corrected.")
 
 	# The previous day may have been corrected since: link its live amendment
 	live_previous = get_live_session(target.previous_session)
 	if live_previous != target.previous_session:
 		target.previous_session = live_previous
-		target.previous_closing_cash = flt(frappe.db.get_value("Counter Session", live_previous, "counted_cash")) if live_previous else 0
+		target.previous_closing_cash = get_handover_cash(live_previous) if live_previous else 0
 
-	apply_count(target, counted_cash, denominations, expenditure, payment_totals)
-	note = f"Corrected by {frappe.utils.get_fullname(frappe.session.user)} on {frappe.utils.format_datetime(now_datetime())}: {remarks.strip()}"
+	note = (
+		f"Corrected by {frappe.utils.get_fullname(frappe.session.user)} on "
+		f"{frappe.utils.format_datetime(now_datetime())}: {remarks.strip()}"
+	)
+	record_close(target, date, counted_cash, denominations, expenditure, payment_totals, note, None, approve=True)
 	target.close_remarks = "\n".join(r for r in (doc.close_remarks, note) if r)
-	target.status = "Closing"
-	target.approved_by = frappe.session.user
+	if target.is_new():
+		target.status = "Closing"
 	target.save(ignore_permissions=True)
-	target.flags.ignore_permissions = True
-	target.submit()
-	return {"session": target.name, "status": target.status}
+	finish_if_complete(target)
+	return {"session": target.name, "close_date": str(date), "status": target.date_close(date).status}
+
+
+def get_handover_cash(session):
+	"""The cash `session` handed its till over with: its last date's count."""
+	return frappe.get_doc("Counter Session", session).handover_cash()
 
 
 # The longest range Day History loads in one request
@@ -950,14 +1146,19 @@ def get_session_history(from_date=None, to_date=None, counter=None, cashier=None
 
 	rows = get_data(filters)
 
-	# What the cashier entered for card, bank and other modes, per day
-	non_cash = dict(frappe.db.sql(
-		"""SELECT parent, SUM(amount) FROM `tabCounter Session Payment Total`
-		WHERE parenttype = 'Counter Session' AND parent IN %(names)s GROUP BY parent""",
+	# What the cashier entered for card, bank and other modes, per date close
+	non_cash = {}
+	for parent, close_date, amount in frappe.db.sql(
+		"""SELECT parent, close_date, SUM(amount) FROM `tabCounter Session Payment Total`
+		WHERE parenttype = 'Counter Session' AND parent IN %(names)s GROUP BY parent, close_date""",
 		{"names": [r.name for r in rows] or [""]},
-	))
+	):
+		non_cash[(parent, str(close_date) if close_date else None)] = flt(amount)
 	for r in rows:
-		r.non_cash_total = flt(non_cash.get(r.name))
+		if r.close_date:
+			r.non_cash_total = non_cash.get((r.name, str(r.close_date)), 0)
+		else:
+			r.non_cash_total = sum(v for (parent, _date), v in non_cash.items() if parent == r.name)
 
 	totals = {
 		"days": len(rows),

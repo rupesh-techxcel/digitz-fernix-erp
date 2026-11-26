@@ -1,7 +1,9 @@
 # Copyright (c) 2026, Rupesh P and contributors
 # For license information, please see license.txt
 
-"""Every cashier day (Counter Session): float, cash movements, expected vs counted cash.
+"""Every cashier day (Counter Session), one line per date close: float, cash
+movements, expected vs counted cash. A day still open, or not counted yet, has
+one line of its own.
 
 The report's ref_doctype is Sales Invoice, not Counter Session: Frappe grants no
 doctype-level "report" right through an If Owner rule, which is how a Cashier
@@ -19,6 +21,7 @@ def execute(filters=None):
 def get_columns():
 	currency = lambda fieldname, label, width=110: {"fieldname": fieldname, "label": label, "fieldtype": "Currency", "width": width}
 	return [
+		{"fieldname": "close_date", "label": "Date", "fieldtype": "Date", "width": 100},
 		{"fieldname": "name", "label": "Session", "fieldtype": "Link", "options": "Counter Session", "width": 150},
 		# Data, not a Link: a Cashier cannot read Counter, and query_report checks every
 		# Link column against the user's read rights once there are rows
@@ -50,28 +53,46 @@ def get_data(filters):
 	if "Cashier" in roles and not is_privileged:
 		filters["cashier"] = current_user
 
-	conditions = ["cs.docstatus < 2"]
+	day = "IFNULL(t.close_date, DATE(t.opened_on))"
+	conditions = []
 	if filters.get("from_date"):
-		conditions.append("DATE(cs.opened_on) >= %(from_date)s")
+		conditions.append(f"{day} >= %(from_date)s")
 	if filters.get("to_date"):
-		conditions.append("DATE(cs.opened_on) <= %(to_date)s")
+		conditions.append(f"{day} <= %(to_date)s")
 	for field in ("counter", "cashier", "status"):
 		if filters.get(field):
-			conditions.append(f"cs.{field} = %({field})s")
+			conditions.append(f"t.{field} = %({field})s")
+	where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
 	return frappe.db.sql(
 		f"""
-		SELECT cs.name, cs.counter, IFNULL(u.full_name, cs.cashier) AS cashier_name, cs.opened_on, cs.closed_on,
-			cs.status, cs.opening_float, cs.cash_sales, cs.cash_receipts, cs.cash_refunds, cs.cash_paid_out,
-			cs.cash_expenditure,
-			cs.expected_cash, cs.counted_cash, cs.difference, IFNULL(c.full_name, cs.closed_by) AS closed_by,
-			IFNULL(a.full_name, cs.approved_by) AS approved_by
-		FROM `tabCounter Session` cs
-		LEFT JOIN `tabUser` u ON u.name = cs.cashier
-		LEFT JOIN `tabUser` c ON c.name = cs.closed_by
-		LEFT JOIN `tabUser` a ON a.name = cs.approved_by
-		WHERE {" AND ".join(conditions)}
-		ORDER BY cs.opened_on DESC
+		SELECT t.name, t.close_date, t.counter, IFNULL(u.full_name, t.cashier) AS cashier_name, t.opened_on,
+			t.closed_on, t.status, t.opening_float, t.cash_sales, t.cash_receipts, t.cash_refunds,
+			t.cash_paid_out, t.cash_expenditure, t.expected_cash, t.counted_cash, t.difference,
+			IFNULL(c.full_name, t.closed_by) AS closed_by, IFNULL(a.full_name, t.approved_by) AS approved_by
+		FROM (
+			-- Each date's close
+			SELECT cs.name, dc.close_date, cs.counter, cs.cashier, cs.opened_on, dc.closed_on, dc.status,
+				dc.opening_float, dc.cash_sales, dc.cash_receipts, dc.cash_refunds, dc.cash_paid_out,
+				dc.cash_expenditure, dc.expected_cash, dc.counted_cash, dc.difference, dc.closed_by, dc.approved_by
+			FROM `tabCounter Session` cs
+			INNER JOIN `tabCounter Session Date Close` dc ON dc.parent = cs.name AND dc.parenttype = 'Counter Session'
+			WHERE cs.docstatus < 2
+			UNION ALL
+			-- A day still open, or with nothing counted yet
+			SELECT cs.name, NULL, cs.counter, cs.cashier, cs.opened_on, cs.closed_on, cs.status,
+				cs.opening_float, cs.cash_sales, cs.cash_receipts, cs.cash_refunds, cs.cash_paid_out,
+				cs.cash_expenditure, cs.expected_cash, cs.counted_cash, cs.difference, cs.closed_by, cs.approved_by
+			FROM `tabCounter Session` cs
+			WHERE cs.docstatus < 2 AND (cs.status = 'Open' OR NOT EXISTS (
+				SELECT 1 FROM `tabCounter Session Date Close` x WHERE x.parent = cs.name AND x.parenttype = 'Counter Session'
+			))
+		) t
+		LEFT JOIN `tabUser` u ON u.name = t.cashier
+		LEFT JOIN `tabUser` c ON c.name = t.closed_by
+		LEFT JOIN `tabUser` a ON a.name = t.approved_by
+		{where}
+		ORDER BY {day} DESC, t.opened_on DESC
 		""",
 		filters,
 		as_dict=True,

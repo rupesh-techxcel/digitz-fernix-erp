@@ -560,7 +560,10 @@ digitz_erp.dayops_styles = function () {
 .dcb-buttons { margin-left: auto; display: flex; gap: 6px; padding-bottom: 2px; }
 .dcb-card { padding: 0; overflow: hidden; }
 .dcb-card > p { padding: 0 16px 12px; }
-.dcb-scroll { overflow-x: auto; }
+/* The grid scrolls inside its card, so the header rows and the label column stay in view */
+.dcb-scroll { overflow: auto; max-height: calc(100vh - 180px); }
+.dcb-grid thead { position: sticky; top: 0; z-index: 2; }
+.dcb-grid thead th:first-child { z-index: 3; }
 .dcb-grid { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 13px; }
 .dcb-grid th, .dcb-grid td { padding: 6px 12px; border-bottom: 1px solid var(--border-color); }
 .dcb-grid th:first-child, .dcb-grid td:first-child { position: sticky; left: 0; z-index: 1; background: var(--card-bg, var(--fg-color));

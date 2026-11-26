@@ -1,0 +1,145 @@
+{
+ "actions": [],
+ "creation": "2026-11-26 13:30:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "close_date",
+  "status",
+  "opening_float",
+  "cash_sales",
+  "cash_receipts",
+  "cash_refunds",
+  "cash_paid_out",
+  "cash_expenditure",
+  "expected_cash",
+  "counted_cash",
+  "difference",
+  "closed_by",
+  "closed_on",
+  "approved_by",
+  "remarks",
+  "covers_whole_day"
+ ],
+ "fields": [
+  {
+   "fieldname": "close_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Close Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Closing\nClosed",
+   "default": "Closing"
+  },
+  {
+   "fieldname": "opening_float",
+   "fieldtype": "Currency",
+   "label": "Opening Float"
+  },
+  {
+   "fieldname": "cash_sales",
+   "fieldtype": "Currency",
+   "label": "Cash Sales",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "cash_receipts",
+   "fieldtype": "Currency",
+   "label": "Cash Receipts",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "cash_refunds",
+   "fieldtype": "Currency",
+   "label": "Cash Refunds",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "cash_paid_out",
+   "fieldtype": "Currency",
+   "label": "Cash Paid Out",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "cash_expenditure",
+   "fieldtype": "Currency",
+   "label": "Expenditure"
+  },
+  {
+   "fieldname": "expected_cash",
+   "fieldtype": "Currency",
+   "label": "Expected Cash",
+   "read_only": 1,
+   "permlevel": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "counted_cash",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Counted Cash"
+  },
+  {
+   "fieldname": "difference",
+   "fieldtype": "Currency",
+   "label": "Difference",
+   "read_only": 1,
+   "permlevel": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "closed_by",
+   "fieldtype": "Link",
+   "label": "Closed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "covers_whole_day",
+   "fieldtype": "Check",
+   "label": "Covers the Whole Day",
+   "read_only": 1,
+   "description": "A count from before date-by-date closes, for every date of the day: its figures are the whole day's."
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-26 13:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "Counter Session Date Close",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

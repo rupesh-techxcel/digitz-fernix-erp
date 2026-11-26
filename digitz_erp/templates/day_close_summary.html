@@ -23,6 +23,8 @@
 	.grid td.short { color: #c00; }
 	.grid td.over { color: #b45309; }
 	.grid .total { background: #f2f2f2; font-weight: bold; }
+	.grid th.group { text-align: center; }
+	.grid td.start { border-left: 2px solid #666; }
 	table.by-cashier { width: auto; min-width: 50%; margin-top: 10px; }
 	.remarks { margin-top: 8px; }
 	.remarks p { margin: 2px 0; }
@@ -42,19 +44,56 @@
 
 	{% if not o.sessions %}
 	<div class="empty">No day was opened on any counter on this date.</div>
+	{% elif view == "summary" %}
+	{%- set g = o.by_cashier -%}
+	<table class="grid">
+		<thead>
+			<tr>
+				<th></th>
+				{% for c in g.cashiers %}
+				<th>{{ c.cashier_name }}</th>
+				{% endfor %}
+				<th class="total">Total</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for ln in g.lines if show_credit or not ln.credit %}
+			{% if ln.kind == "section" %}
+			<tr class="section"><td colspan="{{ g.cashiers|length + 2 }}">{{ ln.label }}</td></tr>
+			{% else %}
+			<tr class="{{ ln.kind }}">
+				<td>{{ ln.label }}</td>
+				{% for v in ln["values"] %}
+				<td class="{{ diff_class(v) if ln.kind == 'difference' else '' }}">{{ money(v) }}</td>
+				{% endfor %}
+				<td class="total {{ diff_class(ln.total) if ln.kind == 'difference' else '' }}">{{ money(ln.total) }}</td>
+			</tr>
+			{% endif %}
+			{% endfor %}
+		</tbody>
+	</table>
+	<p style="font-size: 11px; color: #555; margin: 4px 0 12px;">Each cashier's column adds up all of their days on this date. Cash and payment-mode totals add up only the counted days, so they agree with the differences; Sales totals add up every day.</p>
+
+	<div class="remarks">
+		{% for c in g.cashiers %}
+		{% if c.remarks %}
+		<p><b>{{ c.cashier_name }}:</b> <span style="white-space: pre-line;">{{ c.remarks | join("\n") | e }}</span></p>
+		{% endif %}
+		{% endfor %}
+	</div>
 	{% else %}
 	<table class="grid">
 		<thead>
 			<tr>
 				<th></th>
 				{% for s in o.sessions %}
-				<th>{{ s.counter }}<small>{{ s.cashier_name }}</small><small>{{ s.name }} · {{ s.status }}</small></th>
+				<th>{{ s.counter }}<small>{{ s.cashier_name }}</small><small>{{ s.name }} · {{ s.day_status_label }}</small></th>
 				{% endfor %}
 				<th class="total">Total</th>
 			</tr>
 		</thead>
 		<tbody>
-			{% for ln in o.lines %}
+			{% for ln in o.lines if show_credit or not ln.credit %}
 			{% if ln.kind == "section" %}
 			<tr class="section"><td colspan="{{ o.sessions|length + 2 }}">{{ ln.label }}</td></tr>
 			{% else %}
@@ -69,6 +108,7 @@
 			{% endfor %}
 		</tbody>
 	</table>
+	<p style="font-size: 11px; color: #555; margin: 4px 0 12px;">Cash and payment-mode totals add up only the counted days, so they agree with the differences; Sales totals add up every day.</p>
 
 	<table class="grid by-cashier">
 		<thead>

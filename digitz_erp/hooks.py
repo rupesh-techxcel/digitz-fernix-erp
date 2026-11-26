@@ -91,6 +91,7 @@ jinja = {
 	"methods": [
 		"digitz_erp.api.counter_api.is_supervisor",
 		"digitz_erp.api.counter_session_api.get_slip_payment_rows",
+		"digitz_erp.api.counter_session_api.get_slip_close",
 	],
 }
 
