@@ -435,7 +435,11 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		party_trn_no = doc.tax_id  
 
 	elif doc.doctype == "Sales Invoice":
-		customer_address = doc.customer_address
+		# Always the customer's current address from the master, so a reprint
+		# shows an address corrected after the invoice was made
+		customer_address = (
+			frappe.db.get_value("Customer", doc.customer, "full_address") if doc.customer else None
+		) or doc.customer_address
 		party_trn_no = doc.tax_id
 		customer_name = doc.customer_name
 		lpo_no = doc.lpo_no or ""
