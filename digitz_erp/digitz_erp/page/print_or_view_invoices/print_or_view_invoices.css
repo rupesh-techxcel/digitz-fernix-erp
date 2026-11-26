@@ -223,3 +223,16 @@
 	background: var(--pv-surface);
 	box-shadow: var(--pv-shadow-sm);
 }
+
+/* ---------- Print icon in the list ---------- */
+
+.pv-nowrap { white-space: nowrap; }
+
+.pv-print {
+	margin-left: 6px;
+	padding: 1px 6px;
+	line-height: 1;
+	vertical-align: middle;
+}
+
+.pv-print .icon { margin: 0; }
