@@ -5,9 +5,17 @@
 
 A draft session is an open day. Documents saved in it (Sales Invoice, Sales Return,
 Receipt Entry, Expense Entry) carry its name in `counter_session`; see
-digitz_erp.api.counter_session_api. Submitting the session closes the day. Every
-close waits in status Closing until a supervisor approves it, with or without a
-difference. It is a record of the till only: nothing is posted to the GL.
+digitz_erp.api.counter_session_api. It is a record of the till only: nothing is
+posted to the GL.
+
+A session is closed date by date (`date_closes`, one row per date of its
+documents): each date's expected cash comes from that date's documents -- the
+opening float counts on the session's first date only, as each date's cash is
+taken out when that date is closed -- and is set against the count entered for
+it. Every date close waits (Closing) until a supervisor approves it, with or
+without a difference. The cashier's Day Close ends the till (status Closing) and
+counts the current date; a supervisor closes any earlier date. Submitting the
+session finishes it, once the till is closed and every date is approved.
 
 The counter is taken only while a day on it is Open. Once the till is counted the
 counter is free for the next cashier, even if the close still waits for approval:
@@ -16,7 +24,7 @@ the cash has been handed over, and the approval is the supervisor's check of the
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import flt, now_datetime
+from frappe.utils import flt, getdate, now_datetime
 
 # A receipt's cash: its amount adds Sales Return / Credit Note lines as positive,
 # but they are paid out, so the cash taken is the amount less twice those lines
@@ -46,6 +54,34 @@ def posting_date_condition(posting_date=None, include_later=False):
 	if not posting_date:
 		return ""
 	return "AND d.posting_date >= %(posting_date)s" if include_later else "AND d.posting_date = %(posting_date)s"
+
+
+def get_cash_movements(source, posting_date=None, include_later=False):
+	"""{field: amount} of the submitted cash documents saved in session `source`
+	(CASH_MOVEMENTS), limited to a date as in posting_date_condition."""
+	movements = {}
+	for field, doctype, amount_expr, _sign, skip_credit in CASH_MOVEMENTS:
+		credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
+		dated = posting_date_condition(posting_date, include_later)
+		movements[field] = flt(frappe.db.sql(
+			f"""
+			SELECT SUM({amount_expr})
+			FROM `tab{doctype}` d
+			INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
+			WHERE d.counter_session = %(source)s AND d.docstatus = 1 AND pm.mode = 'Cash' {credit} {dated}
+			""",
+			{"source": source, "posting_date": posting_date},
+		)[0][0])
+	return movements
+
+
+def expected_from(opening_float, movements, expenditure):
+	"""The cash the till should hold: the float, plus and minus the cash
+	movements by their sign, less the expenditure paid out of it."""
+	expected = flt(opening_float) - flt(expenditure)
+	for field, _doctype, _amount, sign, _skip in CASH_MOVEMENTS:
+		expected += sign * flt(movements.get(field))
+	return expected
 
 
 def get_document_dates(source):
@@ -140,6 +176,7 @@ class CounterSession(Document):
 		self.validate_approver()
 		self.set_counted_cash_from_denominations()
 		self.calculate_cash()
+		self.update_date_closes()
 
 	def validate_single_open_session(self):
 		taken = frappe.db.get_value(
@@ -177,8 +214,92 @@ class CounterSession(Document):
 		for row in self.denominations:
 			row.amount = flt(row.denomination) * flt(row.count)
 			total += row.amount
-		if self.denominations and total:
+		# With date closes each date's count is its own (update_date_closes)
+		if self.denominations and total and not self.date_closes:
 			self.counted_cash = total
+
+	def date_close(self, date):
+		"""The close of `date`, or None."""
+		date = getdate(date)
+		return next((row for row in self.date_closes if getdate(row.close_date) == date), None)
+
+	def document_dates(self):
+		if self.is_new() and not self.amended_from:
+			return []
+		return sorted({getdate(d) for d in get_document_dates(self.source_session())})
+
+	def dates_to_close(self):
+		"""The dates this session must close: every date of its documents, and
+		the date the till was closed on. A day counted whole before date-by-date
+		closes needs nothing more."""
+		if any(row.covers_whole_day for row in self.date_closes):
+			return sorted({getdate(row.close_date) for row in self.date_closes})
+		dates = set(self.document_dates())
+		if self.status in ("Closing", "Closed") and self.closed_on:
+			dates.add(getdate(self.closed_on))
+		return sorted(dates)
+
+	def float_date(self):
+		"""The date the opening float counts on: the session's first date, of its
+		documents or of a close (a later date's cash starts from nothing, as the
+		earlier date's cash was taken out when that date was closed)."""
+		dates = set(self.document_dates()) | {getdate(row.close_date) for row in self.date_closes}
+		return min(dates) if dates else getdate(self.opened_on)
+
+	def calculate_date_cash(self, date, expenditure=0, float_date=None):
+		"""{opening_float, the CASH_MOVEMENTS fields, expected_cash} for `date`:
+		that date's cash documents, the float on the session's first date only,
+		less `expenditure` (the date's, entered at its close)."""
+		date = getdate(date)
+		movements = (
+			get_cash_movements(self.source_session(), date)
+			if not (self.is_new() and not self.amended_from)
+			else {field: 0 for field, *_rest in CASH_MOVEMENTS}
+		)
+		opening = flt(self.opening_float) if date == (float_date or self.float_date()) else 0
+		return frappe._dict(
+			movements, opening_float=opening, expected_cash=expected_from(opening, movements, expenditure)
+		)
+
+	def update_date_closes(self):
+		"""Each date close's figures from its date's documents and its count, and
+		the session's count, expenditure, expected cash and difference as their
+		totals (what Day History, the dashboard and the reports read)."""
+		if not self.date_closes:
+			return
+		first = self.float_date()
+		for row in self.date_closes:
+			counted = [d for d in self.denominations if d.close_date and getdate(d.close_date) == getdate(row.close_date)]
+			total = sum(flt(d.denomination) * flt(d.count) for d in counted)
+			if counted and total:
+				row.counted_cash = total
+			if row.covers_whole_day:
+				# Counted for every date of the day, before date-by-date closes
+				movements = get_cash_movements(self.source_session())
+				row.update(dict(movements, opening_float=flt(self.opening_float)))
+				row.expected_cash = expected_from(self.opening_float, movements, row.cash_expenditure)
+			else:
+				row.update(self.calculate_date_cash(row.close_date, row.cash_expenditure, first))
+			row.difference = flt(row.counted_cash) - flt(row.expected_cash)
+		self.counted_cash = sum(flt(row.counted_cash) for row in self.date_closes)
+		self.cash_expenditure = sum(flt(row.cash_expenditure) for row in self.date_closes)
+		self.expected_cash = sum(flt(row.expected_cash) for row in self.date_closes)
+		self.difference = sum(flt(row.difference) for row in self.date_closes)
+
+	def handover_close(self):
+		"""The close of the date the till was closed on (the latest date): the
+		cash left in the till, which the next day on the counter starts from."""
+		if not self.date_closes:
+			return None
+		return max(self.date_closes, key=lambda row: (getdate(row.close_date), str(row.closed_on or "")))
+
+	def handover_cash(self):
+		row = self.handover_close()
+		return flt(row.counted_cash) if row else flt(self.counted_cash)
+
+	def unclosed_dates(self):
+		"""The dates still to close or approve before the session can finish."""
+		return [d for d in self.dates_to_close() if not (self.date_close(d) and self.date_close(d).status == "Closed")]
 
 	def source_session(self):
 		"""The session the day's documents carry. A corrected close is an amended
@@ -195,28 +316,14 @@ class CounterSession(Document):
 		expenditure entered at Day Close, the expected cash. `posting_date` and
 		`include_later` limit the documents as in posting_date_condition: the Day
 		Close board's view of a date, worked out in memory and never saved."""
-		expected = flt(self.opening_float)
-		source = self.source_session()
-
-		for field, doctype, amount_expr, sign, skip_credit in CASH_MOVEMENTS:
-			amount = 0
-			if not self.is_new():
-				credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
-				dated = posting_date_condition(posting_date, include_later)
-				amount = flt(frappe.db.sql(
-					f"""
-					SELECT SUM({amount_expr})
-					FROM `tab{doctype}` d
-					INNER JOIN `tabPayment Mode` pm ON pm.name = d.payment_mode
-					WHERE d.counter_session = %(source)s AND d.docstatus = 1 AND pm.mode = 'Cash' {credit} {dated}
-					""",
-					{"source": source, "posting_date": posting_date},
-				)[0][0])
-			self.set(field, amount)
-			expected += sign * amount
-
+		movements = (
+			{field: 0 for field, *_rest in CASH_MOVEMENTS}
+			if self.is_new()
+			else get_cash_movements(self.source_session(), posting_date, include_later)
+		)
+		self.update(movements)
 		# Paid out of the till, entered at Day Close: kept on the session only
-		expected -= flt(self.cash_expenditure)
+		expected = expected_from(self.opening_float, movements, self.cash_expenditure)
 
 		self.expected_cash = expected
 		self.difference = flt(self.counted_cash) - expected if self.status in ("Closing", "Closed") else 0
@@ -235,8 +342,17 @@ class CounterSession(Document):
 			)
 
 		self.calculate_cash()
+		self.update_date_closes()
 
-		if self.has_difference() and not self.approved_by:
+		if self.date_closes:
+			unclosed = self.unclosed_dates()
+			if unclosed:
+				frappe.throw(
+					"Close and approve every date of this day first: "
+					+ ", ".join(frappe.utils.formatdate(d) for d in unclosed) + ".",
+					title="Approval Needed",
+				)
+		elif self.has_difference() and not self.approved_by:
 			frappe.throw(
 				f"The counted cash differs from the expected cash by {flt(self.difference):.2f}. "
 				"A supervisor has to approve this close.",
@@ -265,7 +381,7 @@ class CounterSession(Document):
 		):
 			frappe.db.set_value(
 				"Counter Session", name,
-				{"previous_session": self.name, "previous_closing_cash": flt(self.counted_cash)},
+				{"previous_session": self.name, "previous_closing_cash": self.handover_cash()},
 			)
 
 	def on_cancel(self):

@@ -13,3 +13,4 @@ digitz_erp.patches.v1_0.set_altaj_letterhead
 digitz_erp.patches.v1_0.remove_cashier_item_edit
 digitz_erp.patches.v1_0.import_historical_invoices
 digitz_erp.patches.v1_0.relink_days_to_corrected_previous_day
+digitz_erp.patches.v1_0.date_closes_for_counted_sessions

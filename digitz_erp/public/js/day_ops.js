@@ -60,9 +60,11 @@ digitz_erp.DayOpsBase = class DayOpsBase {
 		this.opts.on_change && this.opts.on_change();
 	}
 
-	static print_slip(session) {
+	// One date's close: `date` picks it, else the slip prints the last date's
+	static print_slip(session, date) {
 		window.open(frappe.urllib.get_full_url(
 			`/printview?doctype=${encodeURIComponent("Counter Session")}&name=${encodeURIComponent(session)}&format=${encodeURIComponent("Day Close Slip")}&trigger_print=1`
+			+ (date ? `&close_date=${encodeURIComponent(date)}` : "")
 		));
 	}
 };
@@ -532,13 +534,13 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				<button class="btn ${handover ? "btn-default" : "btn-primary"} btn-sm dayops-print">${__("Print Day Close Slip")}</button>
 				${next}
 			</div>`);
-		this.$body.find(".dayops-print").on("click", () => this.print(result.session));
+		this.$body.find(".dayops-print").on("click", () => this.print(result.session, result.close_date));
 		this.$body.find(".dayops-open").on("click", () => this.go("day-open"));
 		this.$body.find(".dayops-logout").on("click", () => frappe.app.logout());
 	}
 
-	print(session) {
-		digitz_erp.DayOpsBase.print_slip(session);
+	print(session, date) {
+		digitz_erp.DayOpsBase.print_slip(session, date);
 	}
 
 	// ------------------------------------------------------- supervisor's board
@@ -547,10 +549,15 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 	// supervisor closes a day for a cashier (or their own), approves a count, and
 	// reopens a closed day to correct it. See counter_session_api.build_day_overview.
 
-	// A day can run past midnight: the board shows the chosen date's documents
-	// only, or with "Include later dates" that date's and the ones after it
+	// The board shows the chosen date's documents only: each date is closed on
+	// its own, even inside a day that ran over several dates
 	board_args() {
-		return { date: this.board_date, include_later: this.board_include_later ? 1 : 0 };
+		return { date: this.board_date };
+	}
+
+	// Credit sales and the Total Sales with them only when "Show credit sales" is ticked
+	board_lines(lines) {
+		return (lines || []).filter((ln) => !ln.credit || this.board_show_credit);
 	}
 
 	async render_board(date) {
@@ -563,8 +570,9 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		const sessions = o.sessions || [];
 		// The cashier summary is the default; the session grid is the detail view
 		const detail = this.board_view === "detail";
-		const count = (status) => sessions.filter((x) => x.status === status).length;
-		const pill = (status) => `<span class="indicator-pill ${{ Open: "green", Closing: "orange", Closed: "blue" }[status] || "gray"}">${status === "Closing" ? __("Awaiting Approval") : __(status)}</span>`;
+		// Each column's state for this date: its close's status, or why it has none
+		const count = (status) => sessions.filter((x) => x.day_status === status).length;
+		const pill = (x) => `<span class="indicator-pill ${{ Open: "green", "Not Closed": "red", Closing: "orange", Closed: "blue" }[x.day_status] || "gray"}">${__(x.day_status_label)}</span>`;
 		const time = (dt) => (dt ? moment(dt).format("hh:mm A") : "");
 
 		const head = sessions.map((x) => `
@@ -574,10 +582,9 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				<div><a href="/app/counter-session/${encodeURIComponent(x.name)}">${this.esc(x.name)}</a></div>
 				<div class="dcb-time">${time(x.opened_on)} → ${x.closed_on ? time(x.closed_on) : __("open")}</div>
 				${x.carried_over ? `<div class="dcb-note">${__("Opened {0}", [frappe.datetime.str_to_user(String(x.opened_on).split(" ")[0])])}</div>` : ""}
-				${x.continues_to ? `<div class="dcb-note">${__("Continues to {0}", [frappe.datetime.str_to_user(x.continues_to)])}</div>` : ""}
-				${x.partial ? `<div class="dcb-note">${__("Count and difference cover the whole day: not shown for part of it")}</div>` : ""}
+				${x.counted_with ? `<div class="dcb-note">${__("Counted for the whole day on {0}", [frappe.datetime.str_to_user(x.counted_with)])}</div>` : ""}
 				${x.amended_from ? `<div class="dcb-note">${__("Corrects {0}", [this.esc(x.amended_from)])}</div>` : ""}
-				<div style="margin-top: 4px;">${pill(x.status)}</div>
+				<div style="margin-top: 4px;">${pill(x)}</div>
 			</th>`).join("");
 
 		const cell = (v, kind) => {
@@ -587,7 +594,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			const cls = kind === "difference" && Math.abs(v) >= 0.005 ? (v < 0 ? "is-short" : "is-over") : "";
 			return `<td class="dayops-num ${cls}">${this.money(v)}</td>`;
 		};
-		const body = (o.lines || []).map((ln) => ln.kind === "section"
+		const body = this.board_lines(o.lines).map((ln) => ln.kind === "section"
 			? `<tr class="dcb-section"><td colspan="${sessions.length + 2}">${this.esc(ln.label)}</td></tr>`
 			: `<tr class="dcb-${ln.kind}"><td>${this.esc(ln.label)}</td>${ln.values.map((v) => cell(v, ln.kind)).join("")}
 				${cell(ln.total, ln.kind).replace("<td class=\"", "<td class=\"dcb-total ")}</tr>`
@@ -596,18 +603,22 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		const actions = sessions.map((x) => {
 			const b = (action, label, cls = "btn-default") =>
 				`<button class="btn btn-xs ${cls}" data-act="${action}" data-name="${this.esc(x.name)}">${label}</button>`;
+			// What this date of the day needs: counting, approving, or a correction
+			const today = this.board_date === frappe.datetime.get_today();
 			const buttons = {
-				Open: b("close", x.is_own ? __("Close My Day") : __("Count & Close"), "btn-primary"),
+				Open: b("close", x.is_own && today ? __("Close My Day") : __("Count & Close"), "btn-primary"),
+				"Not Closed": b("close", __("Count & Close"), "btn-primary"),
 				Closing: b("approve", __("Approve"), "btn-primary") + b("edit", __("Edit")),
-				Closed: b("edit", __("Reopen & Edit")) + b("slip", __("Print Slip")),
-			}[x.status] || "";
+				Closed: b("edit", x.docstatus === 1 ? __("Reopen & Edit") : __("Edit")) + b("slip", __("Print Slip")),
+			}[x.day_status] || "";
 			return `<td class="dcb-actions">${buttons}</td>`;
 		}).join("");
 		const ct = o.cashier_totals || {};
+		const credit = !!this.board_show_credit;
 		const by_cashier = (o.cashiers || []).map((c) => `<tr><td>${this.esc(c.cashier_name)}</td><td class="dayops-num">${c.days}</td>
-				<td class="dayops-num">${this.money(c.total_sales)}</td><td class="dayops-num">${this.money(c.total_collection)}</td></tr>`).join("")
+				<td class="dayops-num">${this.money(c.total_collection)}</td>${credit ? `<td class="dayops-num">${this.money(c.total_sales)}</td>` : ""}</tr>`).join("")
 			+ `<tr class="dcb-strong"><td>${__("All Cashiers")}</td><td class="dayops-num dcb-total">${ct.days || 0}</td>
-				<td class="dayops-num dcb-total">${this.money(ct.total_sales)}</td><td class="dayops-num dcb-total">${this.money(ct.total_collection)}</td></tr>`;
+				<td class="dayops-num dcb-total">${this.money(ct.total_collection)}</td>${credit ? `<td class="dayops-num dcb-total">${this.money(ct.total_sales)}</td>` : ""}</tr>`;
 		const remarks = sessions.map((x) => `<td class="dcb-remarks" title="${this.esc(x.close_remarks)}">${this.esc(x.close_remarks)}</td>`).join("");
 
 		this.$body.html(`
@@ -621,11 +632,11 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					<button class="dcb-chip ${detail ? "" : "active"}" data-view="summary" title="${__("One column per cashier, all of their days together, with approve")}">${__("Summary")}</button>
 					<button class="dcb-chip ${detail ? "active" : ""}" data-view="detail" title="${__("One column per day (session), with approve, close and correct")}">${__("Detail")}</button>
 				</div>
-				<label class="dcb-later" title="${__("For a day left open past midnight, also show its documents posted after this date")}">
-					<input type="checkbox" data-later ${this.board_include_later ? "checked" : ""}> ${__("Include later dates")}
+				<label class="dcb-later" title="${__("Add Credit Sales (not paid) and Total Sales to the Sales lines")}">
+					<input type="checkbox" data-credit ${this.board_show_credit ? "checked" : ""}> ${__("Show credit sales")}
 				</label>
 				<div class="dcb-summary text-muted">
-					${sessions.length === 1 ? __("1 day") : __("{0} days", [sessions.length])} · ${__("{0} open", [count("Open")])} · ${__("{0} awaiting approval", [count("Closing")])} · ${__("{0} closed", [count("Closed")])}
+					${sessions.length === 1 ? __("1 day") : __("{0} days", [sessions.length])} · ${__("{0} open", [count("Open")])} · ${__("{0} not closed", [count("Not Closed")])} · ${__("{0} awaiting approval", [count("Closing")])} · ${__("{0} closed", [count("Closed")])}
 				</div>
 				<div class="dcb-buttons">
 					<button class="btn btn-default btn-sm" data-tool="refresh">${__("Refresh")}</button>
@@ -651,7 +662,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				<h4>${__("By Cashier")}</h4>
 				<div class="dcb-scroll">
 					<table class="dcb-grid">
-						<thead><tr><th>${__("Cashier")}</th><th class="dcb-col">${__("Days")}</th><th class="dcb-col">${__("Total Sales")}</th><th class="dcb-col">${__("Total Collection")}</th></tr></thead>
+						<thead><tr><th>${__("Cashier")}</th><th class="dcb-col">${__("Days")}</th><th class="dcb-col">${__("Total Collection")}</th>${credit ? `<th class="dcb-col">${__("Total Sales")}</th>` : ""}</tr></thead>
 						<tbody>${by_cashier}</tbody>
 					</table>
 				</div>
@@ -677,8 +688,8 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			this.board_view = $(e.currentTarget).attr("data-view");
 			this.render_board();
 		});
-		this.$body.find("[data-later]").on("change", (e) => {
-			this.board_include_later = e.currentTarget.checked;
+		this.$body.find("[data-credit]").on("change", (e) => {
+			this.board_show_credit = e.currentTarget.checked;
 			this.render_board();
 		});
 		this.$body.find("[data-tool]").on("click", (e) => {
@@ -694,7 +705,12 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		this.$body.find("[data-edit-cashier]").on("click", (e) => {
 			const cashier = $(e.currentTarget).attr("data-edit-cashier");
 			const c = ((o.by_cashier || {}).cashiers || []).find((row) => row.cashier === cashier);
-			c && this.edit_cashier(c, sessions);
+			c && this.pick_day(c, c.counted, sessions, __("Edit"), (x) => this.count_dialog(x, "edit"));
+		});
+		this.$body.find("[data-close-cashier]").on("click", (e) => {
+			const cashier = $(e.currentTarget).attr("data-close-cashier");
+			const c = ((o.by_cashier || {}).cashiers || []).find((row) => row.cashier === cashier);
+			c && this.pick_day(c, c.closable, sessions, __("Count & Close"), (x) => this.count_dialog(x, "close"));
 		});
 		this.$body.find("[data-approve-cashier]").on("click", (e) => {
 			const cashier = $(e.currentTarget).attr("data-approve-cashier");
@@ -706,7 +722,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			const x = sessions.find((row) => row.name === name);
 			const act = $(e.currentTarget).attr("data-act");
 			if (act === "slip") {
-				this.print(name);
+				this.print(name, this.board_date);
 			} else if (act === "approve") {
 				this.approve(x);
 			} else {
@@ -734,7 +750,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			<th class="dcb-col">
 				<div class="dcb-cashier">${this.esc(c.cashier_name)}</div>
 			</th>`).join("");
-		const body = g.lines.map((ln) => ln.kind === "section"
+		const body = this.board_lines(g.lines).map((ln) => ln.kind === "section"
 			? `<tr class="dcb-section"><td colspan="${g.cashiers.length + 2}">${this.esc(ln.label)}</td></tr>`
 			: `<tr class="dcb-${ln.kind}"><td>${this.esc(ln.label)}</td>${ln.values.map((v) => cell(v, ln.kind)).join("")}
 				${cell(ln.total, ln.kind).replace("<td class=\"", "<td class=\"dcb-total ")}</tr>`
@@ -747,12 +763,15 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			const approve = c.awaiting.length
 				? `<button class="btn btn-xs btn-primary" data-approve-cashier="${this.esc(c.cashier)}">${__("Approve")}</button>`
 				: "";
-			// Closed days only: correcting reopens the day, as in Detail
-			const all_closed = c.counted.length && c.counted.every((d) => d.status === "Closed");
+			// Finished days only: correcting reopens the day, as in Detail
+			const all_finished = c.counted.length && c.counted.every((d) => d.docstatus === 1);
 			const edit = c.counted.length
-				? `<button class="btn btn-xs btn-default" data-edit-cashier="${this.esc(c.cashier)}">${all_closed ? __("Reopen & Edit") : __("Edit")}</button>`
+				? `<button class="btn btn-xs btn-default" data-edit-cashier="${this.esc(c.cashier)}">${all_finished ? __("Reopen & Edit") : __("Edit")}</button>`
 				: "";
-			return `<td class="dcb-actions">${approve}${edit}</td>`;
+			const close = c.closable.length
+				? `<button class="btn btn-xs btn-primary" data-close-cashier="${this.esc(c.cashier)}">${__("Count & Close")}</button>`
+				: "";
+			return `<td class="dcb-actions">${close}${approve}${edit}</td>`;
 		}).join("");
 		return `
 			<div class="dayops-card dcb-card">
@@ -770,30 +789,30 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			</div>`;
 	}
 
-	// Edit from the summary: the same correction as Detail's Edit. A cashier with
-	// more than one counted day on the date picks which one.
-	edit_cashier(c, sessions) {
+	// Count & Close or Edit from the summary: the same dialog as Detail's, for
+	// this date. A cashier with more than one day on the date picks which one.
+	pick_day(c, days, sessions, action_label, run) {
 		const open = (name) => {
 			const x = sessions.find((row) => row.name === name);
-			x && this.count_dialog(x, "edit");
+			x && run(x);
 		};
-		if (c.counted.length === 1) {
-			open(c.counted[0].name);
+		if (days.length === 1) {
+			open(days[0].name);
 			return;
 		}
 		const label = (d) => {
 			const x = sessions.find((row) => row.name === d.name) || {};
 			const when = x.opened_on ? moment(x.opened_on).format("DD-MM-YYYY hh:mm A") : "";
-			return `${when} · ${d.status === "Closing" ? __("Awaiting Approval") : __(d.status)}`;
+			return `${__("Opened {0}", [when])} · ${__(x.day_status_label || d.status)}`;
 		};
 		const d = new frappe.ui.Dialog({
-			title: __("Edit {0}'s day", [this.esc(c.cashier_name)]),
+			title: __("{0}: {1}'s day", [action_label, this.esc(c.cashier_name)]),
 			fields: [{
 				fieldtype: "Select", fieldname: "day", label: __("Day"), reqd: 1,
-				options: c.counted.map((row) => ({ value: row.name, label: label(row) })),
-				default: c.counted[0].name,
+				options: days.map((row) => ({ value: row.name, label: label(row) })),
+				default: days[0].name,
 			}],
-			primary_action_label: __("Edit"),
+			primary_action_label: action_label,
 			primary_action: (values) => {
 				d.hide();
 				open(values.day);
@@ -805,19 +824,18 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 	// Approve from the summary: every day of the cashier waiting for approval
 	approve_cashier(c) {
 		frappe.confirm(
-			__("Approve {0}'s count (difference {1}) and close {2}?", [
-				this.esc(c.cashier_name), this.money(c.awaiting_difference),
-				c.awaiting.length === 1 ? __("the day") : __("{0} days", [c.awaiting.length]),
+			__("Approve {0}'s count for {1} (difference {2})?", [
+				this.esc(c.cashier_name), frappe.datetime.str_to_user(this.board_date), this.money(c.awaiting_difference),
 			]),
 			async () => {
 				for (const session of c.awaiting) {
 					await frappe.call({
 						method: "digitz_erp.api.counter_session_api.approve_close",
-						args: { session },
+						args: { session, date: this.board_date },
 						freeze: true,
 					});
 				}
-				frappe.show_alert({ message: __("{0}'s day closed", [this.esc(c.cashier_name)]), indicator: "green" });
+				frappe.show_alert({ message: __("{0}'s count approved", [this.esc(c.cashier_name)]), indicator: "green" });
 				this.changed();
 				this.render_board();
 			}
@@ -827,7 +845,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 	async print_summary() {
 		const r = await frappe.call({
 			method: "digitz_erp.api.counter_session_api.get_day_summary_html",
-			args: { ...this.board_args(), view: this.board_view === "detail" ? "detail" : "summary" },
+			args: { ...this.board_args(), view: this.board_view === "detail" ? "detail" : "summary", show_credit: this.board_show_credit ? 1 : 0 },
 		});
 		const w = window.open("", "_blank");
 		if (!w) {
@@ -841,13 +859,15 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 
 	approve(x) {
 		frappe.confirm(
-			__("Approve {0}'s count (difference {1}) and close the day?", [this.esc(x.cashier_name), this.money(x.difference)]),
+			__("Approve {0}'s count for {1} (difference {2})?", [
+				this.esc(x.cashier_name), frappe.datetime.str_to_user(this.board_date), this.money(x.difference),
+			]),
 			() => frappe.call({
 				method: "digitz_erp.api.counter_session_api.approve_close",
-				args: { session: x.name },
+				args: { session: x.name, date: this.board_date },
 				freeze: true,
 				callback: () => {
-					frappe.show_alert({ message: __("{0} closed", [x.name]), indicator: "green" });
+					frappe.show_alert({ message: __("{0}'s count approved", [this.esc(x.cashier_name)]), indicator: "green" });
 					this.changed();
 					this.render_board();
 				},
@@ -865,8 +885,8 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		const before_spent = flt(x.expected_cash) + flt(x.cash_expenditure);
 		const d = new frappe.ui.Dialog({
 			title: editing
-				? __("Correct {0}'s day on {1}", [this.esc(x.cashier_name), this.esc(x.counter)])
-				: __("Close {0}'s day on {1}", [this.esc(x.cashier_name), this.esc(x.counter)]),
+				? __("Correct {0}'s count for {1} on {2}", [this.esc(x.cashier_name), frappe.datetime.str_to_user(this.board_date), this.esc(x.counter)])
+				: __("Count {0}'s {1} on {2}", [this.esc(x.cashier_name), frappe.datetime.str_to_user(this.board_date), this.esc(x.counter)]),
 			size: "large",
 			fields: [
 				{ fieldtype: "HTML", fieldname: "summary",
@@ -892,7 +912,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 						? __("Added to the day's remarks with your name. The original close stays on record.")
 						: __("Why you are closing this day for the cashier. Shown on the Day Close slip.") },
 			],
-			primary_action_label: editing ? (x.status === "Closed" ? __("Reopen & Save") : __("Save & Approve")) : __("Count & Close"),
+			primary_action_label: editing ? (x.docstatus === 1 ? __("Reopen & Save") : __("Save & Approve")) : __("Count & Close"),
 			primary_action: (values) => {
 				frappe.call({
 					method: editing
@@ -900,6 +920,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 						: "digitz_erp.api.counter_session_api.supervisor_close",
 					args: {
 						session: x.name,
+						date: this.board_date,
 						counted_cash: values.counted_cash,
 						denominations: count.counted(),
 						remarks: values.remarks,
@@ -915,7 +936,10 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 							return;
 						}
 						d.hide();
-						frappe.show_alert({ message: __("{0} closed", [r.message.session]), indicator: "green" });
+						frappe.show_alert({
+							message: __("{0} counted for {1}", [r.message.session, frappe.datetime.str_to_user(r.message.close_date)]),
+							indicator: "green",
+						});
 						this.changed();
 						this.render_board();
 					},
@@ -1024,7 +1048,9 @@ digitz_erp.DayHistory = class DayHistory {
 		this.mark_chip("30");
 
 		this.$el.on("click", ".cc-hist-chip", (e) => this.set_range($(e.currentTarget).attr("data-range")));
-		this.$el.on("click", "[data-print]", (e) => digitz_erp.DayOpsBase.print_slip($(e.currentTarget).attr("data-print")));
+		this.$el.on("click", "[data-print]", (e) => digitz_erp.DayOpsBase.print_slip(
+			$(e.currentTarget).attr("data-print"), $(e.currentTarget).attr("data-print-date")
+		));
 		this.$el.on("click", ".cc-hist-report", () => {
 			frappe.route_options = this.filters();
 			frappe.set_route("query-report", "Counter Session Summary");
@@ -1132,7 +1158,7 @@ digitz_erp.DayHistory = class DayHistory {
 			const status_label = row.status === "Closing" ? __("Awaiting Approval") : __(row.status);
 			return `
 				<tr>
-					<td>${day(row.opened_on)}</td>
+					<td>${day(row.close_date || row.opened_on)}</td>
 					<td><a href="/app/counter-session/${encodeURIComponent(row.name)}">${this.esc(row.name)}</a></td>
 					<td>${this.esc(row.counter)}</td>
 					${this.is_supervisor ? `<td>${this.esc(row.cashier_name)}</td>` : ""}
@@ -1144,7 +1170,7 @@ digitz_erp.DayHistory = class DayHistory {
 					${sup ? `<td class="cc-num ${diff_class}">${amount(diff)}</td>` : `<td class="cc-num">${amount(row.cash_expenditure)}</td>`}
 					<td><span class="indicator-pill ${digitz_erp.DayHistory.STATUS_COLOURS[row.status] || "gray"}">${status_label}</span></td>
 					<td class="cc-num cc-nowrap">
-						${pending(row) ? "" : `<button type="button" class="btn btn-xs btn-default" data-print="${this.esc(row.name)}">${__("Print Slip")}</button>`}
+						${pending(row) ? "" : `<button type="button" class="btn btn-xs btn-default" data-print="${this.esc(row.name)}" data-print-date="${this.esc(row.close_date || "")}">${__("Print Slip")}</button>`}
 					</td>
 				</tr>`;
 		}).join("");

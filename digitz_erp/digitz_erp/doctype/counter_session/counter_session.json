@@ -31,6 +31,7 @@
   "closing_section",
   "denominations",
   "payment_mode_totals",
+  "date_closes",
   "counted_cash",
   "cash_expenditure",
   "difference",
@@ -174,6 +175,13 @@
    "options": "Counter Session Payment Total"
   },
   {
+   "fieldname": "date_closes",
+   "fieldtype": "Table",
+   "label": "Date Closes",
+   "options": "Counter Session Date Close",
+   "description": "One close per date of the day's documents: the count, the difference and its approval."
+  },
+  {
    "bold": 1,
    "description": "The cash in the till at close. Filled from the Cash Count when one is entered.",
    "fieldname": "counted_cash",
@@ -262,7 +270,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-16 16:00:00.000000",
+ "modified": "2026-11-26 13:30:00.000000",
  "modified_by": "Administrator",
  "module": "Digitz ERP",
  "name": "Counter Session",

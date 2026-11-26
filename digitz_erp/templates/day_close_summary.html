@@ -57,7 +57,7 @@
 			</tr>
 		</thead>
 		<tbody>
-			{% for ln in g.lines %}
+			{% for ln in g.lines if show_credit or not ln.credit %}
 			{% if ln.kind == "section" %}
 			<tr class="section"><td colspan="{{ g.cashiers|length + 2 }}">{{ ln.label }}</td></tr>
 			{% else %}
@@ -87,13 +87,13 @@
 			<tr>
 				<th></th>
 				{% for s in o.sessions %}
-				<th>{{ s.counter }}<small>{{ s.cashier_name }}</small><small>{{ s.name }} · {{ s.status }}</small></th>
+				<th>{{ s.counter }}<small>{{ s.cashier_name }}</small><small>{{ s.name }} · {{ s.day_status_label }}</small></th>
 				{% endfor %}
 				<th class="total">Total</th>
 			</tr>
 		</thead>
 		<tbody>
-			{% for ln in o.lines %}
+			{% for ln in o.lines if show_credit or not ln.credit %}
 			{% if ln.kind == "section" %}
 			<tr class="section"><td colspan="{{ o.sessions|length + 2 }}">{{ ln.label }}</td></tr>
 			{% else %}
