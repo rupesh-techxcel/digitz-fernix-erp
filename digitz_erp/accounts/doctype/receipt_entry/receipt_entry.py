@@ -872,3 +872,14 @@ def set_document_paid(doctype, name, paid_amount):
 		values["payment_status"] = "Paid" if paid_amount >= total else "Partial" if paid_amount > 0 else "Credit"
 
 	frappe.db.set_value(doctype, name, values)
+
+@frappe.whitelist()
+def print_receipt_entry_pdf(docname):
+	"""Generate and attach the receipt PDF of a submitted Receipt Entry; returns its file URL."""
+	from digitz_erp.selling.doctype.quotation.quotation import generate_custom_invoice_pdf
+
+	doc = frappe.get_doc("Receipt Entry", docname)
+	doc.check_permission("read")
+	if doc.docstatus != 1:
+		frappe.throw(_("Submit the Receipt Entry before printing its receipt."))
+	return generate_custom_invoice_pdf(doc)
