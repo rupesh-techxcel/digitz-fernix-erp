@@ -707,8 +707,10 @@ frappe.provide("digitz_erp");
 		async load_rows() {
 			if (!this.customer) {
 				this.rows = [];
+				this.balance = null;
 				return;
 			}
+			this.load_balance(this.customer);
 			this.rows_loading = true;
 			this.render_rows();
 			try {
@@ -772,6 +774,8 @@ frappe.provide("digitz_erp");
 						<div class="ci-main">
 							<section class="ci-card cr-card-party">
 								<div class="ci-fields cr-fields-party"></div>
+								<!-- The customer's balance, and what it comes to after this receipt -->
+								<div class="cr-balance-line" hidden></div>
 							</section>
 							<section class="ci-card cr-card-invoices">
 								<div class="ci-card-head">
@@ -1144,7 +1148,38 @@ frappe.provide("digitz_erp");
 			!$on_account.is(":focus") && $on_account.val(flt(this.on_account) ? format_number(this.on_account, null, 2) : "");
 		}
 
+		// The customer's ledger balance (what they owe, as on the invoice screen and
+		// the Customer Ledger), before this receipt: it is posted on submit
+		async load_balance(customer) {
+			this.balance = null;
+			const r = await frappe.call({
+				method: "digitz_erp.accounts.doctype.gl_posting.gl_posting.get_party_balance",
+				args: { party_type: "Customer", party: customer },
+			});
+			if (this.customer === customer) {
+				this.balance = flt(r.message);
+				this.refresh_balance();
+			}
+		}
+
+		// Balance when the customer is chosen; Final Balance once an amount is
+		// received: the balance less everything this receipt takes in
+		refresh_balance() {
+			const $line = this.$el.find(".cr-balance-line");
+			if (!this.is_editable() || !this.customer || this.balance === null || this.balance === undefined) {
+				$line.prop("hidden", true).empty();
+				return;
+			}
+			const received = this.total_received();
+			const chip = (label, value, cls = "") => `<span class="ci-balance ${cls}"><span>${label}</span> <b>${money(value)}</b></span>`;
+			$line.prop("hidden", false).html(
+				chip(__("Balance"), this.balance)
+				+ (received ? chip(__("Final Balance"), this.balance - received, "cr-final-balance") : "")
+			);
+		}
+
 		refresh_totals() {
+			this.refresh_balance();
 			const editable = this.is_editable();
 			const total = editable ? this.total_received() : flt(this.doc.amount);
 			this.$el.find(".ci-total-value").text(money(total));
@@ -1154,8 +1189,8 @@ frappe.provide("digitz_erp");
 				const paying = this.rows.filter((row) => flt(row.paying) > 0).length;
 				sums.push([__("Invoices paid"), paying ? `${paying} / ${this.rows.length}` : "-"]);
 				flt(this.on_account) && sums.push([__("On account (no invoice)"), money(this.on_account)]);
-				sums.push([__("Customer's balance"), money(this.total_balance())]);
-				this.rows.length && sums.push([__("Left after this receipt"), money(this.total_balance() - this.total_paying())]);
+				sums.push([__("Open invoices"), money(this.total_balance())]);
+				this.rows.length && sums.push([__("Left on open invoices"), money(this.total_balance() - this.total_paying())]);
 			} else {
 				const line = (this.doc.receipt_entry_details || [])[0];
 				line && line.customer && sums.push([__("Customer"), esc(line.customer)]);

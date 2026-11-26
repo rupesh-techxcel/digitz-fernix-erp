@@ -1413,6 +1413,23 @@ tr.is-open .ci-open-mark {
 	font-variant-numeric: tabular-nums;
 }
 
+/* Receipts: Balance and Final Balance under the customer */
+.cr-balance-line {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 2px;
+}
+
+.cr-balance-line[hidden] {
+	display: none;
+}
+
+.ci-balance.cr-final-balance {
+	background: var(--cc-blue);
+	color: #fff;
+}
+
 .ci-balance[hidden] {
 	display: none;
 }
