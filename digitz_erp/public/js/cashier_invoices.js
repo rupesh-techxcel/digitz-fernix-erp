@@ -82,6 +82,7 @@ frappe.provide("digitz_erp");
 							${frappe.utils.icon("list", "sm")}<span>${__("All Invoices")}</span>
 						</button>
 						<div class="ci-stab-docs"></div>
+						<div class="ci-strip-head"></div>
 						<div class="ci-strip-files"></div>
 						<button type="button" class="ci-new" title="${__("New Invoice (Alt+N)")}">
 							${frappe.utils.icon("add", "sm")}<span>${__("New Invoice")}</span>
@@ -322,10 +323,20 @@ frappe.provide("digitz_erp");
 			}
 			const editor = this.active_editor();
 			editor && editor.on_show();
+			this.place_head();
 			this.paint_files();
 			// Inside an invoice the console's blue header gives its room to the invoice
 			// (the navbar counter badge still shows the shift); it returns on the list
 			this.$el.closest(".cashier-console").toggleClass("cc-in-invoice", key !== "list");
+		}
+
+		// The open invoice's header (status, date, actions) in the strip, after the
+		// tabs. Each editor builds its own and calls this when it renders again.
+		place_head() {
+			const $slot = this.$el.find(".ci-strip-head");
+			const editor = this.active_editor();
+			$slot.children().detach();
+			editor && editor.$head && $slot.append(editor.$head);
 		}
 
 		// Beside New Invoice, for the open invoice: what its printout shows
@@ -380,6 +391,7 @@ frappe.provide("digitz_erp");
 				this.tabs.splice(i, 1);
 				tab.$tab.remove();
 				tab.$view.remove();
+				tab.editor && tab.editor.$head && tab.editor.$head.remove();
 				// Edits live on the cached document: drop it, so unsaved changes are
 				// really discarded and the invoice reopens as saved
 				if (tab.editor && frappe.get_doc(DOCTYPE, tab.editor.doc.name)) {
@@ -705,31 +717,37 @@ frappe.provide("digitz_erp");
 			const doc = this.doc;
 			const editable = this.is_editable();
 
+			// The status, date and actions sit in the open-invoices strip, beside the
+			// invoice's tab, so the form starts higher (InvoiceTabs.place_head)
+			this.$head && this.$head.remove();
+			this.$head = $(`
+				<div class="ci-head">
+					<div class="ci-head-main">
+						<span class="ci-status indicator-pill"></span>
+						<div class="ci-head-meta"></div>
+					</div>
+					<div class="ci-actions"></div>
+				</div>
+			`);
+
 			this.$el.html(`
 				<div class="ci-editor${editable ? "" : " is-readonly"}">
 					<div class="ci-banners"></div>
-					<header class="ci-head">
-						<div class="ci-head-main">
-							<h3 class="ci-docname"></h3>
-							<span class="ci-status indicator-pill"></span>
-							<div class="ci-head-meta"></div>
-						</div>
-						<div class="ci-actions"></div>
-					</header>
-					<div class="ci-shortcuts-slot"></div>
 					<div class="ci-layout">
 						<div class="ci-main">
 							<section class="ci-card ci-card-customer">
-								<div class="ci-fields ci-fields-customer-main"></div>
-								<div class="ci-cust-foot">
-									<button type="button" class="ci-cust-toggle" aria-expanded="false">
-										${frappe.utils.icon("down", "xs")}
-										<span class="ci-strong">${__("Customer details")}</span>
-										<span class="ci-cust-summary text-muted">${__("Email, company & TRN, notes, salesman, token")}</span>
-									</button>
-									<div class="ci-cust-chips">
-										<span class="ci-chip-info ci-token" hidden></span>
-										<span class="ci-balance" hidden></span>
+								<div class="ci-cust-row">
+									<div class="ci-fields ci-fields-customer-main"></div>
+									<div class="ci-cust-foot">
+										<button type="button" class="ci-cust-toggle" aria-expanded="false"
+											title="${__("Email, company & TRN, notes, salesman, token")}">
+											${frappe.utils.icon("down", "xs")}
+											<span class="ci-strong">${__("Details")}</span>
+										</button>
+										<div class="ci-cust-chips">
+											<span class="ci-chip-info ci-token" hidden></span>
+											<span class="ci-balance" hidden></span>
+										</div>
 									</div>
 								</div>
 								<div class="ci-cust-body" hidden>
@@ -913,11 +931,15 @@ frappe.provide("digitz_erp");
 			this.$el.on("click", ".ci-row-del", (e) => this.remove_row($(e.currentTarget).closest("tr").attr("data-row")));
 			this.$el.on("click", ".ci-row-more", (e) => this.open_row_dialog($(e.currentTarget).closest("tr").attr("data-row")));
 
-			// Actions
-			this.$el.on("click", "[data-action]", (e) => {
+			// Actions: in the form, and in the header, which lives in the strip
+			const on_action = (e) => {
 				e.preventDefault();
 				this.action($(e.currentTarget).attr("data-action"));
-			});
+			};
+			this.$el.on("click", "[data-action]", on_action);
+			this.$head.off().on("click", "[data-action]", on_action);
+			this.$head.on("click", ".ci-keys", () => frappe.ui.keys.show_keyboard_shortcut_dialog());
+			this.host.place_head();
 		}
 
 		// ------------------------------------------------------------ refresh
@@ -937,8 +959,7 @@ frappe.provide("digitz_erp");
 			const [label, colour] = doc.__islocal
 				? [__("Not Saved"), "orange"]
 				: [[__("Draft"), "orange"], [__("Submitted"), "green"], [__("Cancelled"), "red"]][doc.docstatus];
-			this.$el.find(".ci-docname").text(doc.__islocal ? __("New Sales Invoice") : doc.name);
-			this.$el.find(".ci-status").attr("class", `ci-status indicator-pill ${this.dirty && !doc.__islocal ? "orange" : colour}`)
+			this.$head.find(".ci-status").attr("class", `ci-status indicator-pill ${this.dirty && !doc.__islocal ? "orange" : colour}`)
 				.text(this.dirty && !doc.__islocal ? __("Not Saved") : label);
 
 			const meta = [
@@ -947,7 +968,7 @@ frappe.provide("digitz_erp");
 			doc.counter && meta.push(`${esc(doc.counter)}${doc.counter_session ? ` · ${esc(doc.counter_session)}` : ""}`);
 			doc.payment_status && !doc.__islocal && meta.push(esc(doc.payment_status));
 			doc.amended_from && meta.push(__("Amended from {0}", [esc(doc.amended_from)]));
-			this.$el.find(".ci-head-meta").html(meta.map((m) => `<span>${m}</span>`).join(""));
+			this.$head.find(".ci-head-meta").html(meta.map((m) => `<span>${m}</span>`).join(""));
 
 			this.render_actions();
 		}
@@ -958,8 +979,8 @@ frappe.provide("digitz_erp");
 			const manager = frappe.user.has_role("Management");
 			const system_manager = frappe.session.user === "Administrator" || frappe.user.has_role("System Manager");
 			const can_revert = ["Administrator", "it-admin"].includes(frappe.session.user) || manager;
-			const btn = (action, label, cls = "btn-default", icon = "") =>
-				`<button type="button" class="btn btn-sm ${cls}" data-action="${action}">${icon ? frappe.utils.icon(icon, "sm") : ""}<span>${label}</span></button>`;
+			const btn = (action, label, cls = "btn-default", icon = "", keys = "") =>
+				`<button type="button" class="btn btn-sm ${cls}" data-action="${action}" ${keys ? `title="${label} (${keys})"` : ""}>${icon ? frappe.utils.icon(icon, "sm") : ""}<span>${label}</span></button>`;
 			const item = (action, label) => `<li><a class="dropdown-item" href="#" data-action="${action}">${label}</a></li>`;
 
 			const buttons = [];
@@ -968,10 +989,10 @@ frappe.provide("digitz_erp");
 			if (this.is_editable()) {
 				// Saved and unchanged: Submit. Otherwise Save & Submit does both at once
 				const clean = saved && !this.dirty;
-				buttons.push(btn("save", __("Save"), "btn-default", "check"));
+				buttons.push(btn("save", __("Save"), "btn-default", "check", "Ctrl+S"));
 				buttons.push(clean
-					? btn("submit", __("Submit"), "btn-primary")
-					: btn("save-submit", __("Save & Submit"), "btn-primary"));
+					? btn("submit", __("Submit"), "btn-primary", "", "Ctrl+Shift+S")
+					: btn("save-submit", __("Save & Submit"), "btn-primary", "", "Ctrl+Shift+S"));
 			}
 			// Correction of a submitted invoice: a cashier's credit sale (any date), or
 			// for a System Manager any payment mode; the server says why when it is not allowed
@@ -1023,13 +1044,10 @@ frappe.provide("digitz_erp");
 						<ul class="dropdown-menu dropdown-menu-right">${menu.join("")}</ul>
 					</div>`);
 			}
-			this.$el.find(".ci-actions").html(buttons.join(""));
-
-			const shortcuts = [["Alt+N", __("New Invoice")]];
-			this.is_editable() && shortcuts.push(["Ctrl+S", __("Save")], ["Ctrl+Shift+S", __("Save & Submit")], ["Alt+P", __("Payment")]);
-			can_print && shortcuts.push(["Ctrl+P", __("Print Invoice")]);
-			shortcuts.push(["?", __("All Shortcuts")]);
-			this.$el.find(".ci-shortcuts-slot").html(E().shortcuts_html(shortcuts));
+			// The keys are on the buttons' tooltips; this lists them all
+			buttons.push(`<button type="button" class="btn btn-sm btn-default ci-keys" title="${__("Keyboard shortcuts (?)")}"
+				aria-label="${__("Keyboard shortcuts")}">${frappe.utils.icon("keyboard", "sm")}</button>`);
+			this.$head.find(".ci-actions").html(buttons.join(""));
 		}
 
 		// Visibility and read-only state, which depend on the document

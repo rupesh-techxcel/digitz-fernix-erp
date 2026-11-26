@@ -296,24 +296,6 @@
 	font-size: 12px;
 }
 
-.cc-compact .cc-tabs {
-	margin: 10px 0;
-	padding: 4px;
-}
-
-.cc-compact .cc-tab {
-	padding: 6px 12px;
-}
-
-.cc-compact .cc-tab-icon {
-	width: 32px;
-	height: 32px;
-}
-
-.cc-compact .cc-tab-hint {
-	display: none;
-}
-
 .cc-compact.cashier-console {
 	margin-top: 12px;
 }
@@ -326,9 +308,9 @@
 	z-index: 5;
 	display: flex;
 	align-items: stretch;
-	gap: 6px;
-	margin: 18px 0;
-	padding: 6px;
+	gap: 4px;
+	margin: 10px 0;
+	padding: 3px;
 	border: 1px solid var(--cc-border);
 	border-radius: calc(var(--cc-radius-sm) + 6px);
 	background: var(--cc-surface);
@@ -348,9 +330,9 @@
 	display: flex;
 	flex: 1 1 0;
 	align-items: center;
-	gap: 12px;
+	gap: 8px;
 	min-width: 0;
-	padding: 10px 14px;
+	padding: 4px 10px;
 	border: 0;
 	border-radius: var(--cc-radius-sm);
 	background: transparent;
@@ -362,8 +344,7 @@
 
 .cc-tab.cc-tab-compact {
 	flex: none;
-	gap: 10px;
-	padding: 10px 12px;
+	padding: 4px 10px;
 }
 
 .cc-tab-compact .cc-tab-hint,
@@ -384,20 +365,20 @@
 .cc-tab-icon {
 	position: relative;
 	display: inline-flex;
-	width: 38px;
-	height: 38px;
+	width: 28px;
+	height: 28px;
 	flex: none;
 	align-items: center;
 	justify-content: center;
-	border-radius: 10px;
+	border-radius: 8px;
 	background: var(--cc-blue-soft);
 	color: var(--cc-blue);
 	transition: inherit;
 }
 
 .cc-tab-icon svg {
-	width: 20px;
-	height: 20px;
+	width: 16px;
+	height: 16px;
 }
 
 /* Day Open's status: green once the day is open, orange while it is due */
@@ -439,7 +420,9 @@
 	text-overflow: ellipsis;
 }
 
+/* One line per tab on every screen: the hint is in the tab's tooltip */
 .cc-tab-hint {
+	display: none;
 	font-size: 12px;
 	white-space: nowrap;
 	overflow: hidden;
@@ -822,19 +805,39 @@
 /* Inner tab strip: All Invoices | open invoices | + New */
 .ci-strip {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 6px;
 	margin: -6px 0 12px;
 	padding-bottom: 8px;
 	border-bottom: 1px solid var(--cc-border);
+}
+
+/* Only the open invoices scroll: the header's Print and More menus beside
+   them must not be clipped */
+.ci-stab-docs {
+	display: flex;
+	flex: 1 1 160px;
+	gap: 6px;
+	min-width: 0;
 	overflow-x: auto;
 	scrollbar-width: thin;
 }
 
-.ci-stab-docs {
-	display: flex;
-	gap: 6px;
-	min-width: 0;
+/* The open invoice's status, date and actions, after the tabs (the editor's
+   own title row is gone: the tab names the invoice) */
+.ci-strip-head:empty {
+	display: none;
+}
+
+.ci-strip .ci-head {
+	flex-wrap: nowrap;
+	gap: 6px 12px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .ci-stab,
@@ -1399,14 +1402,26 @@ tr.is-open .ci-open-mark {
 	margin-bottom: 8px;
 }
 
-.ci-cust-foot {
+.ci-cust-row {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 0 14px;
+}
+
+.ci-cust-row .ci-fields-customer-main {
+	flex: 1 1 520px;
+}
+
+/* Details toggle and the token / balance chips, level with the inputs */
+.ci-cust-foot {
+	display: flex;
+	flex: none;
+	flex-wrap: wrap;
 	align-items: center;
-	justify-content: space-between;
-	gap: 6px 12px;
-	padding-top: 8px;
-	border-top: 1px dashed var(--cc-border);
+	gap: 6px 10px;
+	min-height: var(--input-height, 36px);
+	margin-bottom: 8px;
 }
 
 .ci-cust-toggle {
