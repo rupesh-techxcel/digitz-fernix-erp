@@ -639,7 +639,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 						</tfoot>
 					</table>
 				</div>
-				<p class="text-muted small" style="margin: 8px 0 0;">${__("System is what the submitted documents add up to; Entered is what the cashier counted or typed at Day Close. A day still open shows its live figures, with nothing entered yet.")}</p>
+				<p class="text-muted small" style="margin: 8px 0 0;">${__("System is what the submitted documents add up to; Entered is what the cashier counted or typed at Day Close. A day still open shows its live figures, with nothing entered yet. The Cash and payment-mode totals add up only the counted days, so they agree with the differences; the Sales totals add up every day.")}</p>
 			</div>
 			<div class="dayops-card dcb-card">
 				<h4>${__("By Cashier")}</h4>

@@ -262,3 +262,41 @@ class TestLastCloseIsBlindForCashiers(unittest.TestCase):
 
 	def test_supervisor_gets_difference(self):
 		self.assertEqual(self.last_close(supervisor=True).difference, -100.0)
+
+
+class TestDayOverviewTotalsAgree(unittest.TestCase):
+	"""A counted day beside one only partly on this date: the cash and
+	payment-mode totals take the counted day only, so Expected less Counted and
+	System less Entered match the Difference totals; sales take every day."""
+
+	def lines(self):
+		def day(counted, cash_sales, card_system, card_entered, credit):
+			return frappe._dict(
+				opening_float=0, cash_sales=cash_sales, cash_receipts=0, cash_refunds=0, cash_paid_out=0,
+				cash_expenditure=0 if counted else None, expected_cash=cash_sales,
+				counted_cash=17030.0 if counted else None,
+				difference=17030.0 - cash_sales if counted else None,
+				modes={"Card": {"system": card_system, "entered": card_entered}},
+				non_cash_sales=card_system, credit_sales=credit,
+				total_sales=cash_sales + card_system + credit, total_collection=cash_sales + card_system,
+			)
+
+		overview = frappe._dict(
+			modes=[frappe._dict(payment_mode="Card", mode="Bank")],
+			sessions=[day(True, 17031.91, 23380.0, 23430.0, 210.0), day(False, 100.0, 50.0, None, 5357.6)],
+		)
+		return {ln["label"]: ln["total"] for ln in api.day_overview_lines(overview) if ln["kind"] != "section"}
+
+	def test_cash_and_mode_totals_cover_counted_days(self):
+		t = self.lines()
+		self.assertAlmostEqual(t["+ Cash Sales"], 17031.91)
+		self.assertAlmostEqual(t["Expected Cash"], 17031.91)
+		self.assertAlmostEqual(t["Counted Cash (entered)"] - t["Expected Cash"], t["Cash Difference"])
+		self.assertEqual(t["Card: System"], 23380.0)
+		self.assertEqual(t["Card: Entered"] - t["Card: System"], t["Card: Difference"])
+
+	def test_sales_totals_cover_every_day(self):
+		t = self.lines()
+		self.assertAlmostEqual(t["Cash Sales"], 17131.91)
+		self.assertEqual(t["Card / Bank Sales"], 23430.0)
+		self.assertAlmostEqual(t["Credit Sales (not paid)"], 5567.6)

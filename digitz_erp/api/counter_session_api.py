@@ -578,13 +578,20 @@ def day_overview_lines(overview):
 
 	kind: "section" (a heading), "money", "strong", "difference" (coloured).
 	A value of None is a figure not there yet (a day still open).
+
+	The cash and payment-mode totals cover the counted days only: a day still
+	open, or only partly on this date, has system figures but nothing entered,
+	so totalling it on one side only would leave Expected and Counted (System
+	and Entered) out of step with the Difference. The sales totals cover every day.
 	"""
-	def total(values):
-		known = [v for v in values if v is not None]
+	counted = [s.counted_cash is not None for s in overview.sessions]
+
+	def total(values, counted_only):
+		known = [v for v, c in zip(values, counted) if v is not None and (c or not counted_only)]
 		return sum(known) if known else None
 
-	def line(label, values, kind="money"):
-		return {"label": label, "kind": kind, "values": values, "total": total(values)}
+	def line(label, values, kind="money", counted_only=True):
+		return {"label": label, "kind": kind, "values": values, "total": total(values, counted_only)}
 
 	def field(name):
 		return [s[name] for s in overview.sessions]
@@ -616,11 +623,11 @@ def day_overview_lines(overview):
 		]
 	lines += [
 		{"label": "Sales", "kind": "section"},
-		line("Cash Sales", field("cash_sales")),
-		line("Card / Bank Sales", field("non_cash_sales")),
-		line("Credit Sales (not paid)", field("credit_sales")),
-		line("Total Sales", field("total_sales"), "strong"),
-		line("Total Collection (all but credit)", field("total_collection"), "strong"),
+		line("Cash Sales", field("cash_sales"), counted_only=False),
+		line("Card / Bank Sales", field("non_cash_sales"), counted_only=False),
+		line("Credit Sales (not paid)", field("credit_sales"), counted_only=False),
+		line("Total Sales", field("total_sales"), "strong", counted_only=False),
+		line("Total Collection (all but credit)", field("total_collection"), "strong", counted_only=False),
 	]
 	return lines
 
