@@ -140,7 +140,7 @@ digitz_erp.DayOpen = class DayOpen extends digitz_erp.DayOpsBase {
 			? `<tr><td>${__("Counted by supervisor")}</td><td class="dayops-num">${frappe.utils.escape_html(last.closed_by_name || last.closed_by)}</td></tr>`
 			: "";
 		const pending = last && last.status === "Closing"
-			? `<div class="dayops-result over" style="margin-bottom: 10px;">${__("This close is still waiting for a supervisor to approve its difference. The count below is what was left in the till.")}</div>`
+			? `<div class="dayops-result over" style="margin-bottom: 10px;">${__("This close is still waiting for a supervisor to approve it. The count below is what was left in the till.")}</div>`
 			: "";
 		const previous = last
 			? `
@@ -618,14 +618,14 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					<button class="dcb-chip" data-day="${frappe.datetime.add_days(frappe.datetime.get_today(), -1)}">${__("Yesterday")}</button>
 				</div>
 				<div class="dcb-chips dcb-view">
-					<button class="dcb-chip ${detail ? "" : "active"}" data-view="summary" title="${__("One column per cashier: actual, entered and the difference")}">${__("Summary")}</button>
+					<button class="dcb-chip ${detail ? "" : "active"}" data-view="summary" title="${__("One column per cashier, all of their days together, with approve")}">${__("Summary")}</button>
 					<button class="dcb-chip ${detail ? "active" : ""}" data-view="detail" title="${__("One column per day (session), with approve, close and correct")}">${__("Detail")}</button>
 				</div>
 				<label class="dcb-later" title="${__("For a day left open past midnight, also show its documents posted after this date")}">
 					<input type="checkbox" data-later ${this.board_include_later ? "checked" : ""}> ${__("Include later dates")}
 				</label>
 				<div class="dcb-summary text-muted">
-					${__("{0} days", [sessions.length])} · ${__("{0} open", [count("Open")])} · ${__("{0} awaiting approval", [count("Closing")])} · ${__("{0} closed", [count("Closed")])}
+					${sessions.length === 1 ? __("1 day") : __("{0} days", [sessions.length])} · ${__("{0} open", [count("Open")])} · ${__("{0} awaiting approval", [count("Closing")])} · ${__("{0} closed", [count("Closed")])}
 				</div>
 				<div class="dcb-buttons">
 					<button class="btn btn-default btn-sm" data-tool="refresh">${__("Refresh")}</button>
@@ -691,6 +691,16 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				this.print_summary();
 			}
 		});
+		this.$body.find("[data-edit-cashier]").on("click", (e) => {
+			const cashier = $(e.currentTarget).attr("data-edit-cashier");
+			const c = ((o.by_cashier || {}).cashiers || []).find((row) => row.cashier === cashier);
+			c && this.edit_cashier(c, sessions);
+		});
+		this.$body.find("[data-approve-cashier]").on("click", (e) => {
+			const cashier = $(e.currentTarget).attr("data-approve-cashier");
+			const c = ((o.by_cashier || {}).cashiers || []).find((row) => row.cashier === cashier);
+			c && this.approve_cashier(c);
+		});
 		this.$body.find("[data-act]").on("click", (e) => {
 			const name = $(e.currentTarget).attr("data-name");
 			const x = sessions.find((row) => row.name === name);
@@ -708,65 +718,110 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		this.set_secondary(__("Refresh"), () => this.render_board());
 	}
 
-	// The default view: one column group per cashier -- Actual, Entered and
-	// Difference -- for cash in the till, each non-cash mode and their total,
-	// all cashiers last. Built by counter_session_api.cashier_reconciliation.
+	// The default view: the detail grid's rows with one column per cashier, all
+	// of their days added together (counter_session_api.cashier_grid), and one
+	// Approve per cashier for their days waiting for approval
 	summary_html(o) {
-		const rec = o.reconciliation || { rows: [], cashiers: [], totals: [] };
-		const money = (v) => (v === null || v === undefined
-			? `<td class="dayops-num text-muted">—</td>`
-			: `<td class="dayops-num">${this.money(v)}</td>`);
-		const diff = (v, extra = "") => {
+		const g = o.by_cashier || { cashiers: [], lines: [] };
+		const cell = (v, kind) => {
 			if (v === null || v === undefined) {
-				return `<td class="dayops-num text-muted ${extra}">—</td>`;
+				return `<td class="dayops-num text-muted">—</td>`;
 			}
-			if (Math.abs(v) < 0.005) {
-				return `<td class="dayops-num ${extra}">${this.money(0)}</td>`;
-			}
-			const short = v < 0;
-			return `<td class="dayops-num ${short ? "is-short" : "is-over"} ${extra}">${this.money(v)}
-				<div class="dcs-tag">${short ? __("Short") : __("Excess")}</div></td>`;
+			const cls = kind === "difference" && Math.abs(v) >= 0.005 ? (v < 0 ? "is-short" : "is-over") : "";
+			return `<td class="dayops-num ${cls}">${this.money(v)}</td>`;
 		};
-		const group = (lines, i, extra = "") => {
-			const x = lines[i] || {};
-			return `${money(x.actual).replace('class="', `class="${extra} `)}${money(x.entered)}${diff(x.difference)}`;
-		};
-		const head = rec.cashiers.map((c) => {
-			const skipped = c.not_compared.length
-				? `<div class="dcb-note">${__("Not compared")}: ${c.not_compared.map((n) => `${this.esc(n.name)} (${__(n.reason)})`).join(", ")}</div>`
-				: "";
-			return `<th class="dcb-col dcs-group" colspan="3">
+		const head = g.cashiers.map((c) => `
+			<th class="dcb-col">
 				<div class="dcb-cashier">${this.esc(c.cashier_name)}</div>
-				<div class="dcb-time">${c.sessions.length === 1 ? __("1 day") : __("{0} days", [c.sessions.length])}</div>${skipped}</th>`;
+			</th>`).join("");
+		const body = g.lines.map((ln) => ln.kind === "section"
+			? `<tr class="dcb-section"><td colspan="${g.cashiers.length + 2}">${this.esc(ln.label)}</td></tr>`
+			: `<tr class="dcb-${ln.kind}"><td>${this.esc(ln.label)}</td>${ln.values.map((v) => cell(v, ln.kind)).join("")}
+				${cell(ln.total, ln.kind).replace("<td class=\"", "<td class=\"dcb-total ")}</tr>`
+		).join("");
+		const remarks = g.cashiers.map((c) => {
+			const text = c.remarks.join("\n");
+			return `<td class="dcb-remarks" title="${this.esc(text)}">${this.esc(text)}</td>`;
 		}).join("");
-		const sub = `<th></th>` + [...rec.cashiers, null].map((c) => `
-			<th class="dcb-col dcs-sub ${c ? "" : "dcb-total"}">${__("Actual")}</th>
-			<th class="dcb-col dcs-sub ${c ? "" : "dcb-total"}">${__("Entered")}</th>
-			<th class="dcb-col dcs-sub ${c ? "" : "dcb-total"}">${__("Difference")}</th>`).join("");
-		const body = rec.rows.map((row, i) => `
-			<tr class="${row.key === "Total" ? "dcb-strong" : ""}"><td>${this.esc(__(row.label))}</td>
-				${rec.cashiers.map((c) => group(c.lines, i, "dcs-start")).join("")}
-				${group(rec.totals, i, "dcs-start dcb-total").replace(/<td class="dayops-num/g, '<td class="dcb-total dayops-num')}
-			</tr>`).join("");
+		const actions = g.cashiers.map((c) => {
+			const approve = c.awaiting.length
+				? `<button class="btn btn-xs btn-primary" data-approve-cashier="${this.esc(c.cashier)}">${__("Approve")}</button>`
+				: "";
+			// Closed days only: correcting reopens the day, as in Detail
+			const all_closed = c.counted.length && c.counted.every((d) => d.status === "Closed");
+			const edit = c.counted.length
+				? `<button class="btn btn-xs btn-default" data-edit-cashier="${this.esc(c.cashier)}">${all_closed ? __("Reopen & Edit") : __("Edit")}</button>`
+				: "";
+			return `<td class="dcb-actions">${approve}${edit}</td>`;
+		}).join("");
 		return `
-			<style>
-				.dcs-grid .dcs-start { border-left: 1px solid var(--border-color); }
-				.dcs-grid .dcs-group { text-align: center; border-left: 1px solid var(--border-color); }
-				.dcs-grid .dcs-sub { font-size: 11px; font-weight: 600; color: var(--text-muted); }
-				.dcs-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; }
-			</style>
 			<div class="dayops-card dcb-card">
 				<div class="dcb-scroll">
-					<table class="dcb-grid dcs-grid">
-						<thead>
-							<tr><th></th>${head}<th class="dcb-col dcs-group dcb-total" colspan="3">${__("All Cashiers")}</th></tr>
-							<tr>${sub}</tr>
-						</thead>
+					<table class="dcb-grid">
+						<thead><tr><th></th>${head}<th class="dcb-col dcb-total">${__("Total")}</th></tr></thead>
 						<tbody>${body}</tbody>
+						<tfoot>
+							<tr><td>${__("Remarks")}</td>${remarks}<td class="dcb-total"></td></tr>
+							<tr><td></td>${actions}<td class="dcb-total"></td></tr>
+						</tfoot>
 					</table>
 				</div>
-				<p class="text-muted small" style="margin: 8px 0 0;">${__("Actual is what the submitted documents say the till and each payment mode should hold; Entered is what the cashier counted or typed at Day Close. Cash in Till is the opening float plus cash sales and cash receipts, less refunds, cash paid out and the expenditure entered. Credit sales are left out. Only counted days are compared: a day still open, or only partly on this date, is listed under its cashier and shown in Detail.")}</p>
+				<p class="text-muted small" style="margin: 8px 0 0;">${__("Each cashier's column adds up all of their days on this date. System is what the submitted documents add up to; Entered is what the cashier counted or typed at Day Close. The Cash and payment-mode totals add up only the counted days, so they agree with the differences; the Sales totals add up every day. Detail shows each day on its own.")}</p>
 			</div>`;
+	}
+
+	// Edit from the summary: the same correction as Detail's Edit. A cashier with
+	// more than one counted day on the date picks which one.
+	edit_cashier(c, sessions) {
+		const open = (name) => {
+			const x = sessions.find((row) => row.name === name);
+			x && this.count_dialog(x, "edit");
+		};
+		if (c.counted.length === 1) {
+			open(c.counted[0].name);
+			return;
+		}
+		const label = (d) => {
+			const x = sessions.find((row) => row.name === d.name) || {};
+			const when = x.opened_on ? moment(x.opened_on).format("DD-MM-YYYY hh:mm A") : "";
+			return `${when} · ${d.status === "Closing" ? __("Awaiting Approval") : __(d.status)}`;
+		};
+		const d = new frappe.ui.Dialog({
+			title: __("Edit {0}'s day", [this.esc(c.cashier_name)]),
+			fields: [{
+				fieldtype: "Select", fieldname: "day", label: __("Day"), reqd: 1,
+				options: c.counted.map((row) => ({ value: row.name, label: label(row) })),
+				default: c.counted[0].name,
+			}],
+			primary_action_label: __("Edit"),
+			primary_action: (values) => {
+				d.hide();
+				open(values.day);
+			},
+		});
+		d.show();
+	}
+
+	// Approve from the summary: every day of the cashier waiting for approval
+	approve_cashier(c) {
+		frappe.confirm(
+			__("Approve {0}'s count (difference {1}) and close {2}?", [
+				this.esc(c.cashier_name), this.money(c.awaiting_difference),
+				c.awaiting.length === 1 ? __("the day") : __("{0} days", [c.awaiting.length]),
+			]),
+			async () => {
+				for (const session of c.awaiting) {
+					await frappe.call({
+						method: "digitz_erp.api.counter_session_api.approve_close",
+						args: { session },
+						freeze: true,
+					});
+				}
+				frappe.show_alert({ message: __("{0}'s day closed", [this.esc(c.cashier_name)]), indicator: "green" });
+				this.changed();
+				this.render_board();
+			}
+		);
 	}
 
 	async print_summary() {

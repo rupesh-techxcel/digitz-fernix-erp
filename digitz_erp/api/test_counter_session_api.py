@@ -302,44 +302,85 @@ class TestDayOverviewTotalsAgree(unittest.TestCase):
 		self.assertAlmostEqual(t["Credit Sales (not paid)"], 5567.6)
 
 
-class TestCashierReconciliation(unittest.TestCase):
-	"""The Day Close summary: per cashier Actual, Entered and Difference over
-	their counted days, without credit sales; days not counted are listed."""
+class TestCashierGrid(unittest.TestCase):
+	"""The Day Close summary: the detail rows, one column per cashier, with all
+	of the cashier's days added together."""
 
 	def overview(self):
-		def day(name, cashier, counted, expected, card_system, card_entered, status="Closed"):
+		def day(name, cashier, status, expected, counted, difference, remarks=""):
 			return frappe._dict(
 				name=name, cashier=cashier, cashier_name=cashier.title(), status=status,
-				expected_cash=expected, counted_cash=counted, credit_sales=9999.0,
-				modes={"Card": {"system": card_system, "entered": card_entered}},
+				recorded_difference=difference, close_remarks=remarks,
+				expected_cash=expected, counted_cash=counted,
 			)
 
-		return frappe._dict(
-			modes=[frappe._dict(payment_mode="Card", mode="Bank")],
-			sessions=[
-				day("CS-27", "cashier 1", 17030.0, 17031.91, 23380.0, 23430.0, "Closing"),
-				day("CS-31", "cashier 2", None, 0.0, 0.0, None),
-				day("CS-40", "cashier 1", 500.0, 500.0, 100.0, 100.0),
-				day("CS-41", "cashier 1", None, 200.0, 50.0, None, "Open"),
-			],
-		)
+		sessions = [
+			day("CS-27", "cashier 1", "Closing", 100.0, 98.0, -2.0, "short 2"),
+			day("CS-31", "cashier 2", "Closing", 50.0, None, 5.0),
+			day("CS-40", "cashier 1", "Closed", 200.0, 200.0, 0.0),
+			day("CS-41", "cashier 1", "Open", 30.0, None, None),
+		]
+		lines = [
+			{"label": "Cash", "kind": "section"},
+			{"label": "Expected Cash", "kind": "strong", "values": [s.expected_cash for s in sessions], "total": 300.0},
+			{"label": "Counted Cash (entered)", "kind": "strong", "values": [s.counted_cash for s in sessions], "total": 298.0},
+		]
+		return frappe._dict(sessions=sessions, lines=lines)
 
-	def test_cashier_columns_and_all_cashiers(self):
-		rec = api.cashier_reconciliation(self.overview())
-		self.assertEqual([r["key"] for r in rec.rows], ["Cash", "Card", "Total"])
-		one, two = rec.cashiers
-		cash, card, total = one.lines
-		self.assertAlmostEqual(cash["actual"], 17531.91)
-		self.assertEqual(cash["entered"], 17530.0)
-		self.assertAlmostEqual(cash["difference"], -1.91)
-		self.assertEqual((card["actual"], card["entered"], card["difference"]), (23480.0, 23530.0, 50.0))
-		self.assertAlmostEqual(total["difference"], 48.09)
-		self.assertEqual(one.not_compared, [{"name": "CS-41", "reason": "Open"}])
-		# Nothing of cashier 2 was counted on this date: no figures, not zeros
-		self.assertEqual(two.lines[0], {"actual": None, "entered": None, "difference": None})
-		self.assertEqual(two.not_compared, [{"name": "CS-31", "reason": "Part of the day"}])
-		self.assertEqual(rec.totals, one.lines)
+	def test_one_column_per_cashier(self):
+		grid = api.cashier_grid(self.overview())
+		one, two = grid.cashiers
+		self.assertEqual((one.cashier, one.days, one.open_days), ("cashier 1", 3, 1))
+		self.assertEqual((two.cashier, two.days, two.open_days), ("cashier 2", 1, 0))
+		section, expected, counted = grid.lines
+		self.assertEqual(section, {"label": "Cash", "kind": "section"})
+		# Every day's actual figure, open and part days included
+		self.assertEqual(expected["values"], [330.0, 50.0])
+		# Nothing counted for cashier 2's part day: no figure, not 0
+		self.assertEqual(counted["values"], [298.0, None])
+		# The Total column stays the detail grid's own
+		self.assertEqual((expected["total"], counted["total"]), (300.0, 298.0))
 
-	def test_credit_sales_never_counted(self):
-		rec = api.cashier_reconciliation(self.overview())
-		self.assertNotIn(9999.0, [v for line in rec.totals for v in line.values()])
+	def test_awaiting_approval_per_cashier(self):
+		grid = api.cashier_grid(self.overview())
+		one, two = grid.cashiers
+		self.assertEqual((one.awaiting, one.awaiting_difference), (["CS-27"], -2.0))
+		self.assertEqual((two.awaiting, two.awaiting_difference), (["CS-31"], 5.0))
+		self.assertEqual(one.remarks, ["short 2"])
+		self.assertEqual(one.counted, [{"name": "CS-27", "status": "Closing"}, {"name": "CS-40", "status": "Closed"}])
+
+
+class TestEveryCloseNeedsApproval(unittest.TestCase):
+	"""A cashier's close always waits for a supervisor, even with no difference;
+	a supervisor closing someone else's day approves it with the close."""
+
+	def close(self, closed_by, cashier="cashier", difference=0.0, supervisor=False):
+		session = frappe._dict(name="CS-1", cashier=cashier, difference=difference, approved_by=None, flags=frappe._dict())
+		session.save = lambda **kwargs: None
+		session.submitted = False
+		session.submit = lambda: session.update(submitted=True)
+		with patch.object(api, "apply_count"), patch.object(api, "is_supervisor", return_value=supervisor), \
+				patch.object(api, "now_datetime", return_value="2026-11-26 13:00:00"):
+			result = api.count_and_close(session, 0, [], "", closed_by)
+		return session, result
+
+	def test_clean_count_still_waits(self):
+		session, result = self.close("cashier")
+		self.assertEqual(result["status"], "Closing")
+		self.assertFalse(session.submitted)
+
+	def test_count_with_difference_waits(self):
+		session, result = self.close("cashier", difference=-5.0)
+		self.assertEqual(result["status"], "Closing")
+		self.assertFalse(session.submitted)
+
+	def test_supervisor_closing_own_day_still_waits(self):
+		session, result = self.close("cashier", supervisor=True)
+		self.assertEqual(result["status"], "Closing")
+		self.assertIsNone(session.approved_by)
+
+	def test_supervisor_closing_for_a_cashier_approves(self):
+		session, result = self.close("supervisor", supervisor=True)
+		self.assertEqual(result["status"], "Closed")
+		self.assertEqual(session.approved_by, "supervisor")
+		self.assertTrue(session.submitted)

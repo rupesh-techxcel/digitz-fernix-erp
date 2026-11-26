@@ -5,13 +5,13 @@
 
 A draft session is an open day. Documents saved in it (Sales Invoice, Sales Return,
 Receipt Entry, Expense Entry) carry its name in `counter_session`; see
-digitz_erp.api.counter_session_api. Submitting the session closes the day. A close
-whose counted cash differs from the expected cash waits in status Closing until a
-supervisor approves it. It is a record of the till only: nothing is posted to the GL.
+digitz_erp.api.counter_session_api. Submitting the session closes the day. Every
+close waits in status Closing until a supervisor approves it, with or without a
+difference. It is a record of the till only: nothing is posted to the GL.
 
 The counter is taken only while a day on it is Open. Once the till is counted the
 counter is free for the next cashier, even if the close still waits for approval:
-the cash has been handed over, and the approval is only about the difference.
+the cash has been handed over, and the approval is the supervisor's check of the count.
 """
 
 import frappe

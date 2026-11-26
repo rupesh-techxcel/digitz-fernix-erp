@@ -328,9 +328,10 @@ def count_and_close(session, counted_cash, denominations, remarks, closed_by, ex
 	"""Record the till count (and the cash paid out of the till, `expenditure`,
 	and the non-cash totals, `payment_totals`) on `session` and close it.
 
-	A clean count submits the session. Otherwise it stays in Closing for a
-	supervisor -- unless a supervisor is closing someone else's day, when their
-	close is its own approval. Either way the counter is free from here on.
+	Every close waits in Closing for a supervisor to approve it, with or
+	without a difference, so no day closes unseen -- unless a supervisor is
+	closing someone else's day, when their close is its own approval. Either
+	way the counter is free from here on.
 	"""
 	apply_count(session, counted_cash, denominations, expenditure, payment_totals)
 	session.close_remarks = remarks
@@ -339,15 +340,11 @@ def count_and_close(session, counted_cash, denominations, remarks, closed_by, ex
 	session.closed_by = closed_by
 	session.save(ignore_permissions=True)
 
-	if (
-		abs(flt(session.difference)) >= TOLERANCE
-		and closed_by != session.cashier
-		and is_supervisor(closed_by)
-	):
+	if closed_by != session.cashier and is_supervisor(closed_by):
 		session.approved_by = closed_by
 		session.save(ignore_permissions=True)
 
-	if abs(flt(session.difference)) < TOLERANCE or session.approved_by:
+	if session.approved_by:
 		session.flags.ignore_permissions = True
 		session.submit()
 		return {"session": session.name, "status": "Closed", "difference": flt(session.difference)}
@@ -359,8 +356,8 @@ def count_and_close(session, counted_cash, denominations, remarks, closed_by, ex
 def close_day(counted_cash=None, denominations=None, remarks=None, expenditure=None, payment_totals=None):
 	"""Close the user's open day with the counted cash.
 
-	A clean count closes (submits) the session. A count that differs from the
-	expected cash leaves it in Closing until a supervisor approves it (approve_close).
+	The count leaves the session in Closing until a supervisor approves it
+	(approve_close), whether or not it differs from the expected cash.
 	`denominations` is a list of {denomination, count}; when given, it makes up the
 	counted cash. `payment_totals` is a list of {payment_mode, amount} for the
 	non-cash modes, recorded for the supervisor's day verification.
@@ -402,9 +399,9 @@ def supervisor_close(session, counted_cash=None, denominations=None, remarks=Non
 
 @frappe.whitelist()
 def approve_close(session):
-	"""A supervisor signs off a close with a difference, which closes the session."""
+	"""A supervisor signs off a close, which closes the session."""
 	if not is_supervisor():
-		frappe.throw("Only a supervisor can approve a cash difference.", frappe.PermissionError)
+		frappe.throw("Only a supervisor can approve a day's close.", frappe.PermissionError)
 
 	doc = frappe.get_doc("Counter Session", session)
 	if doc.docstatus != 0 or doc.status != "Closing":
@@ -479,17 +476,27 @@ def build_day_overview(date=None, include_later=0):
 
 	sessions = []
 	for doc in docs:
-		# Display current submitted transactions even after a close was approved.
-		# Recalculate in memory: preserve the recorded count and approval history.
-		doc.calculate_cash(posting_date=date, include_later=include_later)
+		# As saved at the close, before the recalculation below changes it in memory
+		recorded_difference = flt(doc.difference) if doc.status != "Open" else None
 		dates = [getdate(d) for d in get_document_dates(doc.source_session())]
 		later_dates = [d for d in dates if d > date]
 		# The count, the entered totals and the expenditure belong to the whole
 		# day: shown only when the figures cover all of its documents
 		partial = any(d < date or (d > date and not include_later) for d in dates)
-		if partial:
+		# The count belongs to the date it was made on: a day with documents on
+		# other dates shows its count, set against this date's documents, on the
+		# date it was closed, as the correction dialog does; on its other dates,
+		# without the count
+		counted_here = doc.status != "Open" and (
+			not partial or (bool(doc.closed_on) and getdate(doc.closed_on) == date)
+		)
+		# Display current submitted transactions even after a close was approved.
+		# Recalculate in memory: preserve the recorded count and approval history.
+		doc.calculate_cash(posting_date=date, include_later=include_later)
+		if partial and not counted_here:
 			doc.expected_cash = flt(doc.expected_cash) + flt(doc.cash_expenditure)
-		counted = doc.status != "Open" and not partial
+		partial = partial and not counted_here
+		counted = counted_here
 		entered = {row.payment_mode: flt(row.amount) for row in doc.payment_mode_totals}
 		sessions.append(frappe._dict({
 			"name": doc.name,
@@ -531,6 +538,8 @@ def build_day_overview(date=None, include_later=0):
 			# Not counted yet: nothing to show, rather than a misleading 0
 			"counted_cash": flt(doc.counted_cash) if counted else None,
 			"difference": flt(doc.difference) if counted else None,
+			# The difference the close recorded, for the whole day (what Approve signs off)
+			"recorded_difference": recorded_difference,
 			"modes": {
 				m.payment_mode: {
 					"entered": entered.get(m.payment_mode) if counted else None,
@@ -550,69 +559,57 @@ def build_day_overview(date=None, include_later=0):
 	})
 	overview.lines = day_overview_lines(overview)
 	overview.cashiers, overview.cashier_totals = cashier_sales(sessions)
-	overview.reconciliation = cashier_reconciliation(overview)
+	overview.by_cashier = cashier_grid(overview)
 	return overview
 
 
-def cashier_reconciliation(overview):
-	"""The Day Close summary: per cashier, Actual (what the system says the till
-	and each payment mode should hold), Entered (what the cashier counted or
-	typed) and the Difference, for cash, each non-cash mode and their total,
-	with the same three for all cashiers last. Credit sales are not money
-	taken, so no figure here includes them.
+def cashier_grid(overview):
+	"""The Day Close summary: the detail grid's rows with one column per cashier,
+	all of the cashier's days (sessions) added together, so the supervisor sees
+	each cashier once. A cashier's figure is the sum of what their days show in
+	the detail grid; a figure none of their days has (nothing counted yet) stays
+	None. The Total column is the detail grid's own.
 
-	Only counted days are compared: a day still open, or only partly on this
-	date, has no entered figures to set against the actual ones. Those days are
-	listed under the cashier (`not_compared`) and shown in the detail view.
-
-	{rows: [{key, label}], cashiers: [{cashier, cashier_name, sessions,
-	not_compared, lines}], totals: lines}; `lines` has one {actual, entered,
-	difference} per row, all None when nothing of the cashier's was counted.
+	{cashiers: [{cashier, cashier_name, days, open_days, awaiting (the days
+	waiting for approval), awaiting_difference, counted (the days Edit can
+	correct, with their status), remarks}], lines: [{label, kind,
+	values (one per cashier), total}]}
 	"""
-	modes = [m.payment_mode for m in overview.modes]
-	rows = [{"key": "Cash", "label": "Cash in Till"}]
-	rows += [{"key": mode, "label": mode} for mode in modes]
-	rows.append({"key": "Total", "label": "Total"})
-
-	def empty():
-		return {row["key"]: {"actual": 0, "entered": 0} for row in rows if row["key"] != "Total"}
-
-	def lines(sums, compared):
-		if not compared:
-			return [{"actual": None, "entered": None, "difference": None} for _row in rows]
-		out = []
-		for row in rows[:-1]:
-			v = sums[row["key"]]
-			out.append({"actual": v["actual"], "entered": v["entered"], "difference": v["entered"] - v["actual"]})
-		actual, entered = sum(v["actual"] for v in out), sum(v["entered"] for v in out)
-		out.append({"actual": actual, "entered": entered, "difference": entered - actual})
-		return out
-
-	by_cashier, all_sums, all_compared = {}, empty(), 0
-	for s in overview.sessions:
-		c = by_cashier.setdefault(s.cashier, frappe._dict(
-			cashier=s.cashier, cashier_name=s.cashier_name, sessions=[], not_compared=[], sums=empty(), compared=0,
+	groups = {}
+	for i, s in enumerate(overview.sessions):
+		g = groups.setdefault(s.cashier, frappe._dict(
+			cashier=s.cashier, cashier_name=s.cashier_name, days=0, open_days=0,
+			awaiting=[], awaiting_difference=0, counted=[], remarks=[], index=[],
 		))
-		c.sessions.append({"name": s.name, "status": s.status})
-		if s.counted_cash is None:
-			c.not_compared.append({"name": s.name, "reason": "Open" if s.status == "Open" else "Part of the day"})
+		g.index.append(i)
+		g.days += 1
+		if s.status == "Open":
+			g.open_days += 1
+		else:
+			g.counted.append({"name": s.name, "status": s.status})
+		if s.status == "Closing":
+			g.awaiting.append(s.name)
+			# The difference the board shows for this date, as Detail's Approve does
+			shown = s.get("difference")
+			g.awaiting_difference += flt(shown if shown is not None else s.get("recorded_difference"))
+		s.get("close_remarks") and g.remarks.append(s.close_remarks)
+
+	def merged(values, index):
+		known = [values[i] for i in index if values[i] is not None]
+		return sum(known) if known else None
+
+	lines = []
+	for ln in overview.lines:
+		if ln["kind"] == "section":
+			lines.append(ln)
 			continue
-		c.compared += 1
-		all_compared += 1
-		figures = [("Cash", s.expected_cash, s.counted_cash)]
-		figures += [(mode, s.modes[mode]["system"], s.modes[mode]["entered"]) for mode in modes]
-		for key, actual, entered in figures:
-			for sums in (c.sums, all_sums):
-				sums[key]["actual"] += flt(actual)
-				sums[key]["entered"] += flt(entered)
+		lines.append(dict(ln, values=[merged(ln["values"], g.index) for g in groups.values()]))
 
 	cashiers = []
-	for c in by_cashier.values():
-		cashiers.append(frappe._dict(
-			cashier=c.cashier, cashier_name=c.cashier_name, sessions=c.sessions,
-			not_compared=c.not_compared, lines=lines(c.sums, c.compared),
-		))
-	return frappe._dict(rows=rows, cashiers=cashiers, totals=lines(all_sums, all_compared))
+	for g in groups.values():
+		g.pop("index")
+		cashiers.append(g)
+	return frappe._dict(cashiers=cashiers, lines=lines)
 
 
 def cashier_sales(sessions):
