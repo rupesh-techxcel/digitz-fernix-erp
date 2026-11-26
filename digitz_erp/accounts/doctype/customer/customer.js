@@ -13,6 +13,11 @@ frappe.ui.form.on('Customer', {
 			});
 		}
 
+		// Rename with every reference: administrators only (the server checks too)
+		if (!frm.is_new() && (frappe.session.user === "Administrator" || frappe.user.has_role("System Manager") || frappe.user.has_role("Management"))) {
+			frm.add_custom_button(__("Rename Customer"), () => open_rename_popup(frm));
+		}
+
 		frm.set_query("area", function() {
 			return {
 				"filters": {
@@ -118,63 +123,141 @@ frappe.ui.form.on("Customer", "onload", function(frm) {
 })
 
 
+// Merge Customer: every record of this customer moves to the selected one,
+// and this customer is deleted. Shows how many records move first.
 function open_merge_popup(frm) {
-    let d = new frappe.ui.Dialog({
-        title: __('Merge Customer'),
-        fields: [
-            {
-                fieldtype: 'HTML',
-                options: `
-                    <div style="color: red; font-weight: bold;">
-                        Warning: Merging customers is irreversible. Please proceed with caution.
-                    </div>
-                    <div style="margin-top: 10px;">
-                        <p>The system expects this merging operation to avoid duplication of records.</p>
-                        <p>Only the details of the merged customer will persist in the system.</p>
-                    </div>`
-            },
-            {
-                label: __('Current Customer'),
-                fieldname: 'current_customer',
-                fieldtype: 'Data',
-                read_only: 1,
-                default: frm.doc.name
-            },
-            {
-                label: __('Select Customer to Merge'),
-                fieldname: 'merge_customer',
-                fieldtype: 'Link',
-                options: 'Customer',
-                reqd: 1
-            }
-        ],
-        primary_action_label: __('Merge'),
-        primary_action(values) {
-            // Call the merge function
-            merge_customer(frm, values.merge_customer);
-            d.hide();
-			frappe.set_route("List", "Customer"); 
-        }
-    });
+	const esc = frappe.utils.escape_html;
+	const d = new frappe.ui.Dialog({
+		title: __("Merge Customer"),
+		fields: [
+			{
+				fieldtype: "HTML",
+				options: `<div style="color: var(--red-600); font-weight: bold;">${__("Merging customers cannot be undone.")}</div>
+					<p class="text-muted small" style="margin-top: 6px;">${__("Every invoice, return, receipt, GL posting and other record of the current customer moves to the selected customer, and the current customer is deleted.")}</p>`,
+			},
+			{ label: __("Current Customer"), fieldname: "current_customer", fieldtype: "Data", read_only: 1, default: frm.doc.name },
+			{
+				label: __("Merge Into"), fieldname: "merge_customer", fieldtype: "Link", options: "Customer", reqd: 1,
+				get_query: () => ({ filters: { name: ["!=", frm.doc.name] } }),
+			},
+			{ fieldtype: "HTML", fieldname: "references" },
+		],
+		primary_action_label: __("Merge"),
+		primary_action(values) {
+			frappe.confirm(
+				__("Move every record of {0} to {1} and delete {0}? This cannot be undone.", [esc(frm.doc.name), esc(values.merge_customer)]),
+				() => frappe.call({
+					method: "digitz_erp.api.customer_api.merge_customer",
+					args: { current_customer: frm.doc.name, merge_customer: values.merge_customer },
+					freeze: true,
+					freeze_message: __("Merging the customers..."),
+					callback: (r) => {
+						if (!r.message) {
+							return;
+						}
+						d.hide();
+						frappe.show_alert({ message: __("Merged into {0}", [esc(r.message.name)]), indicator: "green" });
+						frappe.set_route("Form", "Customer", r.message.name);
+					},
+				})
+			);
+		},
+	});
 
-    d.show();
+	frappe.call({
+		method: "digitz_erp.accounts.doctype.customer.customer.get_customer_references",
+		args: { customer: frm.doc.name },
+		callback: (r) => {
+			const references = (r.message && r.message.references) || [];
+			const total = references.reduce((sum, x) => sum + x.count, 0);
+			d.fields_dict.references.$wrapper.html(references.length
+				? `<div class="text-muted small" style="margin: 4px 0 6px;">${__("{0} record(s) move:", [total])}</div>
+					<table class="table table-bordered table-sm" style="margin: 0;"><tbody>${references.map((x) => `
+						<tr><td>${esc(__(x.doctype))}${x.lines ? ` <span class="text-muted">(${__("lines")})</span>` : ""}</td>
+							<td class="text-right">${x.count}</td></tr>`).join("")}</tbody></table>`
+				: `<div class="text-muted small">${__("No other record points at this customer.")}</div>`);
+		},
+	});
+	d.show();
 }
 
 
-function merge_customer(frm, merge_customer) {
-    frappe.call({        
-		method: 'digitz_erp.api.customer_api.merge_customer',
-        args: {
-            current_customer: frm.doc.name,
-            merge_customer: merge_customer
-        },
-        callback: function(r) {
-            if (!r.exc) {
-                frappe.msgprint(__('Customers merged successfully.'));
-                frm.reload_doc();
-            } else {
-                frappe.msgprint(__('An error occurred while merging the customers.'));
-            }
-        }
-    });
+// Rename Customer: the new name, what the customer's ID becomes, and how many
+// records point at it (all of them are renamed); optionally the Customer Name
+// copied onto its documents too
+function open_rename_popup(frm) {
+	const esc = frappe.utils.escape_html;
+	const method = "digitz_erp.accounts.doctype.customer.customer";
+	let references = [];
+
+	const d = new frappe.ui.Dialog({
+		title: __("Rename Customer"),
+		fields: [
+			{ fieldtype: "Data", fieldname: "current", label: __("Current"), read_only: 1, default: frm.doc.name },
+			{
+				fieldtype: "Data", fieldname: "new_name", label: __("New Name"), reqd: 1, default: frm.doc.customer_name,
+				change: frappe.utils.debounce(() => preview(), 300),
+			},
+			{ fieldtype: "HTML", fieldname: "new_id" },
+			{
+				fieldtype: "Check", fieldname: "update_copies", default: 1,
+				label: __("Also change the Customer Name printed on its existing documents"),
+			},
+			{ fieldtype: "HTML", fieldname: "references" },
+		],
+		primary_action_label: __("Rename"),
+		primary_action: (values) => {
+			const new_name = (values.new_name || "").trim();
+			const total = references.reduce((sum, r) => sum + r.count, 0);
+			frappe.confirm(
+				__("Rename {0} to {1} and update {2} referencing record(s)? This cannot be undone.",
+					[esc(frm.doc.name), esc(new_name), total]),
+				() => frappe.call({
+					method: `${method}.rename_customer`,
+					args: { customer: frm.doc.name, new_name, update_copies: values.update_copies ? 1 : 0 },
+					freeze: true,
+					freeze_message: __("Renaming the customer and its references..."),
+					callback: (r) => {
+						if (!r.message) {
+							return;
+						}
+						d.hide();
+						frappe.show_alert({ message: __("Renamed to {0}", [esc(r.message.name)]), indicator: "green" });
+						frappe.set_route("Form", "Customer", r.message.name);
+					},
+				})
+			);
+		},
+	});
+
+	const show_references = () => {
+		const total = references.reduce((sum, r) => sum + r.count, 0);
+		const rows = references.map((r) => `
+			<tr><td>${esc(__(r.doctype))}${r.lines ? ` <span class="text-muted">(${__("lines")})</span>` : ""}</td>
+				<td class="text-muted">${esc(r.field)}</td><td class="text-right">${r.count}</td></tr>`).join("");
+		d.fields_dict.references.$wrapper.html(references.length ? `
+			<div class="text-muted small" style="margin: 4px 0 6px;">${__("These records point at the customer. All of them are renamed with it.")}</div>
+			<table class="table table-bordered table-sm" style="margin: 0;">
+				<thead><tr><th>${__("Document")}</th><th>${__("Field")}</th><th class="text-right">${__("Records")}</th></tr></thead>
+				<tbody>${rows}</tbody>
+				<tfoot><tr><th colspan="2">${__("Total")}</th><th class="text-right">${total}</th></tr></tfoot>
+			</table>` : `<div class="text-muted small">${__("No other record points at this customer.")}</div>`);
+	};
+
+	const preview = async () => {
+		const new_name = (d.get_value("new_name") || "").trim();
+		const r = await frappe.call({
+			method: `${method}.get_customer_references`,
+			args: { customer: frm.doc.name, new_name },
+		});
+		references = r.message.references || [];
+		const new_id = r.message.new_id;
+		d.fields_dict.new_id.$wrapper.html(new_id && new_id !== frm.doc.name
+			? `<div class="small" style="margin: -4px 0 8px;">${__("New customer ID")}: <b>${esc(new_id)}</b></div>`
+			: "");
+		show_references();
+	};
+
+	d.show();
+	preview();
 }
