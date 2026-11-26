@@ -1,0 +1,225 @@
+/* Print or View Invoices
+ *
+ * Loaded by Frappe together with the page (Page.load_assets), so edits here
+ * need a page reload, not a bench build. Colours come from the Digitz desk
+ * theme tokens (public/css/digitz_desk.bundle.css), with fallbacks, as in the
+ * Cashier Console.
+ */
+
+.print-or-view-invoices {
+	--pv-blue: var(--digitz-blue, #214dbb);
+	--pv-blue-soft: var(--digitz-blue-soft-2, #edf4ff);
+	--pv-canvas: var(--digitz-blue-soft-3, #f7fbff);
+	--pv-border: var(--digitz-blue-border, #cfe0ff);
+	--pv-text: var(--digitz-text, #1b2b47);
+	--pv-muted: var(--digitz-text-soft, #5f6f8c);
+	--pv-surface: var(--digitz-white, #ffffff);
+	--pv-shadow-sm: var(--digitz-shadow-sm, 0 2px 8px rgba(33, 77, 187, 0.06));
+	--pv-green: #16a34a;
+	--pv-orange: #ea8a0c;
+	--pv-red: #dc2626;
+
+	max-width: 1320px;
+	margin: 4px auto 32px;
+	color: var(--pv-text);
+}
+
+[data-theme="dark"] .print-or-view-invoices {
+	--pv-blue-soft: rgba(77, 163, 255, 0.12);
+	--pv-canvas: rgba(255, 255, 255, 0.02);
+	--pv-border: var(--border-color, #2f3b52);
+	--pv-text: var(--text-color, #e6ebf5);
+	--pv-muted: var(--text-muted, #9aa6bd);
+	--pv-surface: var(--card-bg, #1c2333);
+	--pv-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.print-or-view-invoices .is-loading {
+	opacity: 0.6;
+	transition: opacity 0.2s ease;
+}
+
+.pv-muted { color: var(--pv-muted); }
+.pv-strong { font-weight: 600; }
+.pv-pre { white-space: pre-line; }
+.pv-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- Tiles ---------- */
+
+.pv-tiles {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+.pv-tile {
+	position: relative;
+	overflow: hidden;
+	padding: 14px 16px;
+	border: 1px solid var(--pv-border);
+	border-radius: 14px;
+	background: var(--pv-surface);
+	box-shadow: var(--pv-shadow-sm);
+}
+
+.pv-tile::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 3px;
+	background: var(--pv-blue);
+	opacity: 0.6;
+}
+
+.pv-tile.is-paid::before { background: var(--pv-green); opacity: 1; }
+.pv-tile.is-unpaid::before { background: var(--pv-red); opacity: 1; }
+.pv-tile.is-unpaid .pv-tile-value { color: var(--pv-red); }
+
+.pv-tile-label {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--pv-muted);
+}
+
+.pv-tile-value {
+	margin-top: 4px;
+	font-size: 20px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ---------- List ---------- */
+
+.pv-table {
+	border: 1px solid var(--pv-border);
+	border-radius: 14px;
+	background: var(--pv-surface);
+	box-shadow: var(--pv-shadow-sm);
+	overflow: hidden;
+}
+
+.pv-scroll {
+	max-height: 620px;
+	overflow: auto;
+}
+
+.pv-grid {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 13px;
+}
+
+.pv-grid th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 10px 12px;
+	background: var(--pv-blue-soft);
+	color: var(--pv-muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	border-bottom: 1px solid var(--pv-border);
+}
+
+[data-theme="dark"] .pv-grid th { background: var(--pv-surface); }
+
+.pv-grid td {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--pv-border);
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.pv-grid tbody tr:last-child td { border-bottom: 0; }
+.pv-grid tbody tr:hover td { background: var(--pv-canvas); }
+
+.pv-link { font-weight: 600; color: var(--pv-blue); }
+
+.pv-ellipsis {
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pv-badge {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+	background: var(--pv-blue-soft);
+	color: var(--pv-muted);
+}
+
+.pv-badge.is-paid { background: rgba(22, 163, 74, 0.12); color: var(--pv-green); }
+.pv-badge.is-part { background: rgba(234, 138, 12, 0.14); color: var(--pv-orange); }
+.pv-badge.is-unpaid { background: rgba(220, 38, 38, 0.12); color: var(--pv-red); }
+
+.pv-pager {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 12px 2px;
+	font-size: 12px;
+}
+
+.pv-empty {
+	padding: 40px 16px;
+	text-align: center;
+	color: var(--pv-muted);
+}
+
+/* ---------- Invoice view ---------- */
+
+.pv-view {
+	max-width: 1000px;
+	margin: 0 auto;
+}
+
+.pv-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.pv-tabs { display: inline-flex; gap: 6px; }
+
+.pv-banner {
+	margin-bottom: 10px;
+	padding: 8px 12px;
+	border-radius: 8px;
+	background: rgba(220, 38, 38, 0.1);
+	color: var(--pv-red);
+	font-weight: 600;
+}
+
+.pv-banner.is-draft {
+	background: rgba(234, 138, 12, 0.12);
+	color: var(--pv-orange);
+}
+
+.pv-pdf {
+	display: block;
+	width: 100%;
+	height: calc(100vh - 220px);
+	min-height: 520px;
+	border: 1px solid var(--pv-border);
+	border-radius: 14px;
+	background: var(--pv-surface);
+	box-shadow: var(--pv-shadow-sm);
+}
