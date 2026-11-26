@@ -817,7 +817,7 @@
    them must not be clipped */
 .ci-stab-docs {
 	display: flex;
-	flex: 1 1 160px;
+	flex: 0 1 auto;
 	gap: 6px;
 	min-width: 0;
 	overflow-x: auto;
@@ -1007,6 +1007,11 @@
 	background: var(--cc-blue-soft);
 }
 
+.ci-new.ci-new-tab {
+	margin-left: 0;
+	padding: 7px 9px;
+}
+
 .ci-view[hidden] {
 	display: none;
 }
@@ -1047,6 +1052,29 @@
 }
 
 /* Period: a dropdown, so the status and payment chips fit on the same row */
+/* Pick Dates: From and To beside the period */
+.ci-dates {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+}
+
+.ci-dates[hidden] {
+	display: none;
+}
+
+.ci-date {
+	width: 130px;
+}
+
+.ci-date input {
+	height: 38px;
+	border-radius: 10px;
+	font-size: 13px;
+}
+
 .ci-range {
 	flex: none;
 	width: auto;
@@ -1395,7 +1423,46 @@ tr.is-open .ci-open-mark {
 }
 
 .ci-fields.ci-fields-customer-main {
-	grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 1.2fr);
+	grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.8fr);
+}
+
+/* Customer, name, mobile | email, date, time on two lines when narrow */
+@media (max-width: 1499px) {
+	.ci-fields.ci-fields-customer-main {
+		grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 1.2fr);
+	}
+}
+
+/* The pencil beside Date that opens Date and Time for editing */
+.ci-field[data-fieldname="posting_date"] {
+	position: relative;
+}
+
+.ci-date-edit {
+	position: absolute;
+	top: 0;
+	right: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--cc-muted);
+	cursor: pointer;
+}
+
+.ci-date-edit .icon {
+	stroke: currentColor;
+}
+
+.ci-date-edit:hover,
+.ci-date-edit.active {
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
 }
 
 .ci-fields-customer-main .form-group {
@@ -1433,6 +1500,53 @@ tr.is-open .ci-open-mark {
 	background: transparent;
 	font-size: 12px;
 	cursor: pointer;
+}
+
+/* Remarks icon beside Details; the dot shows the invoice has remarks */
+.ci-remarks-btn {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 1px solid var(--cc-border);
+	border-radius: 8px;
+	background: var(--cc-surface);
+	color: var(--cc-muted);
+	cursor: pointer;
+}
+
+.ci-remarks-btn[hidden] {
+	display: none;
+}
+
+.ci-remarks-btn .icon {
+	stroke: currentColor;
+}
+
+.ci-remarks-btn:hover,
+.ci-remarks-btn.has-value {
+	border-color: var(--cc-blue-light);
+	background: var(--cc-blue-soft);
+	color: var(--cc-blue);
+}
+
+.ci-remarks-dot {
+	position: absolute;
+	top: -3px;
+	right: -3px;
+	display: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--cc-blue);
+	box-shadow: 0 0 0 2px var(--cc-surface);
+}
+
+.ci-remarks-btn.has-value .ci-remarks-dot {
+	display: block;
 }
 
 .ci-cust-toggle .icon {
@@ -2179,3 +2293,145 @@ tr.is-open .ci-open-mark {
 .cl-ledger .cl-customer { min-width: 240px; }
 .cl-ledger .cl-buttons { display: flex; gap: 6px; margin-left: auto; align-self: flex-end; }
 .cl-ledger .cl-summary td { font-weight: 600; background: var(--subtle-fg); }
+
+/* ---------- Sales Invoice editor: compact, less scrolling ---------- */
+
+/* Tighter cards and gaps (Receipts keeps its own spacing) */
+.ci-editor:not(.cr-editor) {
+	--ci-gap: 8px;
+}
+
+.ci-editor:not(.cr-editor) .ci-layout,
+.ci-editor:not(.cr-editor) .ci-main {
+	gap: 8px;
+}
+
+.ci-editor:not(.cr-editor) .ci-card {
+	padding: 10px 14px;
+}
+
+.ci-editor:not(.cr-editor) .ci-card-customer {
+	padding-bottom: 4px;
+}
+
+.ci-editor:not(.cr-editor) .ci-fields-customer-main .form-group {
+	margin-bottom: 6px;
+}
+
+.ci-editor:not(.cr-editor) .ci-fields-customer-main .control-label {
+	margin-bottom: 2px;
+}
+
+/* Item search bar and rows */
+.ci-editor:not(.cr-editor) .ci-items-bar {
+	margin-bottom: 6px;
+}
+
+.ci-editor:not(.cr-editor) .ci-item-search input,
+.ci-editor:not(.cr-editor) .ci-pay-btn {
+	height: 36px;
+}
+
+.ci-editor:not(.cr-editor) .ci-pay-info {
+	min-height: 36px;
+	padding: 4px 12px;
+}
+
+/* Desktop rows only: on a phone the rows are cards with their own spacing */
+@media (min-width: 768px) {
+	.ci-editor:not(.cr-editor) .ci-items th,
+	.ci-editor:not(.cr-editor) .ci-items td {
+		padding: 4px 6px;
+	}
+
+	.ci-editor:not(.cr-editor) .ci-items .ci-input {
+		padding: 3px 8px;
+	}
+}
+
+/* Total: one slim bar, pinned to the bottom of the screen while the items
+   scroll, so the total never needs a scroll to see. The amount at the left,
+   Gross / Taxable / VAT side by side at the right. */
+.ci-editor:not(.cr-editor) .ci-side {
+	position: sticky;
+	bottom: 8px;
+	z-index: 3;
+}
+
+/* Item and customer suggestion lists open over the pinned total bar
+   (Frappe gives them z-index 4) */
+.ci-editor:not(.cr-editor) .awesomplete > ul {
+	z-index: 6;
+}
+
+.ci-editor:not(.cr-editor) .ci-card-total {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	column-gap: 24px;
+	padding: 8px 16px;
+	/* Solid under the soft blue, so the items do not show through */
+	background: linear-gradient(var(--cc-blue-soft), var(--cc-blue-soft)), var(--cc-surface);
+	box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+}
+
+.ci-editor:not(.cr-editor) .ci-total-label,
+.ci-editor:not(.cr-editor) .ci-total-value,
+.ci-editor:not(.cr-editor) .ci-total-words {
+	grid-column: 1;
+}
+
+.ci-editor:not(.cr-editor) .ci-total-value {
+	margin: 0;
+	font-size: 26px;
+}
+
+.ci-editor:not(.cr-editor) .ci-total-words:empty {
+	display: none;
+}
+
+.ci-editor:not(.cr-editor) .ci-sums {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 4px 28px;
+	grid-column: 2;
+	grid-row: 1 / span 3;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.ci-editor:not(.cr-editor) .ci-sum {
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 0;
+	padding: 0;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.ci-editor:not(.cr-editor) .ci-sum > span:first-child {
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--cc-muted);
+}
+
+/* More Details: a slim fold-out at the end */
+.ci-editor:not(.cr-editor) .ci-card-more {
+	padding-top: 8px;
+	padding-bottom: 8px;
+}
+
+@media (max-width: 767px) {
+	.ci-editor:not(.cr-editor) .ci-card-total {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.ci-editor:not(.cr-editor) .ci-sums {
+		grid-column: 1;
+		grid-row: auto;
+		justify-content: flex-start;
+		margin-top: 6px;
+	}
+}

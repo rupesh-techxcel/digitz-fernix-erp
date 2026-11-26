@@ -23,7 +23,6 @@ frappe.provide("digitz_erp");
 	const esc = (v) => frappe.utils.escape_html(v == null ? "" : String(v));
 	const money = (v) => format_currency(flt(v), frappe.boot.sysdefaults.currency);
 	const num = (v) => format_number(flt(v), null, 2);
-	const storage_key = () => `digitz_cashier_invoices:${frappe.session.user}`;
 
 	// Fields that tie an invoice to a Sales Order, Quotation, Delivery Note or
 	// Project. The console never writes them; an invoice with any set opens read-only.
@@ -82,11 +81,12 @@ frappe.provide("digitz_erp");
 							${frappe.utils.icon("list", "sm")}<span>${__("All Invoices")}</span>
 						</button>
 						<div class="ci-stab-docs"></div>
+						<!-- New Invoice as a small + beside the tab, like a browser's new tab -->
+						<button type="button" class="ci-new ci-new-tab" title="${__("New Invoice (Alt+N)")}" aria-label="${__("New Invoice")}">
+							${frappe.utils.icon("add", "sm")}
+						</button>
 						<div class="ci-strip-head"></div>
 						<div class="ci-strip-files"></div>
-						<button type="button" class="ci-new" title="${__("New Invoice (Alt+N)")}">
-							${frappe.utils.icon("add", "sm")}<span>${__("New Invoice")}</span>
-						</button>
 					</div>
 					<div class="ci-views">
 						<div class="ci-view" data-key="list"></div>
@@ -98,7 +98,6 @@ frappe.provide("digitz_erp");
 			this.list = new digitz_erp.InvoiceList(this, this.$el.find('.ci-view[data-key="list"]'));
 
 			this.bind();
-			this.restore();
 		}
 
 		bind() {
@@ -226,10 +225,15 @@ frappe.provide("digitz_erp");
 			}
 			if (key === "new") {
 				const tab = await this.add_new();
-				tab && this.replace_route(tab.key);
+				this.replace_route(tab ? tab.key : this.active);
 				return;
 			}
 
+			// One invoice open at a time: the open one closes first
+			if (!(await this.close_others(key))) {
+				this.replace_route(this.active);
+				return;
+			}
 			let tab = this.tabs.find((t) => t.key === key);
 			if (!tab) {
 				// A link to an unsaved invoice from an earlier session: start a new one
@@ -270,7 +274,11 @@ frappe.provide("digitz_erp");
 			return tab;
 		}
 
+		// null when the cashier keeps the open invoice's unsaved changes
 		async add_new(doc, opts = {}) {
+			if (!(await this.close_others())) {
+				return null;
+			}
 			this.new_count++;
 			const editor_doc = doc || frappe.model.get_new_doc(DOCTYPE);
 			const tab = this.add_tab(editor_doc.name, __("New Invoice {0}", [this.new_count]));
@@ -303,7 +311,6 @@ frappe.provide("digitz_erp");
 			} finally {
 				tab.loading = false;
 				this.paint(tab);
-				this.persist();
 			}
 		}
 
@@ -388,16 +395,7 @@ frappe.provide("digitz_erp");
 			}
 			const remove = () => {
 				const i = this.tabs.indexOf(tab);
-				this.tabs.splice(i, 1);
-				tab.$tab.remove();
-				tab.$view.remove();
-				tab.editor && tab.editor.$head && tab.editor.$head.remove();
-				// Edits live on the cached document: drop it, so unsaved changes are
-				// really discarded and the invoice reopens as saved
-				if (tab.editor && frappe.get_doc(DOCTYPE, tab.editor.doc.name)) {
-					frappe.model.remove_from_locals(DOCTYPE, tab.editor.doc.name);
-				}
-				this.persist();
+				this.discard(tab);
 				if (this.active === key) {
 					const next = this.tabs[i] || this.tabs[i - 1];
 					opts.route === false ? this.show("list") : this.replace_route(next ? next.key : "list");
@@ -410,6 +408,43 @@ frappe.provide("digitz_erp");
 			}
 		}
 
+		// Removes a tab and its invoice, without asking or routing
+		discard(tab) {
+			this.tabs.splice(this.tabs.indexOf(tab), 1);
+			tab.$tab.remove();
+			tab.$view.remove();
+			tab.editor && tab.editor.$head && tab.editor.$head.remove();
+			// Edits live on the cached document: drop it, so unsaved changes are
+			// really discarded and the invoice reopens as saved
+			if (tab.editor && frappe.get_doc(DOCTYPE, tab.editor.doc.name)) {
+				frappe.model.remove_from_locals(DOCTYPE, tab.editor.doc.name);
+			}
+			if (this.active === tab.key) {
+				this.active = "list";
+			}
+		}
+
+		// Closes every open invoice except keep_key, asking first when one has
+		// unsaved changes. False when the cashier chooses to keep them.
+		close_others(keep_key) {
+			const others = this.tabs.filter((t) => t.key !== keep_key);
+			const dirty = others.filter((t) => t.editor && t.editor.dirty);
+			const close_all = () => {
+				others.forEach((t) => this.discard(t));
+				return true;
+			};
+			if (!dirty.length) {
+				return Promise.resolve(close_all());
+			}
+			return new Promise((resolve) => {
+				frappe.confirm(
+					__("{0} has unsaved changes. Close it and lose them?", [esc(dirty[0].$tab.find(".ci-stab-label").text())]),
+					() => resolve(close_all()),
+					() => resolve(false)
+				);
+			});
+		}
+
 		// A new invoice was saved: its tab takes the invoice's name
 		renamed(tab, old_key) {
 			tab.key = tab.editor.doc.name;
@@ -419,27 +454,6 @@ frappe.provide("digitz_erp");
 				this.active = tab.key;
 				this.replace_route(tab.key);
 			}
-			this.persist();
-		}
-
-		// Saved invoices open in tabs come back after a reload
-		persist() {
-			const names = this.tabs.filter((t) => !t.key.startsWith("new-")).map((t) => t.key);
-			try {
-				localStorage.setItem(storage_key(), JSON.stringify(names.slice(-10)));
-			} catch (e) {
-				// storage unavailable: tabs just don't come back
-			}
-		}
-
-		restore() {
-			let names = [];
-			try {
-				names = JSON.parse(localStorage.getItem(storage_key()) || "[]");
-			} catch (e) {
-				names = [];
-			}
-			(Array.isArray(names) ? names : []).forEach((name) => typeof name === "string" && this.add_tab(name));
 		}
 
 		async get_mobile_mandatory() {
@@ -460,6 +474,9 @@ frappe.provide("digitz_erp");
 			this.host = host;
 			this.$el = $el;
 			this.range = "today";
+			// Pick Dates: From / To, both included
+			this.from_date = frappe.datetime.get_today();
+			this.to_date = frappe.datetime.get_today();
 			this.scope = today_only() ? "mine" : "all";
 			this.status = "";
 			this.payment = "";
@@ -483,9 +500,14 @@ frappe.provide("digitz_erp");
 							<input type="search" class="form-control" placeholder="${__("Search invoice no, customer, company, mobile or token")}" aria-label="${__("Search invoices")}">
 						</div>
 						<select class="form-control ci-range" aria-label="${__("Period")}">
-							${[["today", __("Today")], ["week", __("This Week")], ["month", __("This Month")], ["30", __("Last 30 Days")], ["all", __("All")]]
+							${[["today", __("Today")], ["yesterday", __("Yesterday")], ["week", __("This Week")], ["month", __("This Month")], ["30", __("Last 30 Days")], ["all", __("All")], ["custom", __("Pick Dates…")]]
 								.map(([v, label]) => `<option value="${v}"${v === this.range ? " selected" : ""}>${label}</option>`).join("")}
 						</select>
+						<div class="ci-dates" hidden>
+							<div class="ci-date" data-date="from_date" title="${__("From")}"></div>
+							<span class="text-muted">${__("to")}</span>
+							<div class="ci-date" data-date="to_date" title="${__("To")}"></div>
+						</div>
 						${chips("scope", [["mine", __("My Invoices")], ["others", __("Other Cashiers’ Invoices")], ["all", __("All Invoices")]], this.scope)}
 						${chips("status", [["", __("Any Status")], ["0", __("Draft")], ["1", __("Submitted")], ["2", __("Cancelled")]], this.status)}
 						${chips("payment", [["", __("Cash & Credit")], ["cash", __("Cash")], ["credit", __("Credit")]], this.payment)}
@@ -504,8 +526,10 @@ frappe.provide("digitz_erp");
 			});
 			this.$el.on("change", ".ci-range", (e) => {
 				this.range = e.currentTarget.value;
+				this.$el.find(".ci-dates").prop("hidden", this.range !== "custom");
 				this.load(true);
 			});
+			this.make_date_controls();
 			this.$el.on("click", ".ci-chip", (e) => {
 				const $chip = $(e.currentTarget);
 				const filter = $chip.closest(".ci-chips").attr("data-filter");
@@ -522,20 +546,51 @@ frappe.provide("digitz_erp");
 			this.$el.on("click", ".ci-list-more button", () => this.load(false));
 		}
 
+		// From / To for Pick Dates, in the user's date format with the calendar
+		make_date_controls() {
+			this.$el.find(".ci-date").each((_, el) => {
+				const fieldname = el.dataset.date;
+				const control = frappe.ui.form.make_control({
+					df: {
+						fieldtype: "Date",
+						fieldname,
+						placeholder: fieldname === "from_date" ? __("From") : __("To"),
+						change: () => {
+							const value = control.get_value();
+							if (!value || value === this[fieldname]) {
+								return;
+							}
+							this[fieldname] = value;
+							this.range === "custom" && this.load(true);
+						},
+					},
+					parent: el,
+					only_input: true,
+					render_input: true,
+				});
+				control.set_value(this[fieldname]);
+			});
+		}
+
 		show() {
 			this.loaded ? this.paint_open() : this.load(true);
 		}
 
 		filters() {
 			const today = frappe.datetime.get_today();
+			const yesterday = frappe.datetime.add_days(today, -1);
 			const from = {
 				today: today,
+				yesterday: yesterday,
 				week: frappe.datetime.week_start(),
 				month: frappe.datetime.month_start(),
 				30: frappe.datetime.add_days(today, -29),
+				custom: this.from_date,
 			}[this.range];
+			const to = { yesterday: yesterday, custom: this.to_date }[this.range];
 			const filters = [];
 			from && filters.push([DOCTYPE, "posting_date", ">=", from]);
+			to && filters.push([DOCTYPE, "posting_date", "<=", to]);
 			this.status !== "" && filters.push([DOCTYPE, "docstatus", "=", cint(this.status)]);
 			this.payment && filters.push([DOCTYPE, "credit_sale", "=", this.payment === "credit" ? 1 : 0]);
 			return filters;
@@ -739,8 +794,11 @@ frappe.provide("digitz_erp");
 								<div class="ci-cust-row">
 									<div class="ci-fields ci-fields-customer-main"></div>
 									<div class="ci-cust-foot">
+										<button type="button" class="ci-remarks-btn" title="${__("Remarks")}" aria-label="${__("Remarks")}">
+											${frappe.utils.icon("comment", "sm")}<span class="ci-remarks-dot"></span>
+										</button>
 										<button type="button" class="ci-cust-toggle" aria-expanded="false"
-											title="${__("Email, company & TRN, notes, salesman, token")}">
+											title="${__("Company & TRN, notes, salesman, token")}">
 											${frappe.utils.icon("down", "xs")}
 											<span class="ci-strong">${__("Details")}</span>
 										</button>
@@ -790,7 +848,7 @@ frappe.provide("digitz_erp");
 							<section class="ci-card ci-card-more">
 								<button type="button" class="ci-more-toggle" aria-expanded="false">
 									<h4>${__("More Details")}</h4>
-									<span class="ci-more-hint text-muted">${__("Date & time, price list, remarks")}</span>
+									<span class="ci-more-hint text-muted">${__("Price list, remarks")}</span>
 									${frappe.utils.icon("down", "sm")}
 								</button>
 								<div class="ci-more-body" hidden>
@@ -804,13 +862,16 @@ frappe.provide("digitz_erp");
 			`);
 
 			// The customer row holds what every invoice needs; the rest folds away
-			this.make_fields(".ci-fields-customer-main", ["customer", "customer_display_name", "customer_mobile_number"]);
+			this.make_fields(".ci-fields-customer-main", [
+				"customer", "customer_display_name", "customer_mobile_number", "customer_email", "posting_date", "posting_time",
+			]);
+			this.make_date_edit();
 			this.make_fields(".ci-fields-customer", [
-				"customer_email", "customer_token", "customer_company", "tax_id",
+				"customer_token", "customer_company", "tax_id",
 				["notes", { span: 2 }], "salesman", "medical_service",
 			]);
 			this.make_fields(".ci-fields-more", [
-				"edit_posting_date_and_time", "posting_date", "posting_time", "naming_series", "sales_inv_no",
+				"naming_series", "sales_inv_no",
 				// Update Stock, Cost Center, LPO and Update Rates In Price List are not used at the counter: their
 				// values (defaults included) are kept, just not shown
 				"price_list", "rate_includes_tax",
@@ -834,6 +895,45 @@ frappe.provide("digitz_erp");
 			if (editable && !doc.customer) {
 				setTimeout(() => this.focus_field("customer"), 50);
 			}
+		}
+
+		// Edit Posting Date And Time as a small pencil beside Date: it opens Date
+		// and Time for editing, and closes them again
+		make_date_edit() {
+			const $cell = this.$el.find('.ci-field[data-fieldname="posting_date"]');
+			if (!$cell.length || !frappe.meta.get_docfield(DOCTYPE, "edit_posting_date_and_time")) {
+				return;
+			}
+			$(`<button type="button" class="ci-date-edit" aria-pressed="false" title="${__("Edit Date and Time")}">${frappe.utils.icon("edit", "xs")}</button>`)
+				.appendTo($cell)
+				.on("click", () => {
+					this.doc.edit_posting_date_and_time = cint(this.doc.edit_posting_date_and_time) ? 0 : 1;
+					this.on_change("edit_posting_date_and_time");
+				});
+		}
+
+		// Remarks from the customer row: a popup with the invoice's Remarks, written
+		// back when it closes. The same field as in More Details, so either place
+		// shows what the other one typed.
+		open_remarks_dialog() {
+			const doc = this.doc;
+			const editable = this.is_editable();
+			const d = new frappe.ui.Dialog({
+				title: frappe.meta.get_label(DOCTYPE, "remarks"),
+				fields: [{ fieldtype: "Small Text", fieldname: "remarks", read_only: editable ? 0 : 1 }],
+				primary_action_label: editable ? __("Done") : __("Close"),
+				primary_action: () => d.hide(),
+			});
+			d.onhide = () => {
+				const value = d.get_value("remarks") || "";
+				if (editable && value !== (doc.remarks || "")) {
+					doc.remarks = value;
+					this.on_change("remarks");
+				}
+			};
+			d.set_value("remarks", doc.remarks || "");
+			d.show();
+			editable && setTimeout(() => d.fields_dict.remarks.$input && d.fields_dict.remarks.$input.trigger("focus"), 300);
 		}
 
 		toggle_customer_details(open) {
@@ -912,6 +1012,7 @@ frappe.provide("digitz_erp");
 			this.$el.off();
 			this.$el.on("click", ".ci-pay-btn, .ci-pay-info", () => this.open_payment_dialog());
 			this.$el.on("click", ".ci-cust-toggle", () => this.toggle_customer_details());
+			this.$el.on("click", ".ci-remarks-btn", () => this.open_remarks_dialog());
 			this.$el.on("click", ".ci-more-toggle", (e) => {
 				const $btn = $(e.currentTarget);
 				const open = $btn.attr("aria-expanded") !== "true";
@@ -1092,6 +1193,20 @@ frappe.provide("digitz_erp");
 				control.$wrapper.closest(".ci-field").prop("hidden", !visible);
 				control.df.reqd = cint(meta_df.reqd) || reqd[fieldname] ? 1 : 0;
 			});
+
+			// The Remarks icon: hidden with the field, marked when there are remarks
+			const remarks = (doc.remarks || "").trim();
+			this.$el.find(".ci-remarks-btn")
+				.prop("hidden", !this.visible("remarks"))
+				.toggleClass("has-value", !!remarks)
+				.attr("title", remarks ? `${__("Remarks")}: ${remarks.length > 120 ? remarks.slice(0, 120) + "…" : remarks}` : __("Add Remarks"));
+
+			const editing = !!cint(doc.edit_posting_date_and_time);
+			this.$el.find(".ci-date-edit")
+				.prop("hidden", !editable || !this.visible("edit_posting_date_and_time"))
+				.toggleClass("active", editing)
+				.attr("aria-pressed", editing ? "true" : "false")
+				.attr("title", editing ? __("Stop editing Date and Time") : __("Edit Date and Time"));
 
 			this.refresh_pay_info();
 		}
@@ -1814,7 +1929,7 @@ frappe.provide("digitz_erp");
 			newdoc.__run_link_triggers = false;
 			newdoc.amended_from = this.doc.name;
 			const tab = await this.host.add_new(newdoc);
-			this.host.go(tab.key);
+			tab && this.host.go(tab.key);
 		}
 
 		// frappe.model.delete_doc asks for the confirmation itself
@@ -1906,13 +2021,24 @@ frappe.provide("digitz_erp");
 		// A cash sale's Received Amount starts at the total, so the cashier only
 		// types it when the customer hands over more (for change).
 		async open_payment_dialog(focus) {
-			if (!this.is_editable()) {
+			// One popup at a time: a second one (Alt+P again) would cover the first,
+			// which then falls out of step with the invoice
+			if (!this.is_editable() || this.payment_dialog_open) {
 				return;
 			}
+			const token = {};
+			this.payment_dialog_open = token;
+			const release = () => this.payment_dialog_open === token && (this.payment_dialog_open = null);
 			const doc = this.doc;
 			const FIELDS = PAYMENT_FIELDS;
 			let syncing = false;
-			const payment_modes = await this.get_payment_modes();
+			let payment_modes;
+			try {
+				payment_modes = await this.get_payment_modes();
+			} catch (e) {
+				release();
+				throw e;
+			}
 
 			const fields = [{ fieldtype: "HTML", fieldname: "summary" }];
 			FIELDS.forEach((fieldname, i) => {
@@ -1932,7 +2058,10 @@ frappe.provide("digitz_erp");
 							return;
 						}
 						const value = d.get_value(fieldname);
+						// Already the invoice's value: still redraw, in case the popup
+						// shows something else
 						if ((doc[fieldname] ?? "") === (value ?? "") || (meta_df.fieldtype === "Check" && cint(doc[fieldname]) === cint(value))) {
+							sync();
 							return;
 						}
 						doc[fieldname] = value;
@@ -1940,7 +2069,8 @@ frappe.provide("digitz_erp");
 							// Switching to cash (e.g. Credit Sale unticked) fills it too, but
 							// a Received Amount the cashier cleared is left cleared
 							.then(() => fieldname !== "received_amount" && fill_received())
-							.then(() => sync());
+							// Redrawn from the invoice even if a step failed
+							.finally(() => sync());
 					},
 				}));
 			});
@@ -1953,6 +2083,8 @@ frappe.provide("digitz_erp");
 				primary_action_label: __("Save & Submit"),
 				primary_action: async () => {
 					await take_values();
+					// Free now: a missing payment field reopens the popup at once
+					release();
 					d.hide();
 					this.save_and_submit();
 				},
@@ -1984,6 +2116,7 @@ frappe.provide("digitz_erp");
 			// The console's colours for the payment fields
 			d.$wrapper.addClass("ci-pay-dialog");
 			d.onhide = () => {
+				release();
 				this.refresh();
 			};
 
