@@ -239,3 +239,26 @@ class TestCashierSales(unittest.TestCase):
 			[("ali", 2, 130, 90), ("sara", 1, 50, 50)],
 		)
 		self.assertEqual((totals.days, totals.total_sales, totals.total_collection), (3, 180, 140))
+
+
+class TestLastCloseIsBlindForCashiers(unittest.TestCase):
+	"""Day Open's previous close: counted cash with the difference gives the
+	expected cash, so only a supervisor gets the difference."""
+
+	def last_close(self, supervisor):
+		row = frappe._dict(
+			name="CS-1", cashier="cashier@example.com", closed_by=None, closed_on="2026-11-25 22:00:00",
+			counted_cash=900.0, difference=-100.0, status="Closed",
+		)
+		with patch.object(api, "frappe") as framework, patch.object(api, "is_supervisor", return_value=supervisor):
+			framework.db.sql.return_value = [row]
+			framework.get_all.return_value = []
+			return api.get_last_close("Counter 1")
+
+	def test_cashier_gets_count_without_difference(self):
+		last = self.last_close(supervisor=False)
+		self.assertEqual(last.counted_cash, 900.0)
+		self.assertNotIn("difference", last)
+
+	def test_supervisor_gets_difference(self):
+		self.assertEqual(self.last_close(supervisor=True).difference, -100.0)

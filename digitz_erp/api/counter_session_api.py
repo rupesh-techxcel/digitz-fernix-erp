@@ -127,7 +127,7 @@ def get_last_close(counter):
 	"""The last counted session on `counter`, or None.
 
 	{name, cashier, cashier_name, closed_on, counted_cash, difference, status,
-	denominations}. A close still waiting for approval counts: its till was
+	denominations}; `difference` for supervisors only. A close still waiting for approval counts: its till was
 	counted and handed over, so it is what the next day starts from.
 	"""
 	if not counter:
@@ -147,6 +147,9 @@ def get_last_close(counter):
 	if not rows:
 		return None
 	last = rows[0]
+	# A blind close: the difference with the count gives the expected cash
+	if not is_supervisor():
+		last.pop("difference")
 	last.cashier_name = frappe.utils.get_fullname(last.cashier)
 	last.closed_by_name = frappe.utils.get_fullname(last.closed_by) if last.closed_by else None
 	last.denominations = frappe.get_all(
