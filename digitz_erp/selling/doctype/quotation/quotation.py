@@ -383,13 +383,15 @@ def pdf_file_stem(docname):
 	return str(docname).replace("/", "-").replace("\\", "-")
 
 
-def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_override=None):
+def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_override=None, attach_to=None):
 	"""Render `doc` to a PDF and attach it.
 
 	`template_override` / `file_suffix_override` let the same pipeline -- context,
 	header/footer overlay, page transform -- produce a second document for the
 	same record, which is how the RECEIPT for a non credit Sales Invoice is
-	made. Left unset, behaviour is unchanged.
+	made. Left unset, behaviour is unchanged. `attach_to` attaches the PDF to,
+	and names it after, another document: a Sales Invoice carries its Receipt
+	Entry's receipt this way.
 	"""
 	import io, os
 	from PyPDF2 import PdfReader, PdfWriter, Transformation
@@ -607,7 +609,8 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	output_pdf.write(output_stream)
 
 	# A name like INV/450000 has a slash, which a file name cannot hold
-	file_stem = pdf_file_stem(doc.name)
+	target = attach_to or doc
+	file_stem = pdf_file_stem(target.name)
 	file_name = f"{file_stem}-{file_suffix}.pdf"
 
 	# Match on the file name, not just the document: an invoice and its receipt
@@ -617,8 +620,8 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 	stale = frappe.get_all(
 		"File",
 		filters={
-			"attached_to_doctype": doc.doctype,
-			"attached_to_name": doc.name,
+			"attached_to_doctype": target.doctype,
+			"attached_to_name": target.name,
 			"file_name": ["like", f"{file_stem}-{file_suffix}%"],
 		},
 		pluck="name",
@@ -634,7 +637,7 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 			frappe.clear_last_message()
 			frappe.log_error(
 				title="Print PDF: old attachment kept",
-				message=f"{name} of {doc.doctype} {doc.name} was locked; left for the daily cleanup.",
+				message=f"{name} of {target.doctype} {target.name} was locked; left for the daily cleanup.",
 			)
 
 	# A File with its content writes the PDF once. frappe's legacy save_file
@@ -644,8 +647,8 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		"doctype": "File",
 		"file_name": file_name,
 		"content": output_stream.getvalue(),
-		"attached_to_doctype": doc.doctype,
-		"attached_to_name": doc.name,
+		"attached_to_doctype": target.doctype,
+		"attached_to_name": target.name,
 		"folder": "Home/Attachments",
 		"is_private": 0,
 	}).insert(ignore_permissions=True)

@@ -134,12 +134,20 @@ class SalesInvoice(Document):
         Returns {"invoice": file_url, "receipt": file_url or None}."""
         files = {"invoice": generate_custom_invoice_pdf(self), "receipt": None}
 
-        # A cash sale is settled at the counter and gets a RECEIPT alongside the
-        # invoice. A credit sale is billed now and paid later: it gets one only
-        # once a submitted Receipt Entry has paid it (allocated_receipt_entry, set
-        # by ReceiptEntry.refresh_credit_invoice_prints); until then, or after that
-        # receipt is cancelled, any receipt attached earlier is removed.
-        if not self.credit_sale or self.allocated_receipt_entry:
+        # The RECEIPT beside the invoice is the Receipt Entry that paid it
+        # (allocated_receipt_entry): the invoice's own receipt for a cash, card or
+        # bank sale (create_invoice_receipt), the latest one paying a credit sale
+        # (ReceiptEntry.refresh_credit_invoice_prints). It is that receipt's own
+        # printout, listing the invoices it pays. A cash sale submitted before
+        # those receipts existed, or still a draft, prints its RCPT-<invoice no>
+        # receipt from the invoice. An unpaid credit sale has none: any receipt
+        # attached earlier is removed.
+        receipt = self.allocated_receipt_entry and frappe.db.get_value(
+            "Receipt Entry", {"name": self.allocated_receipt_entry, "docstatus": 1})
+        if receipt:
+            files["receipt"] = generate_custom_invoice_pdf(
+                frappe.get_doc("Receipt Entry", receipt), file_suffix_override="receipt", attach_to=self)
+        elif not self.credit_sale:
             files["receipt"] = generate_custom_invoice_pdf(
                 self,
                 template_override="digitz_erp/templates/receipt_template.html",
@@ -1465,7 +1473,6 @@ class SalesInvoice(Document):
             "sales_invoice": self.name,
             "amount": self.rounded_total,
             "allocated_amount": self.rounded_total,
-            "remarks": f"Payment of {self.name}",
         })
         receipt.append("receipt_entry_details", {
             "receipt_type": "Customer",
