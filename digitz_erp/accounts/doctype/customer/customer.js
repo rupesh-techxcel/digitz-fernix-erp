@@ -6,13 +6,6 @@ frappe.ui.form.on('Customer', {
 	refresh:function(frm)
 	{
 
-		if (frappe.user.has_role('Management')) {
-			frm.add_custom_button(('Merge Customer'), function() {
-				// Open the merge popup
-				open_merge_popup(frm);
-			});
-		}
-
 		// Rename with every reference: administrators only (the server checks too)
 		if (!frm.is_new() && (frappe.session.user === "Administrator" || frappe.user.has_role("System Manager") || frappe.user.has_role("Management"))) {
 			frm.add_custom_button(__("Rename Customer"), () => open_rename_popup(frm));
@@ -121,65 +114,6 @@ frappe.ui.form.on('Customer', {
 frappe.ui.form.on("Customer", "onload", function(frm) {
 	
 })
-
-
-// Merge Customer: every record of this customer moves to the selected one,
-// and this customer is deleted. Shows how many records move first.
-function open_merge_popup(frm) {
-	const esc = frappe.utils.escape_html;
-	const d = new frappe.ui.Dialog({
-		title: __("Merge Customer"),
-		fields: [
-			{
-				fieldtype: "HTML",
-				options: `<div style="color: var(--red-600); font-weight: bold;">${__("Merging customers cannot be undone.")}</div>
-					<p class="text-muted small" style="margin-top: 6px;">${__("Every invoice, return, receipt, GL posting and other record of the current customer moves to the selected customer, and the current customer is deleted.")}</p>`,
-			},
-			{ label: __("Current Customer"), fieldname: "current_customer", fieldtype: "Data", read_only: 1, default: frm.doc.name },
-			{
-				label: __("Merge Into"), fieldname: "merge_customer", fieldtype: "Link", options: "Customer", reqd: 1,
-				get_query: () => ({ filters: { name: ["!=", frm.doc.name] } }),
-			},
-			{ fieldtype: "HTML", fieldname: "references" },
-		],
-		primary_action_label: __("Merge"),
-		primary_action(values) {
-			frappe.confirm(
-				__("Move every record of {0} to {1} and delete {0}? This cannot be undone.", [esc(frm.doc.name), esc(values.merge_customer)]),
-				() => frappe.call({
-					method: "digitz_erp.api.customer_api.merge_customer",
-					args: { current_customer: frm.doc.name, merge_customer: values.merge_customer },
-					freeze: true,
-					freeze_message: __("Merging the customers..."),
-					callback: (r) => {
-						if (!r.message) {
-							return;
-						}
-						d.hide();
-						frappe.show_alert({ message: __("Merged into {0}", [esc(r.message.name)]), indicator: "green" });
-						frappe.set_route("Form", "Customer", r.message.name);
-					},
-				})
-			);
-		},
-	});
-
-	frappe.call({
-		method: "digitz_erp.accounts.doctype.customer.customer.get_customer_references",
-		args: { customer: frm.doc.name },
-		callback: (r) => {
-			const references = (r.message && r.message.references) || [];
-			const total = references.reduce((sum, x) => sum + x.count, 0);
-			d.fields_dict.references.$wrapper.html(references.length
-				? `<div class="text-muted small" style="margin: 4px 0 6px;">${__("{0} record(s) move:", [total])}</div>
-					<table class="table table-bordered table-sm" style="margin: 0;"><tbody>${references.map((x) => `
-						<tr><td>${esc(__(x.doctype))}${x.lines ? ` <span class="text-muted">(${__("lines")})</span>` : ""}</td>
-							<td class="text-right">${x.count}</td></tr>`).join("")}</tbody></table>`
-				: `<div class="text-muted small">${__("No other record points at this customer.")}</div>`);
-		},
-	});
-	d.show();
-}
 
 
 // Rename Customer: the new name, what the customer's ID becomes, and how many
