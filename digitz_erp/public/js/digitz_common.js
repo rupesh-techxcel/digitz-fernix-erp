@@ -204,3 +204,33 @@ $(document).ready(function () {
 	$(document).on("page-change", () => digitz.page_head._observe());
 	frappe.router && frappe.router.on("change", () => digitz.page_head._observe());
 });
+
+// ---------------------------------------------------------------------------
+// Workspaces open with the sidebar collapsed (desktop only; phones already use
+// an overlay). Done once per page load: the page's own Toggle Sidebar button
+// shows it again, and that stays until the next reload.
+// ---------------------------------------------------------------------------
+digitz.collapse_workspace_sidebar = function (tries = 20) {
+	const route = frappe.get_route();
+	if (route[0] !== "Workspaces" || frappe.utils.is_xs() || frappe.utils.is_sm()) return;
+
+	const wrapper = document.getElementById("page-Workspaces");
+	const sidebar = wrapper && wrapper.querySelector(".layout-side-section");
+	if (!sidebar) {
+		// The workspace page is built after the route changes
+		tries > 0 && setTimeout(() => digitz.collapse_workspace_sidebar(tries - 1), 100);
+		return;
+	}
+	if (wrapper.dataset.sidebarCollapsed) return;
+	wrapper.dataset.sidebarCollapsed = "1";
+
+	$(sidebar).hide();
+	$(wrapper)
+		.find(".page-head .sidebar-toggle-btn .sidebar-toggle-icon")
+		.html(frappe.utils.icon("es-line-sidebar-expand", "md"));
+};
+
+$(document).ready(function () {
+	digitz.collapse_workspace_sidebar();
+	frappe.router && frappe.router.on("change", () => digitz.collapse_workspace_sidebar());
+});
