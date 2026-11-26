@@ -347,7 +347,7 @@ def get_total_cash_receipts(filters):
     FROM `tabReceipt Entry Detail` AS rd
     INNER JOIN `tabReceipt Entry` AS re ON rd.parent = re.name
     INNER JOIN `tabPayment Mode` AS pm ON pm.name = re.payment_mode 
-    WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND pm.mode in ('Cash') AND re.docstatus < 2 AND re.warehouse = '{warehouse}'
+    WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND pm.mode in ('Cash') AND re.docstatus < 2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse = '{warehouse}'
     """.format(from_date=from_date, to_date=to_date, warehouse=warehouse)
 
     frappe.db.sql(sql, as_dict=True)
@@ -366,7 +366,7 @@ def get_total_bank_receipts(filters):
     FROM `tabReceipt Entry Detail` AS rd
     INNER JOIN `tabReceipt Entry` AS re ON rd.parent = re.name
     INNER JOIN `tabPayment Mode` AS pm on pm.name= re.payment_mode 
-    WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND pm.mode not in ('Cash') AND re.docstatus<2 AND re.warehouse = '{warehouse}'
+    WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND pm.mode not in ('Cash') AND re.docstatus<2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse = '{warehouse}'
     """.format(from_date= from_date, to_date=to_date, warehouse=warehouse), as_dict=True)
 
     return total_receipts[0].total_receipts if  total_receipts[0].total_receipts else 0 
@@ -380,7 +380,7 @@ def get_total_receipts(filters):
         SELECT COALESCE(SUM(rd.amount), 0) as total_receipts
         FROM `tabReceipt Entry Detail` AS rd
         INNER JOIN `tabReceipt Entry` AS re ON rd.parent = re.name
-        WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus<2 AND re.warehouse='{warehouse}'        
+        WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus<2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse='{warehouse}'        
         """.format(from_date= from_date, to_date=to_date, warehouse=warehouse), as_dict=True)
 
     return total_receipts[0].total_receipts if  total_receipts[0].total_receipts else 0   
@@ -747,7 +747,7 @@ def get_cash_receipt_data(filters):
 		INNER JOIN `tabReceipt Entry` re on re.name= ra.parent
 		INNER JOIN `tabCustomer` c ON c.name = ra.customer
 		INNER JOIN `tabPayment Mode` AS pm ON pm.name = re.payment_mode
-		WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus < 2 AND re.warehouse = '{warehouse}'  AND pm.mode in ('Cash')
+		WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus < 2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse = '{warehouse}'  AND pm.mode in ('Cash')
 
 		UNION  
 
@@ -759,7 +759,7 @@ def get_cash_receipt_data(filters):
 		INNER JOIN `tabReceipt Entry` AS re ON re.name = rd.parent
 		INNER JOIN `tabPayment Mode` AS pm ON pm.name = re.payment_mode	
 		LEFT OUTER JOIN `tabCustomer` c on c.name = rd.customer
-		WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus < 2 AND re.warehouse = '{warehouse}' AND (rd.reference_type IS NULL OR rd.reference_type='') AND pm.mode in ('Cash')
+		WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus < 2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse = '{warehouse}' AND (rd.reference_type IS NULL OR rd.reference_type='') AND pm.mode in ('Cash')
 		""".format(from_date=from_date, to_date=to_date, warehouse=warehouse)
   
 	receipt_detail_data = frappe.db.sql(sql, as_dict=True)
@@ -782,7 +782,7 @@ def get_bank_receipt_data(filters):
 		INNER JOIN `tabReceipt Entry` re on re.name= ra.parent
 		INNER JOIN `tabCustomer` c ON c.name = ra.customer
 		INNER JOIN `tabPayment Mode` AS pm ON pm.name = re.payment_mode
-		WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus < 2 AND re.warehouse = '{warehouse}'  AND pm.mode not in ('Cash')
+		WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus < 2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse = '{warehouse}'  AND pm.mode not in ('Cash')
 
 		UNION  
 
@@ -794,7 +794,7 @@ def get_bank_receipt_data(filters):
 		INNER JOIN `tabReceipt Entry` AS re ON re.name = rd.parent
 		INNER JOIN `tabPayment Mode` AS pm ON pm.name = re.payment_mode	
 		LEFT OUTER JOIN `tabCustomer` c on c.name = rd.customer
-		WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus < 2 AND re.warehouse = '{warehouse}' AND (rd.reference_type IS NULL OR rd.reference_type='') AND pm.mode not in ('Cash')
+		WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus < 2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse = '{warehouse}' AND (rd.reference_type IS NULL OR rd.reference_type='') AND pm.mode not in ('Cash')
 		""".format(from_date=from_date, to_date=to_date, warehouse=warehouse)
   
 	receipt_detail_data = frappe.db.sql(sql, as_dict=True)

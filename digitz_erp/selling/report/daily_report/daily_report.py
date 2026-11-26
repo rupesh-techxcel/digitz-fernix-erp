@@ -351,7 +351,7 @@ def get_total_cash_receipts(filters):
     FROM `tabReceipt Entry Detail` AS rd
     INNER JOIN `tabReceipt Entry` AS re ON rd.parent = re.name
     INNER JOIN `tabPayment Mode` AS pm ON pm.name = re.payment_mode 
-    WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND pm.mode in ('Cash') AND re.docstatus < 2 AND re.warehouse = '{warehouse}'
+    WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND pm.mode in ('Cash') AND re.docstatus < 2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse = '{warehouse}'
     """.format(from_date=from_date, to_date=to_date, warehouse=warehouse)
 
     print("sql")
@@ -374,7 +374,7 @@ def get_total_bank_receipts(filters):
     FROM `tabReceipt Entry Detail` AS rd
     INNER JOIN `tabReceipt Entry` AS re ON rd.parent = re.name
     INNER JOIN `tabPayment Mode` AS pm on pm.name= re.payment_mode 
-    WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND pm.mode not in ('Cash') AND re.docstatus<2 AND re.warehouse = '{warehouse}'
+    WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND pm.mode not in ('Cash') AND re.docstatus<2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse = '{warehouse}'
     """.format(from_date= from_date, to_date=to_date, warehouse=warehouse), as_dict=True)
 
     return total_receipts[0].total_receipts if  total_receipts[0].total_receipts else 0 
@@ -388,7 +388,7 @@ def get_total_receipts(filters):
         SELECT COALESCE(SUM(rd.amount), 0) as total_receipts
         FROM `tabReceipt Entry Detail` AS rd
         INNER JOIN `tabReceipt Entry` AS re ON rd.parent = re.name
-        WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus<2 AND re.warehouse='{warehouse}'        
+        WHERE re.posting_date BETWEEN '{from_date}' AND '{to_date}' AND re.docstatus<2 AND IFNULL(re.sales_invoice, '') = '' AND re.warehouse='{warehouse}'        
         """.format(from_date= from_date, to_date=to_date, warehouse=warehouse), as_dict=True)
 
     return total_receipts[0].total_receipts if  total_receipts[0].total_receipts else 0   

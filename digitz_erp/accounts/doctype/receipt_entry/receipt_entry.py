@@ -61,7 +61,9 @@ class ReceiptEntry(Document):
 						receipt_detail.reference_date = self.reference_date
 
 	def before_validate(self):
-		stamp_counter_session(self)
+		# An invoice's receipt keeps the invoice's counter day, whoever submits it
+		if not self.flags.from_sales_invoice:
+			stamp_counter_session(self)
 
 		if(self.Voucher_In_The_Same_Time()):
 
@@ -102,6 +104,7 @@ class ReceiptEntry(Document):
 
 	def validate(self):
 
+		self.check_invoice_receipt_change()
 		self.validate_doc_status()
 		self.check_reference_numbers()
 		self.check_allocations_and_totals()
@@ -115,6 +118,9 @@ class ReceiptEntry(Document):
 		- 'advance_received_with_sales_order' in Sales Invoice
 		- 'advance_received_with_sales_invoice' in Sales Order
 		"""
+		# An invoice's own receipt pays no advance, and must not commit the invoice's submit midway
+		if self.sales_invoice:
+			return
 		# Loop through the allocation table in the Receipt Entry
 		for allocation in self.receipt_allocation:
 			# Case 1: Allocation is for 'Sales Order'
@@ -159,6 +165,9 @@ class ReceiptEntry(Document):
 		Updates Sales Invoice and Sales Order fields based on allocations in the Receipt Entry
 		for advance receipt scenarios.
 		"""
+		# An invoice's own receipt pays no advance, and must not commit the invoice's submit midway
+		if self.sales_invoice:
+			return
 		# Loop through the allocation table in the Receipt Entry
 		for allocation in self.receipt_allocation:
 			# Case 1: Allocation is for 'Sales Order'
@@ -371,10 +380,21 @@ class ReceiptEntry(Document):
 		update_posting_status(self.doctype,self.name,'posting_status','Completed')
 		create_bank_reconciliation("Receipt Entry", self.name)
 
+	def check_invoice_receipt_change(self):
+		"""An invoice's receipt (see SalesInvoice.create_invoice_receipt) changes only through its invoice."""
+		if self.sales_invoice and not self.is_new() and not self.flags.from_sales_invoice:
+			frappe.throw(_("This receipt belongs to Sales Invoice {0}. Correct or cancel the invoice instead.").format(self.sales_invoice))
+
+	def before_cancel(self):
+		self.check_invoice_receipt_change()
+
 	def update_paid_documents(self):
 		"""Set paid_amount (and an invoice's payment_status) on each Sales Invoice,
 		Sales Return and Credit Note this receipt pays: the other submitted
-		receipts' allocations plus this one's."""
+		receipts' allocations plus this one's. Not for an invoice's own receipt:
+		that invoice is paid on submit and keeps its payment mode as its status."""
+		if self.sales_invoice:
+			return
 		for allocation in self.receipt_allocation or []:
 			if allocation.reference_type in PAID_DOCUMENTS and flt(allocation.paying_amount) > 0:
 				set_document_paid(allocation.reference_type, allocation.reference_name,
@@ -807,8 +827,8 @@ class ReceiptEntry(Document):
 
 	def revert_documents_paid_amount_for_receipt(self):
 		# Sales Invoice, Sales Return, Credit Note: back to what the other
-		# submitted receipts have paid
-		for allocation in self.receipt_allocation or []:
+		# submitted receipts have paid. An invoice's own receipt never set it.
+		for allocation in ([] if self.sales_invoice else self.receipt_allocation or []):
 			if allocation.reference_type in PAID_DOCUMENTS and flt(allocation.paying_amount) > 0:
 				set_document_paid(allocation.reference_type, allocation.reference_name,
 					self.other_submitted_allocations(allocation))

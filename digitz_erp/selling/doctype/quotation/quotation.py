@@ -705,7 +705,10 @@ def get_sales_invoice_receipt_info(doc):
 	def username(user):
 		return frappe.db.get_value("User", user, "username") or user
 
-	if not doc.credit_sale:
+	# Since cash, card and bank sales are paid by their own Receipt Entry
+	# (SalesInvoice.create_invoice_receipt), that receipt is shown like a credit
+	# sale's; an invoice submitted before then keeps its RCPT-<invoice no>.
+	if not doc.credit_sale and not doc.get("allocated_receipt_entry"):
 		return frappe._dict(
 			number="RCPT-" + (doc.name[3:] if doc.name.startswith("SI-") else doc.name),
 			amount=flt(doc.paid_amount or doc.rounded_total),
