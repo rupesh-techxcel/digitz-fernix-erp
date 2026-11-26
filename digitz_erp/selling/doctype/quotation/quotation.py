@@ -459,6 +459,13 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		trn_no = frappe.db.get_value("Company", doc.company, "tax_id")
 		return_invoices = list(dict.fromkeys(row.sales_invoice for row in doc.get("invoices") or [] if row.sales_invoice))
 
+	elif doc.doctype == "Receipt Entry":
+		file_suffix = "receipt"
+		trn_no = frappe.db.get_value("Company", doc.company, "tax_id")
+		receipt_info = get_receipt_entry_print_info(doc)
+		customer_name = receipt_info.customer_name
+		receipt_number = receipt_info.number
+
 	elif doc.doctype == "Purchase Order":
 		supplier_name = doc.supplier
 		supplier_address = doc.supplier_address or ""
@@ -473,7 +480,8 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		
 		"quotation_name": doc.name,
 		"date": formatdate(getattr(doc, "posting_date", doc.get("transaction_date")), "dd-mm-yyyy"),
-		"items": doc.items,
+		# A Receipt Entry has no items; its lines are in receipt_info
+		"items": doc.get("items"),
 		"customer_address": customer_address,
 		"customer_name": customer_name,
 		"supplier_address": supplier_address,
@@ -511,6 +519,8 @@ def generate_custom_invoice_pdf(doc, template_override=None, file_suffix_overrid
 		if doc.doctype == "Sales Return"
 		else "digitz_erp/templates/purchase_order_template.html"
 		if doc.doctype == "Purchase Order"
+		else "digitz_erp/templates/receipt_entry_template.html"
+		if doc.doctype == "Receipt Entry"
 		else "digitz_erp/templates/quotation_template.html"
 	)
 
@@ -723,6 +733,59 @@ def get_sales_invoice_receipt_info(doc):
 		collected_by=username(receipt.owner),
 		payment_mode=receipt.payment_mode or "",
 		reference_no=receipt.reference_no or "",
+	)
+
+
+def get_receipt_entry_print_info(doc):
+	"""What a Receipt Entry's own receipt PDF shows.
+
+	One receipt can pay several invoices of several customers, so each allocation
+	with a paying amount is a line; what is left of the received amount after the
+	allocations is a last line, Advance or On Account. A receipt with no
+	allocations lists its detail rows instead.
+	"""
+	from frappe.utils import formatdate, flt
+
+	def customer_name(customer):
+		return frappe.db.get_value("Customer", customer, "customer_name") or customer
+
+	customers = list(dict.fromkeys(row.customer for row in doc.get("receipt_entry_details") or [] if row.customer))
+	if doc.get("customer") and doc.customer not in customers:
+		customers.insert(0, doc.customer)
+	many_customers = len(customers) > 1
+
+	unallocated_label = "Advance" if doc.get("advance_payment") else "On Account"
+	lines = []
+	for allocation in doc.get("receipt_allocation") or []:
+		if flt(allocation.paying_amount) <= 0:
+			continue
+		description = f"{allocation.reference_type} {allocation.reference_name}"
+		if many_customers and allocation.customer:
+			description += f" - {customer_name(allocation.customer)}"
+		lines.append(frappe._dict(description=description, amount=flt(allocation.paying_amount)))
+
+	if lines:
+		remainder = flt(doc.amount) - sum(line.amount for line in lines)
+		if remainder > 0.005:
+			lines.append(frappe._dict(description=unallocated_label, amount=remainder))
+	else:
+		for row in doc.get("receipt_entry_details") or []:
+			description = row.remarks or unallocated_label
+			if many_customers and row.customer:
+				description += f" - {customer_name(row.customer)}"
+			lines.append(frappe._dict(description=description, amount=flt(row.amount)))
+
+	return frappe._dict(
+		number=doc.name,
+		amount=flt(doc.amount),
+		date=formatdate(doc.posting_date, "dd-mm-yyyy"),
+		collected_by=frappe.db.get_value("User", doc.owner, "username") or doc.owner,
+		payment_mode=doc.payment_mode or "",
+		reference_no=doc.reference_no or "",
+		reference_date=formatdate(doc.reference_date, "dd-mm-yyyy") if doc.reference_date else "",
+		customer_name=", ".join(customer_name(c) for c in customers),
+		in_words=money_in_words(doc.amount, "AED"),
+		lines=lines,
 	)
 
 
