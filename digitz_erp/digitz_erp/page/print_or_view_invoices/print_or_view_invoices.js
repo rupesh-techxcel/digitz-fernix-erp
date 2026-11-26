@@ -52,6 +52,7 @@ digitz_erp.PrintOrViewInvoices = class PrintOrViewInvoices {
 			this.load();
 		});
 		this.$el.on("click", "[data-kind]", (e) => this.show_pdf($(e.currentTarget).attr("data-kind")));
+		this.$el.on("click", "[data-print]", (e) => this.print_from_list($(e.currentTarget).attr("data-print")));
 		// The page stays loaded while the route moves between the list and an invoice
 		frappe.router.on("change", () => {
 			frappe.get_route()[0] === PrintOrViewInvoices.ROUTE && this.route();
@@ -161,7 +162,13 @@ digitz_erp.PrintOrViewInvoices = class PrintOrViewInvoices {
 
 		const body = rows.map((row) => `
 			<tr>
-				<td><a href="${this.url(row.name)}" class="pv-link">${this.esc(row.name)}</a></td>
+				<td class="pv-nowrap">
+					<a href="${this.url(row.name)}" class="pv-link">${this.esc(row.name)}</a>
+					<button type="button" class="btn btn-xs btn-default pv-print" data-print="${this.esc(row.name)}"
+						title="${__("Print Invoice")}" aria-label="${__("Print Invoice {0}", [this.esc(row.name)])}">
+						${frappe.utils.icon("printer", "sm")}
+					</button>
+				</td>
 				<td>${this.date(row.posting_date)} <span class="pv-muted">${this.time(row.posting_time)}</span></td>
 				<td><div class="pv-ellipsis" title="${this.esc(row.customer_name)}">${this.esc(row.customer_name)}</div></td>
 				<td><div class="pv-ellipsis" title="${this.esc(row.customer_display_name)}">${this.esc(row.customer_display_name)}</div></td>
@@ -280,6 +287,23 @@ digitz_erp.PrintOrViewInvoices = class PrintOrViewInvoices {
 				<a class="btn btn-sm btn-default" href="${this.pdf_src(files[kind])}" target="_blank" rel="noopener">${__("Open in New Tab")}</a>
 			</div>
 			<iframe class="pv-pdf" title="${this.esc(this.current)}" src="${this.pdf_src(files[kind])}#navpanes=0&view=FitH"></iframe>`);
+	}
+
+	// The printer icon beside an invoice in the list: its invoice PDF straight to
+	// the printer, without opening it
+	async print_from_list(name) {
+		const r = await frappe.call({
+			method: PrintOrViewInvoices.API + "get_invoice_pdfs",
+			args: { name },
+			freeze: true,
+			freeze_message: __("Preparing {0}...", [name]),
+		});
+		const url = r.message && r.message.invoice;
+		if (!url) {
+			frappe.msgprint(__("The PDF was not found. Try again."));
+			return;
+		}
+		digitz_erp.si_engine.print_pdf(url, __("Invoice PDF"));
 	}
 
 	print() {
