@@ -15,3 +15,4 @@ digitz_erp.patches.v1_0.import_historical_invoices
 digitz_erp.patches.v1_0.relink_days_to_corrected_previous_day
 digitz_erp.patches.v1_0.date_closes_for_counted_sessions
 digitz_erp.patches.v1_0.add_print_or_view_invoices_to_navigator
+digitz_erp.patches.v1_0.collapse_navigator_sections
