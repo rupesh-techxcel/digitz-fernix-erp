@@ -279,7 +279,7 @@ digitz_erp.PrintOrViewInvoices = class PrintOrViewInvoices {
 				${tabs}
 				<a class="btn btn-sm btn-default" href="${this.pdf_src(files[kind])}" target="_blank" rel="noopener">${__("Open in New Tab")}</a>
 			</div>
-			<iframe class="pv-pdf" title="${this.esc(this.current)}" src="${this.pdf_src(files[kind])}"></iframe>`);
+			<iframe class="pv-pdf" title="${this.esc(this.current)}" src="${this.pdf_src(files[kind])}#navpanes=0&view=FitH"></iframe>`);
 	}
 
 	print() {
