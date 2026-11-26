@@ -206,28 +206,25 @@ $(document).ready(function () {
 });
 
 // ---------------------------------------------------------------------------
-// Workspaces open with the sidebar collapsed (desktop only; phones already use
-// an overlay). Done once per page load: the page's own Toggle Sidebar button
-// shows it again, and that stays until the next reload.
+// Workspaces open with the sidebar menu collapsed: digitz_desk.bundle.css hides
+// it from the first paint (desktop only). Frappe draws the Toggle Sidebar icon
+// as "collapse", so it is switched to "expand" while the menu is hidden. The
+// toggle itself shows the menu again, until the next reload.
 // ---------------------------------------------------------------------------
-digitz.collapse_workspace_sidebar = function (tries = 20) {
-	const route = frappe.get_route();
-	if (route[0] !== "Workspaces" || frappe.utils.is_xs() || frappe.utils.is_sm()) return;
+digitz.collapse_workspace_sidebar = function (tries = 30) {
+	if (frappe.get_route()[0] !== "Workspaces") return;
 
 	const wrapper = document.getElementById("page-Workspaces");
-	const sidebar = wrapper && wrapper.querySelector(".layout-side-section");
-	if (!sidebar) {
+	const icon = wrapper && wrapper.querySelector(".page-head .sidebar-toggle-btn .sidebar-toggle-icon");
+	if (!icon) {
 		// The workspace page is built after the route changes
 		tries > 0 && setTimeout(() => digitz.collapse_workspace_sidebar(tries - 1), 100);
 		return;
 	}
-	if (wrapper.dataset.sidebarCollapsed) return;
-	wrapper.dataset.sidebarCollapsed = "1";
-
-	$(sidebar).hide();
-	$(wrapper)
-		.find(".page-head .sidebar-toggle-btn .sidebar-toggle-icon")
-		.html(frappe.utils.icon("es-line-sidebar-expand", "md"));
+	const sidebar = wrapper.querySelector(".layout-side-section");
+	if (sidebar && !$(sidebar).is(":visible")) {
+		icon.innerHTML = frappe.utils.icon("es-line-sidebar-expand", "md");
+	}
 };
 
 $(document).ready(function () {
