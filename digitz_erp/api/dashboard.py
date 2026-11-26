@@ -400,14 +400,14 @@ def get_live_till_cash(sessions):
 	for every open session in one query per movement, so the till figure is
 	live rather than whatever the session held when it was last saved.
 	"""
-	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import CASH_MOVEMENTS
+	from digitz_erp.digitz_erp.doctype.counter_session.counter_session import CASH_MOVEMENTS, movement_conditions
 
 	if not sessions:
 		return {}
 
 	net = {}
 	for _field, doctype, amount_expr, sign, skip_credit in CASH_MOVEMENTS:
-		credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
+		credit = movement_conditions(doctype, skip_credit)
 		rows = frappe.db.sql(
 			f"""
 			SELECT d.counter_session, SUM({amount_expr})

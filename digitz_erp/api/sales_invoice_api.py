@@ -213,7 +213,10 @@ def correction_blocked_reason(doc, system_manager=False):
         return (f"{name} is a cash sale. Only credit sale invoices can be corrected: a cash sale's money is "
                 "already in the till and the day's count. Ask a supervisor.")
 
-    receipts = sorted({a.receipt_no for a in get_allocations_for_sales_invoice(name, "") if a.get("receipt_no")})
+    # The invoice's own receipt (SalesInvoice.create_invoice_receipt) is cancelled with the correction
+    own_receipts = set(frappe.get_all("Receipt Entry", filters={"sales_invoice": name}, pluck="name"))
+    receipts = sorted({a.receipt_no for a in get_allocations_for_sales_invoice(name, "")
+                       if a.get("receipt_no") and a.receipt_no not in own_receipts})
     # A paid sale's paid_amount is its total; on a credit sale it means a receipt
     if receipts or (doc.credit_sale and flt(doc.paid_amount) > 0):
         return (f"A payment is recorded against {name}" + (f" ({', '.join(receipts)})" if receipts else "")
@@ -269,6 +272,8 @@ def correct_sales_invoice(docname, check_only=0, reason=None):
     # from them), any bank reconciliation row and its posting-status record
     frappe.db.delete("GL Posting", {"voucher_type": "Sales Invoice", "voucher_no": doc.name})
     cancel_bank_reconciliation("Sales Invoice", doc.name)
+    # Its receipt goes too; resubmitting the invoice creates a new one for the corrected total
+    doc.cancel_invoice_receipt()
     frappe.db.delete("Document Posting Status", {"document_type": "Sales Invoice", "document_name": doc.name})
 
     # Back to draft, the child rows with it, so it saves and submits as any draft

@@ -833,6 +833,49 @@ let create_custom_buttons = function(frm){
 		}, 'Postings');
 		}
 	}
+	if (frm.doc.docstatus === 1) {
+		frm.add_custom_button(__("Print Receipt"), () => print_receipt_entry(frm), __("Print"));
+	}
+	register_receipt_ctrl_p();
+}
+
+// The receipt PDF (same layout and size as the Sales Invoice receipt), sent
+// straight to the printer. Only a submitted receipt prints.
+let print_receipt_entry = async function (frm) {
+	if (frm.doc.docstatus !== 1) {
+		frappe.msgprint(__("Submit the Receipt Entry before printing its receipt."));
+		return;
+	}
+	const r = await frappe.call({
+		method: "digitz_erp.accounts.doctype.receipt_entry.receipt_entry.print_receipt_entry_pdf",
+		args: { docname: frm.doc.name },
+		freeze: true,
+		freeze_message: __("Generating PDF..."),
+	});
+	if (!r.message) {
+		frappe.msgprint(__("The PDF was not found. Try again."));
+		return;
+	}
+	digitz_erp.si_engine.print_pdf(r.message, __("Receipt PDF"));
+	frm.reload_doc();
+}
+
+// Ctrl+P on a submitted Receipt Entry prints its receipt. Registered once; it
+// only applies while a Receipt Entry form is on screen.
+let register_receipt_ctrl_p = function () {
+	if (digitz_erp.receipt_entry_ctrl_p) {
+		return;
+	}
+	digitz_erp.receipt_entry_ctrl_p = true;
+	digitz_erp.si_engine.on_ctrl_p({
+		applies: () => {
+			const route = frappe.get_route();
+			return route[0] === "Form" && route[1] === "Receipt Entry"
+				&& cur_frm && cur_frm.doctype === "Receipt Entry" && cur_frm.doc.docstatus === 1
+				&& cur_frm.page.wrapper.is(":visible");
+		},
+		print: () => print_receipt_entry(cur_frm),
+	});
 }
 
 let general_ledgers = function (frm) {

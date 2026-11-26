@@ -12,6 +12,7 @@
   "naming_series",
   "payment_mode",
   "counter_session",
+  "sales_invoice",
   "account",
   "mode",
   "reference_no",
@@ -253,13 +254,23 @@
    "no_copy": 1,
    "options": "Counter Session",
    "read_only": 1
+  },
+  {
+   "depends_on": "sales_invoice",
+   "description": "The cash, card or bank Sales Invoice this receipt was created for on submit. Correct or cancel that invoice to change it.",
+   "fieldname": "sales_invoice",
+   "fieldtype": "Data",
+   "label": "Created From Sales Invoice",
+   "no_copy": 1,
+   "read_only": 1,
+   "search_index": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-28 21:58:48.695259",
+ "modified": "2026-11-26 16:10:00.000000",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Receipt Entry",

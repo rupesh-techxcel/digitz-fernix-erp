@@ -43,6 +43,16 @@ CASH_MOVEMENTS = (
 	("cash_paid_out", "Expense Entry", "d.paid_amount", -1, False),
 )
 
+def movement_conditions(doctype, skip_credit):
+	"""SQL conditions on a CASH_MOVEMENTS document `d`: credit sales left out
+	where the row says so, and a Sales Invoice's own Receipt Entry
+	(SalesInvoice.create_invoice_receipt) always, as the invoice counts that money."""
+	conditions = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
+	if doctype == "Receipt Entry":
+		conditions += " AND IFNULL(d.sales_invoice, '') = ''"
+	return conditions
+
+
 # Differences below this are treated as a clean close
 TOLERANCE = 0.005
 
@@ -61,7 +71,7 @@ def get_cash_movements(source, posting_date=None, include_later=False):
 	(CASH_MOVEMENTS), limited to a date as in posting_date_condition."""
 	movements = {}
 	for field, doctype, amount_expr, _sign, skip_credit in CASH_MOVEMENTS:
-		credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
+		credit = movement_conditions(doctype, skip_credit)
 		dated = posting_date_condition(posting_date, include_later)
 		movements[field] = flt(frappe.db.sql(
 			f"""
@@ -110,7 +120,7 @@ def get_takings_by_mode(sessions, posting_date=None, include_later=False):
 		reported_as.setdefault(source, []).append(name)
 
 	for _field, doctype, amount_expr, sign, skip_credit in CASH_MOVEMENTS:
-		credit = "AND IFNULL(d.credit_sale, 0) = 0" if skip_credit else ""
+		credit = movement_conditions(doctype, skip_credit)
 		dated = posting_date_condition(posting_date, include_later)
 		rows = frappe.db.sql(
 			f"""

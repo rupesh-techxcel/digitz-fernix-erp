@@ -527,7 +527,8 @@ frappe.provide("digitz_erp");
 				month: frappe.datetime.month_start(),
 				30: frappe.datetime.add_days(today, -29),
 			}[this.range];
-			const filters = [];
+			// Not the receipts submitted with cash, card or bank invoices: they belong to the invoice
+			const filters = [[DOCTYPE, "sales_invoice", "is", "not set"]];
 			from && filters.push([DOCTYPE, "posting_date", ">=", from]);
 			this.status !== "" && filters.push([DOCTYPE, "docstatus", "=", cint(this.status)]);
 			return filters;

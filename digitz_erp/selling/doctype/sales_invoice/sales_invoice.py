@@ -134,12 +134,20 @@ class SalesInvoice(Document):
         Returns {"invoice": file_url, "receipt": file_url or None}."""
         files = {"invoice": generate_custom_invoice_pdf(self), "receipt": None}
 
-        # A cash sale is settled at the counter and gets a RECEIPT alongside the
-        # invoice. A credit sale is billed now and paid later: it gets one only
-        # once a submitted Receipt Entry has paid it (allocated_receipt_entry, set
-        # by ReceiptEntry.refresh_credit_invoice_prints); until then, or after that
-        # receipt is cancelled, any receipt attached earlier is removed.
-        if not self.credit_sale or self.allocated_receipt_entry:
+        # The RECEIPT beside the invoice is the Receipt Entry that paid it
+        # (allocated_receipt_entry): the invoice's own receipt for a cash, card or
+        # bank sale (create_invoice_receipt), the latest one paying a credit sale
+        # (ReceiptEntry.refresh_credit_invoice_prints). It is that receipt's own
+        # printout, listing the invoices it pays. A cash sale submitted before
+        # those receipts existed, or still a draft, prints its RCPT-<invoice no>
+        # receipt from the invoice. An unpaid credit sale has none: any receipt
+        # attached earlier is removed.
+        receipt = self.allocated_receipt_entry and frappe.db.get_value(
+            "Receipt Entry", {"name": self.allocated_receipt_entry, "docstatus": 1})
+        if receipt:
+            files["receipt"] = generate_custom_invoice_pdf(
+                frappe.get_doc("Receipt Entry", receipt), file_suffix_override="receipt", attach_to=self)
+        elif not self.credit_sale:
             files["receipt"] = generate_custom_invoice_pdf(
                 self,
                 template_override="digitz_erp/templates/receipt_template.html",
@@ -745,8 +753,12 @@ class SalesInvoice(Document):
 
         self.do_stock_posting()
         self.insert_gl_records()
-        self.insert_payment_postings()
-        create_bank_reconciliation("Sales Invoice", self.name)
+        if self.pays_with_receipt():
+            # The payment is posted by the invoice's own Receipt Entry
+            self.create_invoice_receipt()
+        else:
+            self.insert_payment_postings()
+            create_bank_reconciliation("Sales Invoice", self.name)
 
         update_accounts_for_doc_type('Sales Invoice',self.name)
         self.update_customer_prices()
@@ -897,6 +909,10 @@ class SalesInvoice(Document):
                     if(valuation_rate == 0):
                         frappe.throw("Please provide a valuation rate for the item, as there is no existing purchase invoice for it.")
 
+
+    def before_cancel(self):
+        # Before Frappe's linked-document check, which the receipt's allocation would trip
+        self.cancel_invoice_receipt()
 
     def on_cancel(self):
         # The cancelled invoice no longer counts against the customer's credit
@@ -1426,8 +1442,79 @@ class SalesInvoice(Document):
             idx +=1
 
 
+    def pays_with_receipt(self):
+        """Whether submitting this invoice records its payment as a Receipt Entry:
+        a sale settled at once (not on credit), other than an advance or a
+        retention recovery, which keep posting the payment in the invoice."""
+        return not self.credit_sale and not self.for_advance_payment and not self.for_retention_recovery
+
+    def create_invoice_receipt(self):
+        """Submit a Receipt Entry paying this invoice in full, and record it in
+        `allocated_receipt_entry`. It is the invoice's receipt: marked with
+        `sales_invoice`, kept in the invoice's counter day, and corrected or
+        cancelled only through the invoice (see ReceiptEntry.from_sales_invoice)."""
+        receivable = frappe.db.get_value("Company", self.company, "default_receivable_account")
+        receipt = frappe.new_doc("Receipt Entry")
+        receipt.update({
+            "company": self.company,
+            "warehouse": self.warehouse,
+            "project": self.project,
+            "default_cost_center": self.default_cost_center,
+            "posting_date": self.posting_date,
+            "posting_time": self.posting_time,
+            "edit_posting_date_and_time": 1,
+            "payment_mode": self.payment_mode,
+            "account": frappe.db.get_value("Payment Mode", self.payment_mode, "account"),
+            "mode": self.payment_mode_type,
+            "reference_no": self.reference_no,
+            "reference_date": self.reference_date,
+            "counter_session": self.counter_session,
+            "customer": self.customer,
+            "sales_invoice": self.name,
+            "amount": self.rounded_total,
+            "allocated_amount": self.rounded_total,
+        })
+        receipt.append("receipt_entry_details", {
+            "receipt_type": "Customer",
+            "customer": self.customer,
+            "account": receivable,
+            "reference_type": "Sales Invoice",
+            "reference_no": self.reference_no,
+            "reference_date": self.reference_date,
+            "project": self.project,
+            "amount": self.rounded_total,
+            "allocated_amount": self.rounded_total,
+        })
+        receipt.append("receipt_allocation", {
+            "customer": self.customer,
+            "reference_type": "Sales Invoice",
+            "reference_name": self.name,
+            "total_amount": self.rounded_total,
+            "paid_amount": 0,
+            "balance_amount": self.rounded_total,
+            "paying_amount": self.rounded_total,
+            "project": self.project,
+        })
+        receipt.flags.from_sales_invoice = True
+        receipt.flags.ignore_permissions = True
+        receipt.insert()
+        receipt.submit()
+        self.db_set("allocated_receipt_entry", receipt.name, update_modified=False)
+
+    def cancel_invoice_receipt(self):
+        """Cancel the Receipt Entry submitted with this invoice, if any, and clear
+        `allocated_receipt_entry`. The cancelled receipt stays for the audit trail."""
+        name = frappe.db.get_value("Receipt Entry", {"sales_invoice": self.name, "docstatus": 1})
+        if name:
+            receipt = frappe.get_doc("Receipt Entry", name)
+            receipt.flags.from_sales_invoice = True
+            receipt.flags.ignore_permissions = True
+            receipt.cancel()
+        if not self.credit_sale and self.allocated_receipt_entry:
+            self.db_set("allocated_receipt_entry", None, update_modified=False)
+
     def insert_payment_postings(self):
-        
+
         remarks = self.get_narration()
 
         if self.credit_sale == 0:

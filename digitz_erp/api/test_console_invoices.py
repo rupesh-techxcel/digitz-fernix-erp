@@ -77,6 +77,7 @@ class TestInvoiceCorrection(unittest.TestCase):
             posting_time='12:34:56',
             meta=SimpleNamespace(get_table_fields=lambda: []),
             add_comment=Mock(),
+            cancel_invoice_receipt=Mock(),
             check_permission=lambda permission: None,
             get=lambda fieldname: [],
         )
@@ -117,6 +118,8 @@ class TestInvoiceCorrection(unittest.TestCase):
             docname=self.doc.name, reason='Correcting the recorded cash amount'
         )
         self.assertEqual(result, {'ok': True, 'name': self.doc.name})
+        # The invoice's own Receipt Entry is cancelled with the correction
+        self.doc.cancel_invoice_receipt.assert_called_once_with()
         self.doc.add_comment.assert_called_once_with(
             'Comment',
             'Taken back to draft for correction by Admin User. Reason: Correcting the recorded cash amount '

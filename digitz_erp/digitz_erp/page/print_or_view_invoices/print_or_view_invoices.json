@@ -1,0 +1,36 @@
+{
+ "content": null,
+ "creation": "2026-11-26 15:15:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "icon": "printer",
+ "idx": 0,
+ "modified": "2026-11-26 15:15:00.000000",
+ "modified_by": "Administrator",
+ "module": "Digitz ERP",
+ "name": "print-or-view-invoices",
+ "owner": "Administrator",
+ "page_name": "print-or-view-invoices",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Management"
+  },
+  {
+   "role": "Cashier"
+  },
+  {
+   "role": "Cashier Approver"
+  },
+  {
+   "role": "Accounts User"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Print or View Invoices"
+}
