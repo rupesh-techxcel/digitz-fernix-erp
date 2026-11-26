@@ -23,6 +23,8 @@
 	.grid td.short { color: #c00; }
 	.grid td.over { color: #b45309; }
 	.grid .total { background: #f2f2f2; font-weight: bold; }
+	.grid th.group { text-align: center; }
+	.grid td.start { border-left: 2px solid #666; }
 	table.by-cashier { width: auto; min-width: 50%; margin-top: 10px; }
 	.remarks { margin-top: 8px; }
 	.remarks p { margin: 2px 0; }
@@ -42,6 +44,38 @@
 
 	{% if not o.sessions %}
 	<div class="empty">No day was opened on any counter on this date.</div>
+	{% elif view == "summary" %}
+	{%- set rec = o.reconciliation -%}
+	{%- macro trio(x, cls="") -%}
+	<td class="start {{ cls }}">{{ money(x.actual) }}</td><td class="{{ cls }}">{{ money(x.entered) }}</td>
+	<td class="{{ cls }} {{ diff_class(x.difference) }}">{{ money(x.difference) }}{% if x.difference is not none and x.difference < -0.005 %} Short{% elif x.difference is not none and x.difference > 0.005 %} Excess{% endif %}</td>
+	{%- endmacro -%}
+	<table class="grid">
+		<thead>
+			<tr>
+				<th rowspan="2"></th>
+				{% for c in rec.cashiers %}
+				<th colspan="3" class="group">{{ c.cashier_name }}<small>{{ c.sessions|length }} day{{ 's' if c.sessions|length != 1 else '' }}{% if c.not_compared %} · not compared: {% for n in c.not_compared %}{{ n.name }} ({{ n.reason }}){% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</small></th>
+				{% endfor %}
+				<th colspan="3" class="group total">All Cashiers</th>
+			</tr>
+			<tr>
+				{% for c in rec.cashiers %}<th>Actual</th><th>Entered</th><th>Difference</th>{% endfor %}
+				<th class="total">Actual</th><th class="total">Entered</th><th class="total">Difference</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for row in rec.rows %}
+			{%- set i = loop.index0 %}
+			<tr class="{{ 'strong' if row.key == 'Total' else '' }}">
+				<td>{{ row.label }}</td>
+				{% for c in rec.cashiers %}{{ trio(c.lines[i]) }}{% endfor %}
+				{{ trio(rec.totals[i], "total") }}
+			</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+	<p style="font-size: 11px; color: #555; margin: 4px 0 12px;">Actual is what the submitted documents say the till and each payment mode should hold; Entered is what the cashier counted or typed. Cash in Till is the opening float plus cash sales and cash receipts, less refunds, cash paid out and the expenditure entered. Credit sales are left out. Only counted days are compared.</p>
 	{% else %}
 	<table class="grid">
 		<thead>

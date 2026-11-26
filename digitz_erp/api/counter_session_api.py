@@ -550,7 +550,69 @@ def build_day_overview(date=None, include_later=0):
 	})
 	overview.lines = day_overview_lines(overview)
 	overview.cashiers, overview.cashier_totals = cashier_sales(sessions)
+	overview.reconciliation = cashier_reconciliation(overview)
 	return overview
+
+
+def cashier_reconciliation(overview):
+	"""The Day Close summary: per cashier, Actual (what the system says the till
+	and each payment mode should hold), Entered (what the cashier counted or
+	typed) and the Difference, for cash, each non-cash mode and their total,
+	with the same three for all cashiers last. Credit sales are not money
+	taken, so no figure here includes them.
+
+	Only counted days are compared: a day still open, or only partly on this
+	date, has no entered figures to set against the actual ones. Those days are
+	listed under the cashier (`not_compared`) and shown in the detail view.
+
+	{rows: [{key, label}], cashiers: [{cashier, cashier_name, sessions,
+	not_compared, lines}], totals: lines}; `lines` has one {actual, entered,
+	difference} per row, all None when nothing of the cashier's was counted.
+	"""
+	modes = [m.payment_mode for m in overview.modes]
+	rows = [{"key": "Cash", "label": "Cash in Till"}]
+	rows += [{"key": mode, "label": mode} for mode in modes]
+	rows.append({"key": "Total", "label": "Total"})
+
+	def empty():
+		return {row["key"]: {"actual": 0, "entered": 0} for row in rows if row["key"] != "Total"}
+
+	def lines(sums, compared):
+		if not compared:
+			return [{"actual": None, "entered": None, "difference": None} for _row in rows]
+		out = []
+		for row in rows[:-1]:
+			v = sums[row["key"]]
+			out.append({"actual": v["actual"], "entered": v["entered"], "difference": v["entered"] - v["actual"]})
+		actual, entered = sum(v["actual"] for v in out), sum(v["entered"] for v in out)
+		out.append({"actual": actual, "entered": entered, "difference": entered - actual})
+		return out
+
+	by_cashier, all_sums, all_compared = {}, empty(), 0
+	for s in overview.sessions:
+		c = by_cashier.setdefault(s.cashier, frappe._dict(
+			cashier=s.cashier, cashier_name=s.cashier_name, sessions=[], not_compared=[], sums=empty(), compared=0,
+		))
+		c.sessions.append({"name": s.name, "status": s.status})
+		if s.counted_cash is None:
+			c.not_compared.append({"name": s.name, "reason": "Open" if s.status == "Open" else "Part of the day"})
+			continue
+		c.compared += 1
+		all_compared += 1
+		figures = [("Cash", s.expected_cash, s.counted_cash)]
+		figures += [(mode, s.modes[mode]["system"], s.modes[mode]["entered"]) for mode in modes]
+		for key, actual, entered in figures:
+			for sums in (c.sums, all_sums):
+				sums[key]["actual"] += flt(actual)
+				sums[key]["entered"] += flt(entered)
+
+	cashiers = []
+	for c in by_cashier.values():
+		cashiers.append(frappe._dict(
+			cashier=c.cashier, cashier_name=c.cashier_name, sessions=c.sessions,
+			not_compared=c.not_compared, lines=lines(c.sums, c.compared),
+		))
+	return frappe._dict(rows=rows, cashiers=cashiers, totals=lines(all_sums, all_compared))
 
 
 def cashier_sales(sessions):
@@ -662,8 +724,9 @@ def get_day_overview(date=None, include_later=0):
 
 
 @frappe.whitelist()
-def get_day_summary_html(date=None, include_later=0):
-	"""The Day Close Summary print: the grid of a date, landscape, with signatures."""
+def get_day_summary_html(date=None, include_later=0, view="summary"):
+	"""The Day Close Summary print, landscape, with signatures: the cashier
+	summary (`view` "summary") or the session grid ("detail") of a date."""
 	if not is_supervisor():
 		frappe.throw("Only a supervisor can print the Day Close Summary.", frappe.PermissionError)
 	overview = build_day_overview(date, include_later)
@@ -672,6 +735,7 @@ def get_day_summary_html(date=None, include_later=0):
 		"digitz_erp/templates/day_close_summary.html",
 		{
 			"o": overview,
+			"view": "detail" if view == "detail" else "summary",
 			"company": default_company,
 			"currency": frappe.db.get_value("Company", default_company, "default_currency") if default_company else None,
 			"printed_by": frappe.utils.get_fullname(frappe.session.user),

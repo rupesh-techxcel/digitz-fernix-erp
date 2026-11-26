@@ -300,3 +300,46 @@ class TestDayOverviewTotalsAgree(unittest.TestCase):
 		self.assertAlmostEqual(t["Cash Sales"], 17131.91)
 		self.assertEqual(t["Card / Bank Sales"], 23430.0)
 		self.assertAlmostEqual(t["Credit Sales (not paid)"], 5567.6)
+
+
+class TestCashierReconciliation(unittest.TestCase):
+	"""The Day Close summary: per cashier Actual, Entered and Difference over
+	their counted days, without credit sales; days not counted are listed."""
+
+	def overview(self):
+		def day(name, cashier, counted, expected, card_system, card_entered, status="Closed"):
+			return frappe._dict(
+				name=name, cashier=cashier, cashier_name=cashier.title(), status=status,
+				expected_cash=expected, counted_cash=counted, credit_sales=9999.0,
+				modes={"Card": {"system": card_system, "entered": card_entered}},
+			)
+
+		return frappe._dict(
+			modes=[frappe._dict(payment_mode="Card", mode="Bank")],
+			sessions=[
+				day("CS-27", "cashier 1", 17030.0, 17031.91, 23380.0, 23430.0, "Closing"),
+				day("CS-31", "cashier 2", None, 0.0, 0.0, None),
+				day("CS-40", "cashier 1", 500.0, 500.0, 100.0, 100.0),
+				day("CS-41", "cashier 1", None, 200.0, 50.0, None, "Open"),
+			],
+		)
+
+	def test_cashier_columns_and_all_cashiers(self):
+		rec = api.cashier_reconciliation(self.overview())
+		self.assertEqual([r["key"] for r in rec.rows], ["Cash", "Card", "Total"])
+		one, two = rec.cashiers
+		cash, card, total = one.lines
+		self.assertAlmostEqual(cash["actual"], 17531.91)
+		self.assertEqual(cash["entered"], 17530.0)
+		self.assertAlmostEqual(cash["difference"], -1.91)
+		self.assertEqual((card["actual"], card["entered"], card["difference"]), (23480.0, 23530.0, 50.0))
+		self.assertAlmostEqual(total["difference"], 48.09)
+		self.assertEqual(one.not_compared, [{"name": "CS-41", "reason": "Open"}])
+		# Nothing of cashier 2 was counted on this date: no figures, not zeros
+		self.assertEqual(two.lines[0], {"actual": None, "entered": None, "difference": None})
+		self.assertEqual(two.not_compared, [{"name": "CS-31", "reason": "Part of the day"}])
+		self.assertEqual(rec.totals, one.lines)
+
+	def test_credit_sales_never_counted(self):
+		rec = api.cashier_reconciliation(self.overview())
+		self.assertNotIn(9999.0, [v for line in rec.totals for v in line.values()])

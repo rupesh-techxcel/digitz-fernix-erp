@@ -561,6 +561,8 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		});
 		const o = (this.overview = r.message);
 		const sessions = o.sessions || [];
+		// The cashier summary is the default; the session grid is the detail view
+		const detail = this.board_view === "detail";
 		const count = (status) => sessions.filter((x) => x.status === status).length;
 		const pill = (status) => `<span class="indicator-pill ${{ Open: "green", Closing: "orange", Closed: "blue" }[status] || "gray"}">${status === "Closing" ? __("Awaiting Approval") : __(status)}</span>`;
 		const time = (dt) => (dt ? moment(dt).format("hh:mm A") : "");
@@ -615,6 +617,10 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					<button class="dcb-chip" data-day="${frappe.datetime.get_today()}">${__("Today")}</button>
 					<button class="dcb-chip" data-day="${frappe.datetime.add_days(frappe.datetime.get_today(), -1)}">${__("Yesterday")}</button>
 				</div>
+				<div class="dcb-chips dcb-view">
+					<button class="dcb-chip ${detail ? "" : "active"}" data-view="summary" title="${__("One column per cashier: actual, entered and the difference")}">${__("Summary")}</button>
+					<button class="dcb-chip ${detail ? "active" : ""}" data-view="detail" title="${__("One column per day (session), with approve, close and correct")}">${__("Detail")}</button>
+				</div>
 				<label class="dcb-later" title="${__("For a day left open past midnight, also show its documents posted after this date")}">
 					<input type="checkbox" data-later ${this.board_include_later ? "checked" : ""}> ${__("Include later dates")}
 				</label>
@@ -627,7 +633,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					<button class="btn btn-primary btn-sm" data-tool="print">${__("Print Summary")}</button>
 				</div>
 			</div>
-			${sessions.length ? `
+			${!sessions.length ? "" : !detail ? this.summary_html(o) : `
 			<div class="dayops-card dcb-card">
 				<div class="dcb-scroll">
 					<table class="dcb-grid">
@@ -650,7 +656,8 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 					</table>
 				</div>
 				<p class="text-muted small" style="margin: 8px 0 0;">${__("Total Collection is the money taken for the sales through every payment mode (cash, card, bank and others). Credit sales are left out.")}</p>
-			</div>` : `
+			</div>`}
+			${sessions.length ? "" : `
 			<div class="dayops-card dayops-state"><div class="dayops-big">${__("No days")}</div><p>${__("No day was opened on any counter on this date.")}</p></div>`}
 		`);
 
@@ -666,6 +673,10 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		this.board_date_control.set_value(this.board_date);
 		this.$body.find(".dcb-chip").each((_, el) => el.classList.toggle("active", el.dataset.day === this.board_date));
 		this.$body.find("[data-day]").on("click", (e) => this.render_board($(e.currentTarget).attr("data-day")));
+		this.$body.find("[data-view]").on("click", (e) => {
+			this.board_view = $(e.currentTarget).attr("data-view");
+			this.render_board();
+		});
 		this.$body.find("[data-later]").on("change", (e) => {
 			this.board_include_later = e.currentTarget.checked;
 			this.render_board();
@@ -697,10 +708,71 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 		this.set_secondary(__("Refresh"), () => this.render_board());
 	}
 
+	// The default view: one column group per cashier -- Actual, Entered and
+	// Difference -- for cash in the till, each non-cash mode and their total,
+	// all cashiers last. Built by counter_session_api.cashier_reconciliation.
+	summary_html(o) {
+		const rec = o.reconciliation || { rows: [], cashiers: [], totals: [] };
+		const money = (v) => (v === null || v === undefined
+			? `<td class="dayops-num text-muted">—</td>`
+			: `<td class="dayops-num">${this.money(v)}</td>`);
+		const diff = (v, extra = "") => {
+			if (v === null || v === undefined) {
+				return `<td class="dayops-num text-muted ${extra}">—</td>`;
+			}
+			if (Math.abs(v) < 0.005) {
+				return `<td class="dayops-num ${extra}">${this.money(0)}</td>`;
+			}
+			const short = v < 0;
+			return `<td class="dayops-num ${short ? "is-short" : "is-over"} ${extra}">${this.money(v)}
+				<div class="dcs-tag">${short ? __("Short") : __("Excess")}</div></td>`;
+		};
+		const group = (lines, i, extra = "") => {
+			const x = lines[i] || {};
+			return `${money(x.actual).replace('class="', `class="${extra} `)}${money(x.entered)}${diff(x.difference)}`;
+		};
+		const head = rec.cashiers.map((c) => {
+			const skipped = c.not_compared.length
+				? `<div class="dcb-note">${__("Not compared")}: ${c.not_compared.map((n) => `${this.esc(n.name)} (${__(n.reason)})`).join(", ")}</div>`
+				: "";
+			return `<th class="dcb-col dcs-group" colspan="3">
+				<div class="dcb-cashier">${this.esc(c.cashier_name)}</div>
+				<div class="dcb-time">${c.sessions.length === 1 ? __("1 day") : __("{0} days", [c.sessions.length])}</div>${skipped}</th>`;
+		}).join("");
+		const sub = `<th></th>` + [...rec.cashiers, null].map((c) => `
+			<th class="dcb-col dcs-sub ${c ? "" : "dcb-total"}">${__("Actual")}</th>
+			<th class="dcb-col dcs-sub ${c ? "" : "dcb-total"}">${__("Entered")}</th>
+			<th class="dcb-col dcs-sub ${c ? "" : "dcb-total"}">${__("Difference")}</th>`).join("");
+		const body = rec.rows.map((row, i) => `
+			<tr class="${row.key === "Total" ? "dcb-strong" : ""}"><td>${this.esc(__(row.label))}</td>
+				${rec.cashiers.map((c) => group(c.lines, i, "dcs-start")).join("")}
+				${group(rec.totals, i, "dcs-start dcb-total").replace(/<td class="dayops-num/g, '<td class="dcb-total dayops-num')}
+			</tr>`).join("");
+		return `
+			<style>
+				.dcs-grid .dcs-start { border-left: 1px solid var(--border-color); }
+				.dcs-grid .dcs-group { text-align: center; border-left: 1px solid var(--border-color); }
+				.dcs-grid .dcs-sub { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+				.dcs-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; }
+			</style>
+			<div class="dayops-card dcb-card">
+				<div class="dcb-scroll">
+					<table class="dcb-grid dcs-grid">
+						<thead>
+							<tr><th></th>${head}<th class="dcb-col dcs-group dcb-total" colspan="3">${__("All Cashiers")}</th></tr>
+							<tr>${sub}</tr>
+						</thead>
+						<tbody>${body}</tbody>
+					</table>
+				</div>
+				<p class="text-muted small" style="margin: 8px 0 0;">${__("Actual is what the submitted documents say the till and each payment mode should hold; Entered is what the cashier counted or typed at Day Close. Cash in Till is the opening float plus cash sales and cash receipts, less refunds, cash paid out and the expenditure entered. Credit sales are left out. Only counted days are compared: a day still open, or only partly on this date, is listed under its cashier and shown in Detail.")}</p>
+			</div>`;
+	}
+
 	async print_summary() {
 		const r = await frappe.call({
 			method: "digitz_erp.api.counter_session_api.get_day_summary_html",
-			args: this.board_args(),
+			args: { ...this.board_args(), view: this.board_view === "detail" ? "detail" : "summary" },
 		});
 		const w = window.open("", "_blank");
 		if (!w) {
