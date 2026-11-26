@@ -260,6 +260,16 @@ header.navbar,
     min-width: 240px !important;
 }
 
+/* Workspaces open with the sidebar menu collapsed, on every login and reload.
+   Not !important: Frappe's Toggle Sidebar button shows it with an inline
+   display, which wins. Phones keep Frappe's slide-out menu. The toggle's icon
+   is set to match in digitz_common.js (collapse_workspace_sidebar). */
+@media (min-width: 768px) {
+    #page-Workspaces .layout-side-section {
+        display: none;
+    }
+}
+
 /* =========================================================
    Cards / widgets / blocks
    ========================================================= */

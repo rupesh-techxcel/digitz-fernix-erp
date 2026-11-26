@@ -204,3 +204,30 @@ $(document).ready(function () {
 	$(document).on("page-change", () => digitz.page_head._observe());
 	frappe.router && frappe.router.on("change", () => digitz.page_head._observe());
 });
+
+// ---------------------------------------------------------------------------
+// Workspaces open with the sidebar menu collapsed: digitz_desk.bundle.css hides
+// it from the first paint (desktop only). Frappe draws the Toggle Sidebar icon
+// as "collapse", so it is switched to "expand" while the menu is hidden. The
+// toggle itself shows the menu again, until the next reload.
+// ---------------------------------------------------------------------------
+digitz.collapse_workspace_sidebar = function (tries = 30) {
+	if (frappe.get_route()[0] !== "Workspaces") return;
+
+	const wrapper = document.getElementById("page-Workspaces");
+	const icon = wrapper && wrapper.querySelector(".page-head .sidebar-toggle-btn .sidebar-toggle-icon");
+	if (!icon) {
+		// The workspace page is built after the route changes
+		tries > 0 && setTimeout(() => digitz.collapse_workspace_sidebar(tries - 1), 100);
+		return;
+	}
+	const sidebar = wrapper.querySelector(".layout-side-section");
+	if (sidebar && !$(sidebar).is(":visible")) {
+		icon.innerHTML = frappe.utils.icon("es-line-sidebar-expand", "md");
+	}
+};
+
+$(document).ready(function () {
+	digitz.collapse_workspace_sidebar();
+	frappe.router && frappe.router.on("change", () => digitz.collapse_workspace_sidebar());
+});
