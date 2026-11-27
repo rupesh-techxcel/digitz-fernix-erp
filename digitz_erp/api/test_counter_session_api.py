@@ -74,10 +74,13 @@ class TestSalesByType(unittest.TestCase):
 	def test_splits_non_cash_and_credit_for_the_date(self):
 		from digitz_erp.digitz_erp.doctype.counter_session import counter_session as model
 		with patch.object(model, "frappe") as framework:
-			framework.db.sql.return_value = [("day-1", 30, 70)]
+			framework.db.sql.return_value = [("day-1", "Card", 20, 70), ("day-1", "Pay by Link", 10, 0)]
 			sales = model.get_sales_by_type({"day-1": "day-1", "day-2": "day-2"}, "2026-11-13")
 			query, params = framework.db.sql.call_args.args
-		self.assertEqual(sales, {"day-1": {"non_cash": 30, "credit": 70}, "day-2": {"non_cash": 0, "credit": 0}})
+		self.assertEqual(sales, {
+			"day-1": {"non_cash": 30, "credit": 70, "by_mode": {"Card": 20, "Pay by Link": 10}},
+			"day-2": {"non_cash": 0, "credit": 0, "by_mode": {}},
+		})
 		self.assertIn("d.posting_date = %(posting_date)s", query)
 		self.assertIn("LEFT JOIN `tabPayment Mode`", query)
 		self.assertEqual(params["posting_date"], "2026-11-13")
