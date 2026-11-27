@@ -29,7 +29,8 @@ At the bottom of the Day Close grid, **Sales** shows what each cashier sold:
 
 - **Cash Sales**, then **Cash in Hand** (cash sales less the expenditure) and **Expenditure** (cash paid out of the till). The two add up to Cash Sales.
 - One row for each other payment mode, such as **Card Sales** and **Pay by Link Sales**.
-- **Total Collection**: Cash Sales plus every other payment mode. Credit sales are not in it, and expenditure is not added again, because it is already part of Cash Sales.
+- **Total Sales Collection**: Cash Sales plus every other payment mode, for the day's sales only. Credit sales are not in it, and expenditure is not added again, because it is already part of Cash Sales.
+- **Total Money Collected**: all the money the cashier took. It is the Total Sales Collection plus the credit collections (Receipts) in cash and in every other payment mode, less refunds. It matches the cash plus each payment mode's System figure above.
 
 ## See the notes and coins each counter counted
 
