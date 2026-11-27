@@ -640,6 +640,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				</div>
 				<div class="dcb-buttons">
 					<button class="btn btn-default btn-sm" data-tool="refresh">${__("Refresh")}</button>
+					${sessions.length ? `<button class="btn btn-default btn-sm" data-tool="denominations">${__("Denominations")}</button>` : ""}
 					${frappe.user.has_role("System Manager") ? `<button class="btn btn-default btn-sm" data-tool="excel">${__("Export to Excel")}</button>` : ""}
 					<button class="btn btn-primary btn-sm" data-tool="print">${__("Print Summary")}</button>
 				</div>
@@ -696,6 +697,8 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			const tool = $(e.currentTarget).attr("data-tool");
 			if (tool === "refresh") {
 				this.render_board();
+			} else if (tool === "denominations") {
+				this.denominations_dialog(o);
 			} else if (tool === "excel") {
 				window.open(`/api/method/digitz_erp.api.counter_session_api.export_day_overview?${new URLSearchParams(this.board_args())}`);
 			} else {
@@ -840,6 +843,50 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 				this.render_board();
 			}
 		);
+	}
+
+	// The notes and coins each counter counted on this date, side by side with
+	// their total: what the cashier entered at Day Close, read only
+	denominations_dialog(o) {
+		const days = (o.sessions || []).filter((x) => x.counted_cash !== null && x.counted_cash !== undefined);
+		const count_of = (x, value) => {
+			const row = (x.denominations || []).find((r) => Math.abs(flt(r.denomination) - value) < 0.001);
+			return row ? cint(row.count) : 0;
+		};
+		const cell = (count, value) => count
+			? `<td class="dayops-num"><b>${count}</b><div class="text-muted small">${this.money(count * value)}</div></td>`
+			: `<td class="dayops-num text-muted">—</td>`;
+		const values = (o.denominations || []).map(flt);
+		const rows = values.map((value) => {
+			const counts = days.map((x) => count_of(x, value));
+			return `<tr><td>${this.money(value)}</td>${counts.map((c) => cell(c, value)).join("")}
+				${cell(counts.reduce((a, b) => a + b, 0), value).replace("<td class=\"", "<td class=\"dcb-total ")}</tr>`;
+		}).join("");
+		const counted = days.map((x) => values.reduce((t, v) => t + count_of(x, v) * v, 0));
+		const total_row = (label, amounts, cls) => `<tr class="${cls}"><td>${label}</td>
+			${amounts.map((a) => `<td class="dayops-num">${this.money(a)}</td>`).join("")}
+			<td class="dayops-num dcb-total">${this.money(amounts.reduce((a, b) => a + b, 0))}</td></tr>`;
+		const d = new frappe.ui.Dialog({
+			title: __("Denominations for {0}", [frappe.datetime.str_to_user(this.board_date)]),
+			size: "extra-large",
+		});
+		d.$body.html(!days.length
+			? `<p class="text-muted">${__("No counter has been counted on this date yet.")}</p>`
+			: `<div class="dcb-scroll">
+				<table class="dcb-grid">
+					<thead><tr><th>${__("Note / Coin")}</th>${days.map((x) => `
+						<th class="dcb-col"><div class="dcb-counter">${this.esc(x.counter)}</div>
+						<div class="dcb-cashier">${this.esc(x.cashier_name)}</div></th>`).join("")}
+						<th class="dcb-col dcb-total">${__("Total")}</th></tr></thead>
+					<tbody>${rows}</tbody>
+					<tfoot>
+						${total_row(__("Total Counted"), counted, "dcb-strong")}
+						${total_row(__("Counted Cash (entered)"), days.map((x) => flt(x.counted_cash)), "dcb-money")}
+					</tfoot>
+				</table>
+			</div>
+			<p class="text-muted small" style="margin: 8px 0 0;">${__("What each cashier counted at Day Close: the number of each note and coin, and its amount. Counted Cash can differ from Total Counted when the cashier typed the total instead of counting.")}</p>`);
+		d.show();
 	}
 
 	async print_summary() {
