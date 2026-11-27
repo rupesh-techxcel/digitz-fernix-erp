@@ -31,6 +31,10 @@ At the bottom of the Day Close grid, **Sales** shows what each cashier sold:
 - One row for each other payment mode, such as **Card Sales** and **Pay by Link Sales**.
 - **Total Collection**: Cash Sales plus every other payment mode. Credit sales are not in it, and expenditure is not added again, because it is already part of Cash Sales.
 
+## See the notes and coins each counter counted
+
+On **Day Close**, click **Denominations**. A popup shows, for the chosen date, one column per counted counter: how many of each note and coin the cashier counted and its amount, with a **Total** column across all counters. **Total Counted** adds up the count; **Counted Cash (entered)** is what was saved, which can differ when the cashier typed the total instead of counting.
+
 ## Close a day for a cashier who has left
 
 If a cashier leaves without closing, their counter stays blocked. No one else can open a day on it.
