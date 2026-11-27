@@ -210,7 +210,7 @@ class TestDayOverviewByDate(unittest.TestCase):
 				patch.object(api, "get_non_cash_payment_modes", return_value=[frappe._dict(payment_mode="Card", mode="Card")]), \
 				patch.object(api, "nowdate", return_value="2026-11-16"), \
 				patch.object(model, "get_takings_by_mode", return_value={doc.name: {"Card": 30}}) as takings, \
-				patch.object(model, "get_sales_by_type", return_value={doc.name: {"non_cash": 30, "credit": 70}}):
+				patch.object(model, "get_sales_by_type", return_value={doc.name: {"non_cash": 30, "credit": 70, "by_mode": {"Card": 30}}}):
 			framework._dict = frappe._dict
 			framework.get_doc.return_value = doc
 			framework.utils.get_fullname.side_effect = lambda user: user
@@ -259,6 +259,8 @@ class TestDayOverviewByDate(unittest.TestCase):
 		self.assertEqual(x.total_collection, 90)
 		rows = {ln["label"]: ln for ln in overview.lines if ln["kind"] != "section"}
 		self.assertEqual(rows["Total Sales"]["values"], [160])
+		self.assertEqual(rows["Card Sales"]["values"], [30])
+		self.assertEqual(rows["Cash in Hand (Cash Sales − Expenditure)"]["values"], [50])
 
 
 class TestMigrationPatch(unittest.TestCase):

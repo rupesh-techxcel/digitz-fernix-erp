@@ -624,6 +624,7 @@ def build_day_overview(date=None, include_later=0):
 			"cash_refunds": flt(figures.cash_refunds),
 			"cash_paid_out": flt(figures.cash_paid_out),
 			"non_cash_sales": sales[doc.name]["non_cash"],
+			"sales_by_mode": sales[doc.name]["by_mode"],
 			"credit_sales": sales[doc.name]["credit"],
 			"total_sales": cash_sales + sales[doc.name]["non_cash"] + sales[doc.name]["credit"],
 			# Money taken for the sales: every payment mode, cash or not, but not credit
@@ -776,11 +777,26 @@ def day_overview_lines(overview):
 			line(f"{mode}: Entered", entered, "strong"),
 			line(f"{mode}: Difference", [less(e, sy) for e, sy in zip(entered, system)], "difference"),
 		]
+	# Sales by payment mode: cash (split into what stayed in the till and the
+	# expenditure paid out of it), then every other mode, adding up to the
+	# Total Collection. A mode no longer set up still shows if it has sales.
+	sale_modes = [m.payment_mode for m in overview.modes]
+	sale_modes += sorted({
+		mode for s in overview.sessions for mode in s.sales_by_mode if mode not in sale_modes
+	}, key=lambda mode: mode or "")
 	lines += [
 		{"label": "Sales", "kind": "section"},
 		line("Cash Sales", field("cash_sales"), counted_only=False),
-		line("Card / Bank Sales", field("non_cash_sales"), counted_only=False),
-		line("Total Collection (all but credit)", field("total_collection"), "strong", counted_only=False),
+		line("Cash in Hand (Cash Sales − Expenditure)",
+			[s.cash_sales - flt(s.cash_expenditure) for s in overview.sessions], counted_only=False),
+		line("Expenditure (paid from Cash Sales)", field("cash_expenditure"), counted_only=False),
+	]
+	lines += [
+		line(f"{mode or 'No Payment Mode'} Sales", [flt(s.sales_by_mode.get(mode)) for s in overview.sessions], counted_only=False)
+		for mode in sale_modes
+	]
+	lines += [
+		line("Total Collection (all payment modes, not credit)", field("total_collection"), "strong", counted_only=False),
 		# Credit and the total with it: shown on the board only when asked for ("credit")
 		dict(line("Credit Sales (not paid)", field("credit_sales"), counted_only=False), credit=True),
 		dict(line("Total Sales", field("total_sales"), "strong", counted_only=False), credit=True),
