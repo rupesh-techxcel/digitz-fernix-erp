@@ -134,7 +134,7 @@ class TestDayOverviewTotalsAgree(unittest.TestCase):
 				counted_cash=17030.0 if counted else None,
 				difference=17030.0 - cash_sales if counted else None,
 				modes={"Card": {"system": card_system, "entered": card_entered}},
-				non_cash_sales=card_system, sales_by_mode={"Card": card_system}, credit_sales=credit,
+				non_cash_sales=card_system, sales_by_mode={"Card": card_system}, non_cash_taken=card_system, credit_sales=credit,
 				total_sales=cash_sales + card_system + credit, total_collection=cash_sales + card_system,
 			)
 
@@ -160,7 +160,7 @@ class TestDayOverviewTotalsAgree(unittest.TestCase):
 
 	def test_sales_rows_add_up_to_total_collection(self):
 		t = self.lines()
-		self.assertAlmostEqual(t["Cash Sales"] + t["Card Sales"], t["Total Collection (all payment modes, not credit)"])
+		self.assertAlmostEqual(t["Cash Sales"] + t["Card Sales"], t["Total Sales Collection (all payment modes, not credit)"])
 
 
 class TestDayOverviewSalesRows(unittest.TestCase):
@@ -175,7 +175,7 @@ class TestDayOverviewSalesRows(unittest.TestCase):
 				counted_cash=cash_sales - expenditure if expenditure is not None else None,
 				difference=0 if expenditure is not None else None,
 				modes={"Card": {"system": 0, "entered": 0}, "Pay by Link": {"system": 0, "entered": 0}},
-				non_cash_sales=sum(by_mode.values()), sales_by_mode=by_mode, credit_sales=0,
+				non_cash_sales=sum(by_mode.values()), sales_by_mode=by_mode, non_cash_taken=sum(by_mode.values()), credit_sales=0,
 				total_sales=cash_sales + sum(by_mode.values()), total_collection=cash_sales + sum(by_mode.values()),
 			)
 
@@ -191,14 +191,18 @@ class TestDayOverviewSalesRows(unittest.TestCase):
 		return [(ln["label"], ln["values"], ln["total"]) for ln in lines[start + 1:]]
 
 	def test_rows_in_order_with_every_mode(self):
-		self.assertEqual([r[0] for r in self.rows()][:7], [
+		self.assertEqual([r[0] for r in self.rows()][:11], [
 			"Cash Sales",
 			"Cash in Hand (Cash Sales − Expenditure)",
 			"Expenditure (paid from Cash Sales)",
 			"Card Sales",
 			"Pay by Link Sales",
 			"Old Mode Sales",
-			"Total Collection (all payment modes, not credit)",
+			"Total Sales Collection (all payment modes, not credit)",
+			"+ Cash Receipts (Credit Collections)",
+			"+ Card / Bank Receipts (Credit Collections, less refunds)",
+			"− Cash Refunds",
+			"Total Money Collected",
 		])
 
 	def test_cash_split_and_total(self):
@@ -207,7 +211,31 @@ class TestDayOverviewSalesRows(unittest.TestCase):
 		self.assertEqual(r["Expenditure (paid from Cash Sales)"][0], [389.0, None])
 		self.assertEqual(r["Pay by Link Sales"][0], [2455.0, 0])
 		modes = sum(r[f"{m} Sales"][1] for m in ("Card", "Pay by Link", "Old Mode"))
-		self.assertAlmostEqual(r["Cash Sales"][1] + modes, r["Total Collection (all payment modes, not credit)"][1])
+		self.assertAlmostEqual(r["Cash Sales"][1] + modes, r["Total Sales Collection (all payment modes, not credit)"][1])
+
+
+class TestTotalMoneyCollected(unittest.TestCase):
+	"""Cashier 3 on 25-11-2026: sales collection 22,140 plus 6,270 cash and
+	1,800 Pay by Link credit collections, less 450 cash refunds, is 29,760,
+	the same as the payment-mode sections' cash and System figures."""
+
+	def test_cashier_3_on_25_11(self):
+		day = frappe._dict(
+			opening_float=0, cash_sales=10760.0, cash_receipts=6270.0, cash_refunds=450.0, cash_paid_out=0,
+			cash_expenditure=389.0, expected_cash=16191.0, counted_cash=16190.0, difference=-1.0,
+			modes={"Card": {"system": 10725.0, "entered": 10725.0}, "Pay by Link": {"system": 2455.0, "entered": 2455.0}},
+			non_cash_sales=11380.0, sales_by_mode={"Card": 10725.0, "Pay by Link": 655.0},
+			non_cash_taken=13180.0, credit_sales=0, total_sales=22140.0, total_collection=22140.0,
+		)
+		overview = frappe._dict(
+			modes=[frappe._dict(payment_mode="Card", mode="Bank"), frappe._dict(payment_mode="Pay by Link", mode="Bank")],
+			sessions=[day],
+		)
+		t = {ln["label"]: ln["total"] for ln in api.day_overview_lines(overview) if ln["kind"] != "section"}
+		self.assertEqual(t["Total Sales Collection (all payment modes, not credit)"], 22140.0)
+		self.assertEqual(t["+ Card / Bank Receipts (Credit Collections, less refunds)"], 1800.0)
+		self.assertEqual(t["Total Money Collected"], 29760.0)
+		self.assertEqual(t["Total Money Collected"], t["Expected Cash"] + t["− Expenditure (entered)"] + 10725.0 + 2455.0)
 
 
 class TestCashierGrid(unittest.TestCase):
