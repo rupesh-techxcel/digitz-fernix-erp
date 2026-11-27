@@ -29,7 +29,7 @@ If a cashier leaves without closing, their counter stays blocked. No one else ca
 
 1. Open **Day Close**. **Open Days** lists every other cashier's open day with the cash expected **right now**.
 2. Click **Close for Cashier** on that row.
-3. Enter any **Expenditure** the cashier paid out of the till, if you know of it. The expected cash goes down by that amount. Count the till in the dialog. **Counted Cash** fills in from the count.
+3. The top of the dialog shows the **Cash Before Expenditure**. Enter any **Expenditure** the cashier paid out of the till, if you know of it. **Expected Cash**, shown below it, goes down by that amount. Count the till in the dialog. **Counted Cash** fills in from the count.
 4. Enter a **Reason**. This is required and is printed on the slip.
 5. Click **Count & Close**.
 

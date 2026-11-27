@@ -890,11 +890,13 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 			size: "large",
 			fields: [
 				{ fieldtype: "HTML", fieldname: "summary",
-					options: `<p>${__("Expected cash in the till")}: <b class="sv-expected"></b>
+					options: `<p>${__("Cash Before Expenditure")}: <b>${this.money(before_spent)}</b>
 						<span class="text-muted">(${__("float")} ${this.money(x.opening_float)})</span></p>` },
 				{ fieldtype: "Currency", fieldname: "expenditure", label: __("Expenditure"),
 					default: editing ? x.recorded.cash_expenditure : undefined,
 					description: __("Cash paid out of the till."), change: () => show_result() },
+				{ fieldtype: "HTML", fieldname: "expected",
+					options: `<p>${__("Expected Cash")}: <b class="sv-expected"></b></p>` },
 				{ fieldtype: "HTML", fieldname: "count_wrap" },
 				{ fieldtype: "Column Break" },
 				{ fieldtype: "Currency", fieldname: "counted_cash", label: __("Counted Cash"), reqd: 1,
@@ -949,7 +951,7 @@ digitz_erp.DayClose = class DayClose extends digitz_erp.DayOpsBase {
 
 		const show_result = () => {
 			const expected = before_spent - flt(d.get_value("expenditure"));
-			d.fields_dict.summary.$wrapper.find(".sv-expected").text(this.money(expected));
+			d.fields_dict.expected.$wrapper.find(".sv-expected").text(this.money(expected));
 			const counted = d.get_value("counted_cash");
 			const $r = d.fields_dict.result.$wrapper.empty();
 			if (counted === undefined || counted === null || counted === "") {
