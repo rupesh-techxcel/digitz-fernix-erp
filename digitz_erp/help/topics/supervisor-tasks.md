@@ -23,6 +23,14 @@ You can also open the Counter Session itself and click **Approve & Close** there
 
 > When you close **your own** day with a difference as a supervisor, it still waits for a *different* supervisor to approve it.
 
+## Read the Sales section of Day Close
+
+At the bottom of the Day Close grid, **Sales** shows what each cashier sold:
+
+- **Cash Sales**, then **Cash in Hand** (cash sales less the expenditure) and **Expenditure** (cash paid out of the till). The two add up to Cash Sales.
+- One row for each other payment mode, such as **Card Sales** and **Pay by Link Sales**.
+- **Total Collection**: Cash Sales plus every other payment mode. Credit sales are not in it, and expenditure is not added again, because it is already part of Cash Sales.
+
 ## Close a day for a cashier who has left
 
 If a cashier leaves without closing, their counter stays blocked. No one else can open a day on it.

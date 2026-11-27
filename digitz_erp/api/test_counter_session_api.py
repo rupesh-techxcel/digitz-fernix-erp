@@ -131,7 +131,7 @@ class TestDayOverviewTotalsAgree(unittest.TestCase):
 				counted_cash=17030.0 if counted else None,
 				difference=17030.0 - cash_sales if counted else None,
 				modes={"Card": {"system": card_system, "entered": card_entered}},
-				non_cash_sales=card_system, credit_sales=credit,
+				non_cash_sales=card_system, sales_by_mode={"Card": card_system}, credit_sales=credit,
 				total_sales=cash_sales + card_system + credit, total_collection=cash_sales + card_system,
 			)
 
@@ -152,8 +152,59 @@ class TestDayOverviewTotalsAgree(unittest.TestCase):
 	def test_sales_totals_cover_every_day(self):
 		t = self.lines()
 		self.assertAlmostEqual(t["Cash Sales"], 17131.91)
-		self.assertEqual(t["Card / Bank Sales"], 23430.0)
+		self.assertEqual(t["Card Sales"], 23430.0)
 		self.assertAlmostEqual(t["Credit Sales (not paid)"], 5567.6)
+
+	def test_sales_rows_add_up_to_total_collection(self):
+		t = self.lines()
+		self.assertAlmostEqual(t["Cash Sales"] + t["Card Sales"], t["Total Collection (all payment modes, not credit)"])
+
+
+class TestDayOverviewSalesRows(unittest.TestCase):
+	"""The Sales section: Cash Sales split into Cash in Hand and Expenditure, one
+	row per payment mode (Pay by Link too), adding up to the Total Collection."""
+
+	def rows(self):
+		def day(cash_sales, expenditure, by_mode):
+			return frappe._dict(
+				opening_float=0, cash_sales=cash_sales, cash_receipts=0, cash_refunds=0, cash_paid_out=0,
+				cash_expenditure=expenditure, expected_cash=cash_sales - (expenditure or 0),
+				counted_cash=cash_sales - expenditure if expenditure is not None else None,
+				difference=0 if expenditure is not None else None,
+				modes={"Card": {"system": 0, "entered": 0}, "Pay by Link": {"system": 0, "entered": 0}},
+				non_cash_sales=sum(by_mode.values()), sales_by_mode=by_mode, credit_sales=0,
+				total_sales=cash_sales + sum(by_mode.values()), total_collection=cash_sales + sum(by_mode.values()),
+			)
+
+		overview = frappe._dict(
+			modes=[frappe._dict(payment_mode="Card", mode="Bank"), frappe._dict(payment_mode="Pay by Link", mode="Bank")],
+			sessions=[
+				day(10760.0, 389.0, {"Card": 8925.0, "Pay by Link": 2455.0}),
+				day(100.0, None, {"Old Mode": 40.0}),
+			],
+		)
+		lines = api.day_overview_lines(overview)
+		start = next(i for i, ln in enumerate(lines) if ln["label"] == "Sales")
+		return [(ln["label"], ln["values"], ln["total"]) for ln in lines[start + 1:]]
+
+	def test_rows_in_order_with_every_mode(self):
+		self.assertEqual([r[0] for r in self.rows()][:7], [
+			"Cash Sales",
+			"Cash in Hand (Cash Sales − Expenditure)",
+			"Expenditure (paid from Cash Sales)",
+			"Card Sales",
+			"Pay by Link Sales",
+			"Old Mode Sales",
+			"Total Collection (all payment modes, not credit)",
+		])
+
+	def test_cash_split_and_total(self):
+		r = {label: (values, total) for label, values, total in self.rows()}
+		self.assertEqual(r["Cash in Hand (Cash Sales − Expenditure)"][0], [10371.0, 100.0])
+		self.assertEqual(r["Expenditure (paid from Cash Sales)"][0], [389.0, None])
+		self.assertEqual(r["Pay by Link Sales"][0], [2455.0, 0])
+		modes = sum(r[f"{m} Sales"][1] for m in ("Card", "Pay by Link", "Old Mode"))
+		self.assertAlmostEqual(r["Cash Sales"][1] + modes, r["Total Collection (all payment modes, not credit)"][1])
 
 
 class TestCashierGrid(unittest.TestCase):
