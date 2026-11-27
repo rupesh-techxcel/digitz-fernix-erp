@@ -236,6 +236,11 @@ class TestTotalMoneyCollected(unittest.TestCase):
 		self.assertEqual(t["+ Card / Bank Receipts (Credit Collections, less refunds)"], 1800.0)
 		self.assertEqual(t["Total Money Collected"], 29760.0)
 		self.assertEqual(t["Total Money Collected"], t["Expected Cash"] + t["− Expenditure (entered)"] + 10725.0 + 2455.0)
+		self.assertEqual(t["Total Collection"], 16580.0)
+
+	def test_total_collection_sits_just_above_expected_cash(self):
+		labels = [ln["label"] for ln in api.day_overview_lines(frappe._dict(modes=[], sessions=[]))]
+		self.assertEqual(labels.index("Total Collection") + 1, labels.index("Expected Cash"))
 
 
 class TestCashierGrid(unittest.TestCase):

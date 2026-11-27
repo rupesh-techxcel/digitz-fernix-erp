@@ -765,6 +765,10 @@ def day_overview_lines(overview):
 		line("− Cash Refunds", field("cash_refunds")),
 		line("− Cash Paid Out", field("cash_paid_out")),
 		line("− Expenditure (entered)", field("cash_expenditure")),
+		# The cash before expenditure: Expected Cash with the expenditure added back
+		line("Total Collection", [
+			None if s.expected_cash is None else s.expected_cash + flt(s.cash_expenditure) for s in overview.sessions
+		], "strong"),
 		line("Expected Cash", field("expected_cash"), "strong"),
 		line("Counted Cash (entered)", field("counted_cash"), "strong"),
 		line("Cash Difference", field("difference"), "difference"),
